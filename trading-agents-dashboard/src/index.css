@@ -87,6 +87,17 @@ body {
   animation: flow-y 0.6s linear infinite;
 }
 
+.agent-edge-flow {
+  stroke-dasharray: 5 5;
+  animation: agent-edge-flow 0.6s linear infinite;
+}
+
+@keyframes agent-edge-flow {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
