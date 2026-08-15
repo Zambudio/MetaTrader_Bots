@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Agent, OutputType } from '../types/agent';
 import { useAgentStore } from '../lib/store';
+import { wouldCreateCycle } from '../lib/agentGraph';
 
 interface Props {
   agent: Agent | null;
@@ -16,10 +17,15 @@ const fieldInput =
 
 export const AgentConfigModal = ({ agent, otherAgents, onClose, onSave, onDelete }: Props) => {
   const models = useAgentStore((state) => state.models);
+  const allAgents = useAgentStore((state) => state.agents);
   const [name, setName] = useState(agent?.name ?? '');
   const [role, setRole] = useState(agent?.role ?? '');
   const [systemPrompt, setSystemPrompt] = useState(agent?.systemPrompt ?? '');
-  const [dependsOn, setDependsOn] = useState<string>(agent?.dependsOn ?? '');
+  const [dependsOn, setDependsOn] = useState<string[]>(agent?.dependsOn ?? []);
+
+  const toggleDependsOn = (id: string) => {
+    setDependsOn((current) => (current.includes(id) ? current.filter((depId) => depId !== id) : [...current, id]));
+  };
   const [outputType, setOutputType] = useState<OutputType>(agent?.outputType ?? 'text');
   const [photo, setPhoto] = useState(agent?.photo ?? '');
   const [photoFailed, setPhotoFailed] = useState(false);
@@ -39,7 +45,7 @@ export const AgentConfigModal = ({ agent, otherAgents, onClose, onSave, onDelete
         name: name.trim(),
         role: role.trim() || 'Agente',
         systemPrompt,
-        dependsOn: dependsOn || null,
+        dependsOn,
         outputType,
         photo: photo || undefined,
         model: model || undefined,
@@ -114,16 +120,32 @@ export const AgentConfigModal = ({ agent, otherAgents, onClose, onSave, onDelete
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className={fieldLabel}>Espera respuesta de</label>
-            <select value={dependsOn} onChange={(e) => setDependsOn(e.target.value)} className={fieldInput}>
-              <option value="" className="bg-panel">
-                Ninguno
-              </option>
-              {otherAgents.map((a) => (
-                <option key={a.id} value={a.id} className="bg-panel">
-                  {a.name}
-                </option>
-              ))}
-            </select>
+            <div className="border border-line/70 rounded-xl divide-y divide-line/50 max-h-40 overflow-y-auto">
+              {otherAgents.length === 0 ? (
+                <p className="px-3.5 py-2.5 text-sm text-muted">No hay otros agentes todavía.</p>
+              ) : (
+                otherAgents.map((a) => {
+                  const disabled = agent ? wouldCreateCycle(allAgents, agent.id, a.id) : false;
+                  return (
+                    <label
+                      key={a.id}
+                      className={`flex items-center gap-2.5 px-3.5 py-2 text-base ${
+                        disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={dependsOn.includes(a.id)}
+                        disabled={disabled}
+                        onChange={() => toggleDependsOn(a.id)}
+                        className="accent-cyan"
+                      />
+                      <span className="text-paper">{a.name}</span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
           </div>
 
           <div>
