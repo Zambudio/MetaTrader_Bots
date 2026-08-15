@@ -7,7 +7,7 @@ export interface Agent {
   role: string;
   photo?: string;
   systemPrompt: string;
-  dependsOn: string | null;
+  dependsOn: string[];
   outputType: OutputType;
   model?: string;
 }
