@@ -1,64 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { DragEvent } from 'react';
 import { useAgentStore } from '../lib/store';
 import { AgentCard } from './AgentCard';
 import { AgentConfigModal } from './AgentConfigModal';
+import { AgentConnections } from './AgentConnections';
 import { PairSelector } from './PairSelector';
 import { PriceChart } from './PriceChart';
 import { StrategyResultCard } from './StrategyResultCard';
+import { buildLevels, wouldCreateCycle } from '../lib/agentGraph';
 import type { Agent } from '../types/agent';
-import type { AgentRunResult } from '../types/run';
-
-function buildLevels(agents: Agent[]): Agent[][] {
-  const byParent = new Map<string | null, Agent[]>();
-  for (const agent of agents) {
-    const key = agent.dependsOn;
-    if (!byParent.has(key)) byParent.set(key, []);
-    byParent.get(key)!.push(agent);
-  }
-
-  const levels: Agent[][] = [];
-  const seen = new Set<string>();
-  let level = byParent.get(null) ?? [];
-  while (level.length > 0) {
-    levels.push(level);
-    level.forEach((agent) => seen.add(agent.id));
-    level = level.flatMap((agent) => byParent.get(agent.id) ?? []);
-  }
-  const orphaned = agents.filter((agent) => !seen.has(agent.id));
-  if (orphaned.length > 0) levels.push(orphaned);
-  return levels;
-}
-
-function connectorState(agentsInLevel: Agent[], resultsByAgentId: Map<string, AgentRunResult>) {
-  const statuses = agentsInLevel.map((a) => resultsByAgentId.get(a.id)?.status ?? 'idle');
-  if (statuses.some((s) => s === 'error')) return 'error';
-  if (statuses.some((s) => s === 'running')) return 'running';
-  if (statuses.length > 0 && statuses.every((s) => s === 'done')) return 'done';
-  return 'idle';
-}
-
-const CONNECTOR_LINE: Record<string, string> = {
-  idle: 'bg-line',
-  running: 'flow-y',
-  done: 'bg-bull',
-  error: 'bg-bear',
-};
-
-const CONNECTOR_ARROW: Record<string, string> = {
-  idle: 'text-line',
-  running: 'text-cyan',
-  done: 'text-bull',
-  error: 'text-bear',
-};
-
-function FlowConnector({ state }: { state: string }) {
-  return (
-    <div className="flex flex-col items-center py-1" aria-hidden="true">
-      <span className={`w-0.5 h-7 rounded-full block ${CONNECTOR_LINE[state]}`} />
-      <span className={`text-xl leading-none -mt-1.5 ${CONNECTOR_ARROW[state]}`}>&#9660;</span>
-    </div>
-  );
-}
 
 export const Dashboard = () => {
   const {
@@ -75,6 +25,10 @@ export const Dashboard = () => {
   } = useAgentStore();
 
   const [editingAgent, setEditingAgent] = useState<Agent | null | 'new'>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const chainContainerRef = useRef<HTMLDivElement>(null);
+  const cardRefs = useRef(new Map<string, HTMLDivElement>());
 
   useEffect(() => {
     loadInitialData();
@@ -92,6 +46,69 @@ export const Dashboard = () => {
     setEditingAgent(null);
   };
 
+  const reportDependencyError = (err: unknown) => {
+    useAgentStore.setState({ error: err instanceof Error ? err.message : 'No se pudo actualizar la dependencia' });
+  };
+
+  const handleCardDragStart = (agentId: string) => (e: DragEvent<HTMLDivElement>) => {
+    setDraggingId(agentId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragEnd = () => {
+    setDraggingId(null);
+    setDropTargetId(null);
+  };
+
+  const handleCardDragOver = (agentId: string) => (e: DragEvent<HTMLDivElement>) => {
+    if (!draggingId || draggingId === agentId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = wouldCreateCycle(agents, draggingId, agentId) ? 'none' : 'move';
+    setDropTargetId(agentId);
+  };
+
+  const handleCardDragLeave = (agentId: string) => () => {
+    setDropTargetId((current) => (current === agentId ? null : current));
+  };
+
+  const handleCardDrop = (agentId: string) => async (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const sourceId = draggingId;
+    setDraggingId(null);
+    setDropTargetId(null);
+    if (!sourceId || sourceId === agentId) return;
+    const source = agents.find((a) => a.id === sourceId);
+    if (!source || source.dependsOn.includes(agentId)) return;
+    if (wouldCreateCycle(agents, sourceId, agentId)) return;
+    try {
+      await updateAgent(sourceId, { dependsOn: [...source.dependsOn, agentId] });
+    } catch (err) {
+      reportDependencyError(err);
+    }
+  };
+
+  const handleContainerDragOver = (e: DragEvent<HTMLDivElement>) => {
+    if (!draggingId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleContainerDrop = async (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const sourceId = draggingId;
+    setDraggingId(null);
+    setDropTargetId(null);
+    if (!sourceId) return;
+    const source = agents.find((a) => a.id === sourceId);
+    if (!source || source.dependsOn.length === 0) return;
+    try {
+      await updateAgent(sourceId, { dependsOn: [] });
+    } catch (err) {
+      reportDependencyError(err);
+    }
+  };
+
   return (
     <div className="min-h-screen text-paper font-body">
       <div className="max-w-7xl mx-auto px-6 py-12 md:px-10">
@@ -102,7 +119,7 @@ export const Dashboard = () => {
               <span className="text-sm font-medium tracking-wide text-muted uppercase">Sistema activo</span>
             </div>
             <h1 className="font-display font-bold text-3xl md:text-4xl text-paper tracking-wide">
-              MESA DE <span className="text-cyan">TRADING</span>
+              BOTS DE <span className="text-cyan">TRADING</span>
             </h1>
             <p className="text-muted mt-2 text-base">Consola de agentes de análisis · cadena de estrategia</p>
           </div>
@@ -136,31 +153,62 @@ export const Dashboard = () => {
               <span className="h-px flex-1 bg-line/60" aria-hidden="true" />
             </div>
 
-            <div className="flex flex-col items-center">
-              {levels.map((level, levelIndex) => (
-                <div key={level.map((a) => a.id).join('-')} className="flex flex-col items-center">
-                  {levelIndex > 0 && <FlowConnector state={connectorState(level, resultsByAgentId)} />}
-                  <div className="flex flex-row flex-wrap items-start justify-center gap-4">
-                    {level.map((agent) => (
-                      <AgentCard
-                        key={agent.id}
-                        agent={agent}
-                        runResult={resultsByAgentId.get(agent.id)}
-                        onConfigure={() => setEditingAgent(agent)}
-                      />
-                    ))}
-                  </div>
+            {draggingId && (
+              <p className="text-sm text-muted text-center mb-4">
+                Suelta sobre otra tarjeta para conectar la dependencia, o en un espacio vacío para quitarla.
+              </p>
+            )}
+
+            <div
+              ref={chainContainerRef}
+              className="relative flex flex-col items-center gap-16"
+              onDragOver={handleContainerDragOver}
+              onDrop={handleContainerDrop}
+            >
+              <AgentConnections
+                agents={agents}
+                resultsByAgentId={resultsByAgentId}
+                containerRef={chainContainerRef}
+                cardRefs={cardRefs}
+              />
+              {levels.map((level) => (
+                <div
+                  key={level.map((a) => a.id).join('-')}
+                  className="flex flex-row flex-wrap items-start justify-center gap-4"
+                >
+                  {level.map((agent) => (
+                    <AgentCard
+                      key={agent.id}
+                      ref={(el) => {
+                        if (el) cardRefs.current.set(agent.id, el);
+                        else cardRefs.current.delete(agent.id);
+                      }}
+                      agent={agent}
+                      runResult={resultsByAgentId.get(agent.id)}
+                      onConfigure={() => setEditingAgent(agent)}
+                      isDragging={draggingId === agent.id}
+                      dropState={
+                        dropTargetId === agent.id
+                          ? wouldCreateCycle(agents, draggingId ?? '', agent.id)
+                            ? 'invalid'
+                            : 'valid'
+                          : null
+                      }
+                      onDragStart={handleCardDragStart(agent.id)}
+                      onDragEnd={handleDragEnd}
+                      onDragOver={handleCardDragOver(agent.id)}
+                      onDragLeave={handleCardDragLeave(agent.id)}
+                      onDrop={handleCardDrop(agent.id)}
+                    />
+                  ))}
                 </div>
               ))}
-              <div className="flex flex-col items-center">
-                {levels.length > 0 && <FlowConnector state="idle" />}
-                <button
-                  onClick={() => setEditingAgent('new')}
-                  className="w-72 min-h-[120px] border border-dashed border-line rounded-2xl flex items-center justify-center text-base font-medium text-muted hover:text-cyan hover:border-cyan/50 transition-colors px-6"
-                >
-                  + Añadir agente
-                </button>
-              </div>
+              <button
+                onClick={() => setEditingAgent('new')}
+                className="w-72 min-h-[120px] border border-dashed border-line rounded-2xl flex items-center justify-center text-base font-medium text-muted hover:text-cyan hover:border-cyan/50 transition-colors px-6"
+              >
+                + Añadir agente
+              </button>
             </div>
 
             {strategyResults.length > 0 && (
