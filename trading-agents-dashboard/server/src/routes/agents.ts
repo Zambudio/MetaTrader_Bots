@@ -24,9 +24,13 @@ agentsRouter.post(
       res.status(400).json({ error: 'name is required' });
       return;
     }
-    if (dependsOn && !agents.some((a) => a.id === dependsOn)) {
-      res.status(400).json({ error: 'dependsOn does not reference an existing agent' });
-      return;
+
+    const dependsOnList: string[] = Array.isArray(dependsOn) ? dependsOn : [];
+    for (const parentId of dependsOnList) {
+      if (!agents.some((a) => a.id === parentId)) {
+        res.status(400).json({ error: 'dependsOn does not reference an existing agent' });
+        return;
+      }
     }
 
     const newAgent: Agent = {
@@ -34,7 +38,7 @@ agentsRouter.post(
       name,
       role: typeof role === 'string' && role ? role : 'Agente',
       systemPrompt: typeof systemPrompt === 'string' ? systemPrompt : '',
-      dependsOn: dependsOn ?? null,
+      dependsOn: dependsOnList,
       outputType: outputType === 'strategy' ? 'strategy' : 'text',
       photo: typeof photo === 'string' && photo ? photo : undefined,
       model: typeof model === 'string' && model ? model : undefined,
@@ -58,17 +62,23 @@ agentsRouter.put(
     const updates = req.body ?? {};
     if ('dependsOn' in updates) {
       const newDependsOn = updates.dependsOn;
-      if (newDependsOn === req.params.id) {
-        res.status(400).json({ error: 'an agent cannot depend on itself' });
+      if (!Array.isArray(newDependsOn) || !newDependsOn.every((id) => typeof id === 'string')) {
+        res.status(400).json({ error: 'dependsOn must be an array of agent ids' });
         return;
       }
-      if (newDependsOn && !agents.some((a) => a.id === newDependsOn)) {
-        res.status(400).json({ error: 'dependsOn does not reference an existing agent' });
-        return;
-      }
-      if (newDependsOn && detectCycle(agents, req.params.id, newDependsOn)) {
-        res.status(400).json({ error: 'this dependency would create a cycle' });
-        return;
+      for (const parentId of newDependsOn) {
+        if (parentId === req.params.id) {
+          res.status(400).json({ error: 'an agent cannot depend on itself' });
+          return;
+        }
+        if (!agents.some((a) => a.id === parentId)) {
+          res.status(400).json({ error: 'dependsOn does not reference an existing agent' });
+          return;
+        }
+        if (detectCycle(agents, req.params.id, parentId)) {
+          res.status(400).json({ error: 'this dependency would create a cycle' });
+          return;
+        }
       }
     }
 
@@ -91,7 +101,7 @@ agentsRouter.delete(
 
     const remaining = agents
       .filter((a) => a.id !== req.params.id)
-      .map((a) => (a.dependsOn === req.params.id ? { ...a, dependsOn: null } : a));
+      .map((a) => ({ ...a, dependsOn: a.dependsOn.filter((id) => id !== req.params.id) }));
 
     await saveAgents(remaining);
     res.json({ ok: true });
