@@ -23,6 +23,7 @@ interface AgentStore {
   setSelectedPair: (pair: string) => void;
   setTimeframe: (timeframe: string) => void;
   runWorkflow: () => Promise<void>;
+  loadRun: (id: string) => Promise<void>;
   toggleFavorite: (symbol: string, favorite: boolean) => Promise<void>;
 }
 
@@ -98,5 +99,10 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     } finally {
       set({ isAnalysing: false });
     }
+  },
+
+  loadRun: async (id) => {
+    const run = await api.getRun(id);
+    set({ currentRun: run, selectedPair: run.pair, timeframe: run.timeframe });
   },
 }));

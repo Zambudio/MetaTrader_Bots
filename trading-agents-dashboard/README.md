@@ -10,6 +10,8 @@ Consola de investigación/estrategia para trading — **no es una plataforma de 
 - **Gráfico de precio con indicadores**: velas + hasta 11 indicadores técnicos seleccionables (SMA 20/50/200, EMA 20/50, Bollinger, Volumen, RSI, MACD, Estocástico, ATR) renderizados con `lightweight-charts` (multi-panel nativo). Histórico al máximo que permite cada proveedor de datos (ver `server/README.md`).
 - **Búsqueda de símbolos estilo TradingView**: modal con pestañas (Favoritos primero, luego Todos / Acciones / Fondos / Forex / Índices / Cripto) para buscar cualquier activo soportado por Twelve Data. Seleccionar un resultado carga su gráfico al momento; el botón de favorito junto al par lo añade a la pestaña de Favoritos.
 - **Datos de mercado**: cripto (BTC/USD, ETH/USD) vía Kraken (sin API key); todo lo demás (forex, acciones, materias primas) vía Twelve Data (`TWELVEDATA_API_KEY`).
+- **Generación de código MQL5**: desde una propuesta de estrategia, botón "Generar código MQL5" que hace que un LLM escriba un Expert Advisor `.mq5`, lo compile de verdad contra MetaEditor y corrija automáticamente los errores reales que reporte el compilador (hasta 3 intentos), documentando cada corrección confirmada para que las siguientes generaciones no repitan el mismo error. Detalle técnico en `server/README.md`.
+- **Validar con backtest**: bajo el código generado, un apartado para arrastrar (o elegir desde el explorador de Windows) el `.log` del Strategy Tester de MetaTrader — calcula win rate, R:R medio, esperanza matemática y resultado neto automáticamente, para no tener que leer el log a mano. Que un EA compile y opere no implica que la estrategia sea rentable; ver `docs/MQL5_LECCIONES_LOGICA_Y_BACKTEST.md` y `docs/BACKTEST_LOG_ANALYZER.md`.
 
 ## Arrancar en local
 
@@ -32,5 +34,7 @@ npm run dev:client   # frontend
   - `components/PriceChart.tsx` — gráfico e indicadores.
   - `components/PairSelector.tsx` + `components/SymbolSearchModal.tsx` — selector de par y buscador de símbolos con pestañas/favoritos.
   - `components/AgentCard.tsx`, `AgentConfigModal.tsx`, `AgentConnections.tsx`, `StrategyResultCard.tsx` — tarjeta de agente, modal de configuración, flechas de relación entre agentes y resultado final.
+  - `components/Mql5CodeBlock.tsx` — resultado de la generación de código MQL5 (código contraíble, estado de compilación, copiar/descargar), lanzada desde `StrategyResultCard.tsx`.
+  - `components/BacktestLogAnalyzer.tsx` — drop/selector de archivo para el log del Strategy Tester y tarjeta de métricas (win rate, R:R, resultado neto), lanzada desde `StrategyResultCard.tsx`. Ver `docs/BACKTEST_LOG_ANALYZER.md`.
   - `lib/agentGraph.ts` — cálculo de niveles de ejecución y detección de ciclos en el grafo de dependencias (compartido entre la cadena visual y el modal).
 - `server/` — backend Express local. Guarda la configuración de agentes, los pares favoritos y el historial de runs en JSON (`server/src/data/`, no versionado). Ver `server/README.md`.

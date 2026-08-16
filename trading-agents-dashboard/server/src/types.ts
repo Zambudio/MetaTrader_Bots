@@ -24,6 +24,16 @@ export interface StrategyProposalLite {
   confianza?: string;
 }
 
+export interface Mql5GenerationResult {
+  code: string;
+  filename: string;
+  assumptionsToVerify: string[];
+  compileStatus: 'ok' | 'errors' | 'unverified';
+  compileErrors: string[];
+  compileWarnings: string[];
+  attempts: number;
+}
+
 export interface AgentRunResult {
   agentId: string;
   status: AgentRunStatus;
@@ -41,6 +51,15 @@ export interface Run {
   status: 'running' | 'done' | 'error';
   createdAt: string;
   results: AgentRunResult[];
+}
+
+export interface RunSummary {
+  id: string;
+  pair: string;
+  timeframe: string;
+  status: 'running' | 'done' | 'error';
+  createdAt: string;
+  hasStrategy: boolean;
 }
 
 export interface SavedPair {

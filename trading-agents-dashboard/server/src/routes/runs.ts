@@ -1,12 +1,20 @@
 import { Router } from 'express';
 import { nanoid } from 'nanoid';
 import { listAgents } from '../store/agentsStore.js';
-import { saveRun, loadRun } from '../store/runsStore.js';
+import { saveRun, loadRun, listRuns, deleteRun } from '../store/runsStore.js';
 import { executeRun } from '../engine/orchestrator.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import type { Run } from '../types.js';
 
 export const runsRouter = Router();
+
+runsRouter.get(
+  '/',
+  asyncHandler(async (_req, res) => {
+    const runs = await listRuns();
+    res.json(runs);
+  })
+);
 
 runsRouter.post(
   '/',
@@ -50,5 +58,13 @@ runsRouter.get(
       return;
     }
     res.json(run);
+  })
+);
+
+runsRouter.delete(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    await deleteRun(req.params.id);
+    res.json({ ok: true });
   })
 );

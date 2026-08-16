@@ -20,3 +20,12 @@ export interface Run {
   createdAt: string;
   results: AgentRunResult[];
 }
+
+export interface RunSummary {
+  id: string;
+  pair: string;
+  timeframe: string;
+  status: 'running' | 'done' | 'error';
+  createdAt: string;
+  hasStrategy: boolean;
+}
