@@ -6,6 +6,21 @@ Servidor Express que persiste en disco (JSON) la configuración de agentes y el 
 
 `src/engine/executor.ts` decide en cada ejecución: si `OMNIROUTE_BASE_URL` y `OMNIROUTE_API_KEY` están configurados (ver `.env.example`), usa `realExecutor.ts` para llamar a OmniRoute (gateway de IA self-hosted en el NAS, API compatible con OpenAI) con el modelo del agente (o `OMNIROUTE_DEFAULT_MODEL` si no se ha elegido uno). Si no están configurados, usa `mockExecutor.ts` (salidas de relleno etiquetadas `[SIMULADO]`) sin llamar a ningún LLM. No hay fallback silencioso de real a mock en caliente: si OmniRoute falla a mitad de una ejecución con la clave configurada, ese agente termina en estado `error` con el mensaje real, en vez de disfrazarse de resultado simulado.
 
+## Conocimiento de apoyo de la wiki (`src/store/wikiStore.ts`)
+
+Tanto la cadena de agentes de análisis como el generador de MQL5 reciben automáticamente contexto de la wiki de trading del repo (`wiki/`, ver `wiki/CLAUDE.md`) como apoyo adicional — nunca como única fuente, y sin ningún campo nuevo en `agents.json` ni en el tipo `Agent`.
+
+`wikiStore.ts` parsea el catálogo de `wiki/index.md` (excluyendo `glosario.md`: es enorme y su descripción haría match genérico con casi cualquier agente, desplazando páginas más específicas) y puntúa cada página por solapamiento de palabras clave contra el texto de consulta, ponderado por especificidad (IDF suavizado): una palabra rara en el catálogo (p. ej. "rsi", presente en 1-2 páginas) pesa mucho más que una genérica (p. ej. "mercado" o "indicadores", presente en decenas) — sin este peso, cualquier agente que mencione "indicadores técnicos" empataría con casi toda la categoría por igual. Un acierto en el nombre de archivo (p. ej. "macd" en el prompt del agente y `macd.md`) pesa el doble que un acierto suelto en la descripción. No hay embeddings ni tooling externo — es el mismo criterio de simplicidad que usa la wiki (`wiki/METHODOLOGY.md`: un catálogo tipo `index.md` funciona bien sin embeddings hasta ~100 fuentes).
+
+`getWikiContextBlock(queryText, opts)` encadena selección → lectura de las páginas elegidas (quita frontmatter y las secciones `## Ver también`/`## Fuentes`, trunca a un máximo de caracteres) → formateo, y se llama desde dos sitios, cada uno con su propio texto de consulta y presupuesto de páginas:
+
+- `realExecutor.ts` (`runRealAgent`): consulta = rol + `systemPrompt` del agente; hasta 3 páginas.
+- `mql5Generator.ts` (`generateMql5`): consulta = resumen + indicadores clave de la estrategia ya decidida; hasta 2 páginas (el prompt ya es denso con el estándar de generación de EAs y las lecciones de compilación).
+
+En ambos casos el bloque de wiki se concatena al `systemPrompt` existente (mismo patrón que las lecciones de compilación de `mql5KnowledgeStore.ts` — ver sección siguiente). Todo el acceso a disco está envuelto en `try/catch`: si la wiki no existe, una página falta, o el parseo falla, la ejecución del agente sigue igual que antes (bloque vacío), nunca se rompe por esto.
+
+Es un heurístico de primera pasada — si en uso real resulta demasiado ruidoso o demasiado escaso, ajustar `minScore`/`maxPages` en las dos llamadas a `getWikiContextBlock(...)` antes de plantearse algo más sofisticado.
+
 ## Endpoints
 
 - `GET/POST /api/agents`, `PUT/DELETE /api/agents/:id`

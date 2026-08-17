@@ -1,4 +1,5 @@
 import type { Agent, StrategyProposalLite } from '../types.js';
+import { getWikiContextBlock } from '../store/wikiStore.js';
 
 const REQUEST_TIMEOUT_MS = 60_000;
 
@@ -89,8 +90,10 @@ export async function runRealAgent(
   timeframe: string
 ): Promise<RealExecutionResult> {
   const model = agent.model || process.env.OMNIROUTE_DEFAULT_MODEL || 'auto/best-reasoning';
+  const baseSystemPrompt = agent.systemPrompt || `Eres ${agent.name}, ${agent.role}.`;
+  const wikiBlock = await getWikiContextBlock(`${agent.role}\n${agent.systemPrompt}`, { maxPages: 3 });
   const messages: ChatMessage[] = [
-    { role: 'system', content: agent.systemPrompt || `Eres ${agent.name}, ${agent.role}.` },
+    { role: 'system', content: wikiBlock ? `${baseSystemPrompt}\n\n${wikiBlock}` : baseSystemPrompt },
     { role: 'user', content: buildUserPrompt(pair, timeframe, context) },
   ];
 

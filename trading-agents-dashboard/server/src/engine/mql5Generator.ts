@@ -5,6 +5,7 @@ import {
   recordConfirmedFix,
   renderIssuesForPrompt,
 } from '../store/mql5KnowledgeStore.js';
+import { getWikiContextBlock } from '../store/wikiStore.js';
 import type { Mql5GenerationResult, StrategyProposalLite } from '../types.js';
 
 // Antes esto acotaba la duración de una única petición HTTP bloqueante, así que se mantenía
@@ -278,7 +279,10 @@ export async function generateMql5(
 
   const learnedIssues = await loadTopIssues(20);
   const learnedSection = renderIssuesForPrompt(learnedIssues);
-  const systemPrompt = learnedSection ? `${MQL5_STANDARD_SYSTEM_PROMPT}\n\n${learnedSection}` : MQL5_STANDARD_SYSTEM_PROMPT;
+  const wikiSection = await getWikiContextBlock(`${strategy.resumen}\n${strategy.indicadoresClave.join(', ')}`, {
+    maxPages: 2,
+  });
+  const systemPrompt = [MQL5_STANDARD_SYSTEM_PROMPT, learnedSection, wikiSection].filter(Boolean).join('\n\n');
 
   onProgress?.({ attempt: 1, maxAttempts: MAX_COMPILE_ATTEMPTS, phase: 'generating' });
   let draft = await requestEa(resolvedModel, systemPrompt, buildUserPrompt(strategy));
