@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { nanoid } from 'nanoid';
 import { listAgents } from '../store/agentsStore.js';
 import { saveRun, loadRun, listRuns, deleteRun } from '../store/runsStore.js';
-import { executeRun } from '../engine/orchestrator.js';
+import { executeRun, DEFAULT_MAX_RETRIES } from '../engine/orchestrator.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import type { Run } from '../types.js';
 
@@ -19,7 +19,7 @@ runsRouter.get(
 runsRouter.post(
   '/',
   asyncHandler(async (req, res) => {
-    const { pair, timeframe } = req.body ?? {};
+    const { pair, timeframe, maxRetries } = req.body ?? {};
     if (!pair || typeof pair !== 'string') {
       res.status(400).json({ error: 'pair is required' });
       return;
@@ -38,6 +38,8 @@ runsRouter.post(
       status: 'running',
       createdAt: new Date().toISOString(),
       results: agents.map((a) => ({ agentId: a.id, status: 'waiting' })),
+      retryCount: 0,
+      maxRetries: typeof maxRetries === 'number' && Number.isFinite(maxRetries) ? maxRetries : DEFAULT_MAX_RETRIES,
     };
     await saveRun(run);
 
