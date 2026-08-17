@@ -43,8 +43,10 @@ runsRouter.post(
     };
     await saveRun(run);
 
-    executeRun(run, agents).catch((err) => {
+    executeRun(run, agents).catch(async (err) => {
       console.error('[runs] execution failed', err);
+      run.status = 'error';
+      await saveRun(run).catch(() => {});
     });
 
     res.status(202).json(run);

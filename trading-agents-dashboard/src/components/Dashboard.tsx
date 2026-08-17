@@ -232,28 +232,6 @@ export const Dashboard = () => {
               </button>
             </div>
 
-            {strategyResults.length > 0 && (
-              <div className="mt-14">
-                <div className="flex items-center gap-3 mb-6">
-                  <span className="text-base font-medium text-cyan whitespace-nowrap">Propuesta de estrategia</span>
-                  <span className="h-px flex-1 bg-line/60" aria-hidden="true" />
-                </div>
-                <div className="space-y-6">
-                  {strategyResults.map((r) => {
-                    const agent = agents.find((a) => a.id === r.agentId);
-                    return r.strategy && agent ? (
-                      <StrategyResultCard
-                        key={r.agentId}
-                        agentName={agent.name}
-                        strategy={r.strategy}
-                        agentModel={agent.model}
-                      />
-                    ) : null;
-                  })}
-                </div>
-              </div>
-            )}
-
             {verdictResults.length > 0 && (
               <div className="mt-14">
                 <div className="flex items-center gap-3 mb-6">
@@ -271,6 +249,28 @@ export const Dashboard = () => {
                         attempt={r.attempt}
                         retryCount={currentRun?.retryCount}
                         maxRetries={currentRun?.maxRetries}
+                      />
+                    ) : null;
+                  })}
+                </div>
+              </div>
+            )}
+
+            {strategyResults.length > 0 && (
+              <div className="mt-14">
+                <div className="flex items-center gap-3 mb-6">
+                  <span className="text-base font-medium text-cyan whitespace-nowrap">Propuesta de estrategia</span>
+                  <span className="h-px flex-1 bg-line/60" aria-hidden="true" />
+                </div>
+                <div className="space-y-6">
+                  {strategyResults.map((r) => {
+                    const agent = agents.find((a) => a.id === r.agentId);
+                    return r.strategy && agent ? (
+                      <StrategyResultCard
+                        key={r.agentId}
+                        agentName={agent.name}
+                        strategy={r.strategy}
+                        agentModel={agent.model}
                       />
                     ) : null;
                   })}

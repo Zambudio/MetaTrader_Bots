@@ -4,6 +4,10 @@ import { computeSMA, computeRSI, computeMACD, computeBollingerBands, computeATR 
 
 const RECENT_CANDLES_FOR_RANGE = 50;
 
+/** Se inyecta en el prompt cuando no hay snapshot: los agentes deben saber que NO lo recibieron. */
+const SNAPSHOT_UNAVAILABLE =
+  'Snapshot de mercado: NO DISPONIBLE (no se pudieron descargar velas para este par/timeframe) — indícalo explícitamente en tu análisis y no inventes valores.';
+
 function lastValue(points: { value: number }[]): number | undefined {
   return points.length > 0 ? points[points.length - 1].value : undefined;
 }
@@ -40,13 +44,13 @@ function formatSnapshot(pair: string, timeframe: string, candles: Candle[]): str
 export async function buildMarketSnapshotBlock(pair: string, timeframe: string): Promise<string> {
   try {
     const candles = await getCandles(pair, timeframe);
-    if (candles.length === 0) return '';
+    if (candles.length === 0) return SNAPSHOT_UNAVAILABLE;
     return formatSnapshot(pair, timeframe, candles);
   } catch (err) {
     console.warn(
       `[marketSnapshot] no se pudo calcular el snapshot de ${pair} ${timeframe}:`,
       err instanceof Error ? err.message : err
     );
-    return '';
+    return SNAPSHOT_UNAVAILABLE;
   }
 }

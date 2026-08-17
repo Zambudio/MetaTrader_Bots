@@ -105,6 +105,7 @@ export function retryEntryPoints(agents: Agent[], subgraph: Set<string>): string
 
 function resultText(result: AgentRunResult | undefined): string {
   if (!result) return '';
+  if (result.status === 'error') return '[ERROR: este agente falló y no produjo salida — no asumas su contenido]';
   if (result.output) return result.output;
   if (result.strategy) return JSON.stringify(result.strategy);
   if (result.verdict) return JSON.stringify(result.verdict);
@@ -182,8 +183,12 @@ export async function executeRun(run: Run, agents: Agent[]): Promise<void> {
     if (!verdict || verdict.veredicto !== 'ajustar') break;
     if (run.retryCount >= run.maxRetries) break;
 
-    run.retryCount += 1;
     const subgraph = computeRetrySubgraph(agents, verdictAgent.id);
+    // Si algún agente del subgrafo ha fallado con error técnico, reintentar solo repetiría
+    // el mismo fallo (el run terminará en 'error' igualmente): no gastamos más llamadas.
+    if (run.results.some((r) => subgraph.has(r.agentId) && r.status === 'error')) break;
+
+    run.retryCount += 1;
     const entryIds = retryEntryPoints(agents, subgraph);
     const objectionsText = formatObjections(verdict, run.retryCount);
     const extraContextByAgentId = new Map(entryIds.map((id) => [id, objectionsText]));
