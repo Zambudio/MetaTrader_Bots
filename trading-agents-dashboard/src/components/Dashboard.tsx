@@ -8,6 +8,7 @@ import { PairSelector } from './PairSelector';
 import { PriceChart } from './PriceChart';
 import { RunHistoryModal } from './RunHistoryModal';
 import { StrategyResultCard } from './StrategyResultCard';
+import { VerdictResultCard } from './VerdictResultCard';
 import { buildLevels, wouldCreateCycle } from '../lib/agentGraph';
 import type { Agent } from '../types/agent';
 
@@ -39,6 +40,7 @@ export const Dashboard = () => {
 
   const resultsByAgentId = new Map((currentRun?.results ?? []).map((r) => [r.agentId, r]));
   const strategyResults = (currentRun?.results ?? []).filter((r) => r.strategy);
+  const verdictResults = (currentRun?.results ?? []).filter((r) => r.verdict);
   const levels = buildLevels(agents);
 
   const handleDelete = async (id: string) => {
@@ -245,6 +247,30 @@ export const Dashboard = () => {
                         agentName={agent.name}
                         strategy={r.strategy}
                         agentModel={agent.model}
+                      />
+                    ) : null;
+                  })}
+                </div>
+              </div>
+            )}
+
+            {verdictResults.length > 0 && (
+              <div className="mt-14">
+                <div className="flex items-center gap-3 mb-6">
+                  <span className="text-base font-medium text-cyan whitespace-nowrap">Veredicto</span>
+                  <span className="h-px flex-1 bg-line/60" aria-hidden="true" />
+                </div>
+                <div className="space-y-6">
+                  {verdictResults.map((r) => {
+                    const agent = agents.find((a) => a.id === r.agentId);
+                    return r.verdict && agent ? (
+                      <VerdictResultCard
+                        key={r.agentId}
+                        agentName={agent.name}
+                        verdict={r.verdict}
+                        attempt={r.attempt}
+                        retryCount={currentRun?.retryCount}
+                        maxRetries={currentRun?.maxRetries}
                       />
                     ) : null;
                   })}

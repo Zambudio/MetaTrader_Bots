@@ -110,10 +110,11 @@ export const AgentCard = forwardRef<HTMLDivElement, Props>(
             <span className={`text-sm font-medium ${STATUS_TEXT[status]}`}>{STATUS_LABELS[status]}</span>
           </div>
 
-          {(agent.dependsOn.length > 0 || agent.model) && (
+          {(agent.dependsOn.length > 0 || agent.model || (runResult?.attempt ?? 1) > 1) && (
             <div className="flex flex-col items-center gap-0.5 mt-2 text-sm text-muted">
               {agent.dependsOn.length > 0 && <span>Encadenado</span>}
               {agent.model && <span className="truncate max-w-full text-cyan-soft">{agent.model}</span>}
+              {(runResult?.attempt ?? 1) > 1 && <span className="text-violet">Intento {runResult?.attempt}</span>}
             </div>
           )}
 
