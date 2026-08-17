@@ -1,4 +1,4 @@
-import type { Agent, StrategyProposalLite } from '../types.js';
+import type { Agent, StrategyProposalLite, VerdictResult } from '../types.js';
 import { getWikiContextBlock } from '../store/wikiStore.js';
 
 const REQUEST_TIMEOUT_MS = 60_000;
@@ -6,6 +6,7 @@ const REQUEST_TIMEOUT_MS = 60_000;
 export interface RealExecutionResult {
   output?: string;
   strategy?: StrategyProposalLite;
+  verdict?: VerdictResult;
 }
 
 const STRATEGY_TOOL = {
@@ -33,12 +34,40 @@ const STRATEGY_TOOL = {
   },
 };
 
+const VERDICT_TOOL = {
+  type: 'function' as const,
+  function: {
+    name: 'emitir_veredicto',
+    description: 'Emite el veredicto final sobre la propuesta de estrategia tras revisar las críticas de los validadores.',
+    parameters: {
+      type: 'object',
+      properties: {
+        veredicto: {
+          type: 'string',
+          enum: ['go', 'ajustar', 'no_operar'],
+          description:
+            "'go' si la propuesta es sólida y las críticas no la invalidan, 'ajustar' si hay objeciones concretas y corregibles, 'no_operar' si las condiciones u objeciones son serias y ninguna propuesta de entrada tiene sentido ahora mismo.",
+        },
+        razon: { type: 'string', description: 'Explicación breve del veredicto.' },
+        objeciones: {
+          type: 'array',
+          items: { type: 'string' },
+          description: "Objeciones concretas y corregibles. Rellenar siempre que veredicto sea 'ajustar'.",
+        },
+      },
+      required: ['veredicto', 'razon'],
+    },
+  },
+};
+
+type Tool = typeof STRATEGY_TOOL | typeof VERDICT_TOOL;
+
 interface ChatMessage {
   role: 'system' | 'user';
   content: string;
 }
 
-async function chatCompletion(model: string, messages: ChatMessage[], forceStrategyTool: boolean): Promise<any> {
+async function chatCompletion(model: string, messages: ChatMessage[], tool: Tool | null): Promise<any> {
   const baseUrl = process.env.OMNIROUTE_BASE_URL;
   const apiKey = process.env.OMNIROUTE_API_KEY;
   if (!baseUrl || !apiKey) {
@@ -59,9 +88,7 @@ async function chatCompletion(model: string, messages: ChatMessage[], forceStrat
         model,
         messages,
         stream: false,
-        ...(forceStrategyTool
-          ? { tools: [STRATEGY_TOOL], tool_choice: { type: 'function', function: { name: 'propose_strategy' } } }
-          : {}),
+        ...(tool ? { tools: [tool], tool_choice: { type: 'function', function: { name: tool.function.name } } } : {}),
       }),
       signal: controller.signal,
     });
@@ -77,41 +104,43 @@ async function chatCompletion(model: string, messages: ChatMessage[], forceStrat
   }
 }
 
-function buildUserPrompt(pair: string, timeframe: string, context: string): string {
-  return [`Par: ${pair}`, `Timeframe: ${timeframe}`, context ? `Contexto de agentes anteriores:\n${context}` : null]
+function buildUserPrompt(pair: string, timeframe: string, marketSnapshot: string, context: string): string {
+  return [
+    `Par: ${pair}`,
+    `Timeframe: ${timeframe}`,
+    marketSnapshot || null,
+    context ? `Contexto de agentes anteriores:\n${context}` : null,
+  ]
     .filter((part): part is string => Boolean(part))
     .join('\n\n');
+}
+
+function parseToolArgs(data: any): any {
+  const message = data?.choices?.[0]?.message;
+  const toolCall = message?.tool_calls?.[0];
+  if (toolCall?.function?.arguments) return JSON.parse(toolCall.function.arguments);
+  if (typeof message?.content === 'string' && message.content.trim()) return JSON.parse(message.content);
+  throw new Error('El modelo no devolvió la respuesta estructurada esperada');
 }
 
 export async function runRealAgent(
   agent: Agent,
   context: string,
   pair: string,
-  timeframe: string
+  timeframe: string,
+  marketSnapshot: string
 ): Promise<RealExecutionResult> {
   const model = agent.model || process.env.OMNIROUTE_DEFAULT_MODEL || 'auto/best-reasoning';
   const baseSystemPrompt = agent.systemPrompt || `Eres ${agent.name}, ${agent.role}.`;
   const wikiBlock = await getWikiContextBlock(`${agent.role}\n${agent.systemPrompt}`, { maxPages: 3 });
   const messages: ChatMessage[] = [
     { role: 'system', content: wikiBlock ? `${baseSystemPrompt}\n\n${wikiBlock}` : baseSystemPrompt },
-    { role: 'user', content: buildUserPrompt(pair, timeframe, context) },
+    { role: 'user', content: buildUserPrompt(pair, timeframe, marketSnapshot, context) },
   ];
 
   if (agent.outputType === 'strategy') {
-    const data = await chatCompletion(model, messages, true);
-    const message = data?.choices?.[0]?.message;
-    const toolCall = message?.tool_calls?.[0];
-
-    let args: any;
-    if (toolCall?.function?.arguments) {
-      args = JSON.parse(toolCall.function.arguments);
-    } else if (typeof message?.content === 'string' && message.content.trim()) {
-      // Fallback: some models return the JSON directly in content instead of a tool call.
-      args = JSON.parse(message.content);
-    } else {
-      throw new Error('El modelo no devolvió la estrategia estructurada esperada');
-    }
-
+    const data = await chatCompletion(model, messages, STRATEGY_TOOL);
+    const args = parseToolArgs(data);
     const strategy: StrategyProposalLite = {
       pair,
       timeframe,
@@ -126,7 +155,21 @@ export async function runRealAgent(
     return { strategy };
   }
 
-  const data = await chatCompletion(model, messages, false);
+  if (agent.outputType === 'verdict') {
+    const data = await chatCompletion(model, messages, VERDICT_TOOL);
+    const args = parseToolArgs(data);
+    if (args.veredicto !== 'go' && args.veredicto !== 'ajustar' && args.veredicto !== 'no_operar') {
+      throw new Error(`Veredicto inválido devuelto por el modelo: ${String(args.veredicto)}`);
+    }
+    const verdict: VerdictResult = {
+      veredicto: args.veredicto,
+      razon: typeof args.razon === 'string' ? args.razon : '',
+      objeciones: Array.isArray(args.objeciones) ? args.objeciones : undefined,
+    };
+    return { verdict };
+  }
+
+  const data = await chatCompletion(model, messages, null);
   const content = data?.choices?.[0]?.message?.content;
   if (typeof content !== 'string' || !content.trim()) {
     throw new Error('El modelo no devolvió contenido');

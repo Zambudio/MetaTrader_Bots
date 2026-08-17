@@ -1,4 +1,4 @@
-import type { Agent, StrategyProposalLite } from '../types.js';
+import type { Agent, StrategyProposalLite, VerdictResult } from '../types.js';
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -7,27 +7,35 @@ function delay(ms: number): Promise<void> {
 export interface MockExecutionResult {
   output?: string;
   strategy?: StrategyProposalLite;
+  verdict?: VerdictResult;
 }
 
 export async function runMockAgent(
   agent: Agent,
   context: string,
   pair: string,
-  timeframe: string
+  timeframe: string,
+  marketSnapshot: string
 ): Promise<MockExecutionResult> {
   await delay(600 + Math.floor(Math.random() * 600));
 
   if (agent.outputType === 'strategy') {
     return { strategy: buildMockStrategy(agent, pair, timeframe) };
   }
-  return { output: buildMockText(agent, context, pair, timeframe) };
+  if (agent.outputType === 'verdict') {
+    return { verdict: buildMockVerdict(context) };
+  }
+  return { output: buildMockText(agent, context, pair, timeframe, marketSnapshot) };
 }
 
-function buildMockText(agent: Agent, context: string, pair: string, timeframe: string): string {
+function buildMockText(agent: Agent, context: string, pair: string, timeframe: string, marketSnapshot: string): string {
   const contextNote = context ? `\n\nContexto recibido de agentes anteriores:\n${context}` : '';
+  const snapshotNote = marketSnapshot
+    ? '\n\nSnapshot de mercado recibido: sí.'
+    : '\n\nSnapshot de mercado recibido: no (sin velas disponibles).';
   return `[SIMULADO] ${agent.name} (${agent.role}) analizando ${pair} en ${timeframe}.\n\nPrompt configurado: "${
     agent.systemPrompt || '(sin prompt configurado)'
-  }"${contextNote}\n\nEsta es una salida de relleno para probar el flujo — conecta un LLM real para obtener un análisis de verdad.`;
+  }"${snapshotNote}${contextNote}\n\nEsta es una salida de relleno para probar el flujo — conecta un LLM real para obtener un análisis de verdad.`;
 }
 
 function buildMockStrategy(agent: Agent, pair: string, timeframe: string): StrategyProposalLite {
@@ -41,5 +49,20 @@ function buildMockStrategy(agent: Agent, pair: string, timeframe: string): Strat
     takeProfit: 'Nivel de take profit simulado',
     entradasEscalonadas: 'Ejemplo: 3 entradas parciales al 33% cada una (simulado)',
     confianza: 'media (simulado)',
+  };
+}
+
+function buildMockVerdict(context: string): VerdictResult {
+  const isRetry = context.includes('Objeciones del Razonador');
+  if (isRetry) {
+    return { veredicto: 'go', razon: '[SIMULADO] La propuesta corregida resuelve las objeciones planteadas.' };
+  }
+  return {
+    veredicto: 'ajustar',
+    razon: '[SIMULADO] La propuesta necesita ajustes antes de darse por buena.',
+    objeciones: [
+      '[SIMULADO] Objeción de ejemplo del Validador de Coherencia Técnica.',
+      '[SIMULADO] Objeción de ejemplo del Refutador.',
+    ],
   };
 }
