@@ -1,5 +1,6 @@
-export type OutputType = 'text' | 'strategy';
+export type OutputType = 'text' | 'strategy' | 'verdict';
 export type AgentRunStatus = 'idle' | 'waiting' | 'running' | 'done' | 'error';
+export type Veredicto = 'go' | 'ajustar' | 'no_operar';
 
 export interface Agent {
   id: string;
@@ -24,6 +25,12 @@ export interface StrategyProposalLite {
   confianza?: string;
 }
 
+export interface VerdictResult {
+  veredicto: Veredicto;
+  razon: string;
+  objeciones?: string[];
+}
+
 export interface Mql5GenerationResult {
   code: string;
   filename: string;
@@ -39,6 +46,8 @@ export interface AgentRunResult {
   status: AgentRunStatus;
   output?: string;
   strategy?: StrategyProposalLite;
+  verdict?: VerdictResult;
+  attempt?: number;
   startedAt?: string;
   finishedAt?: string;
   error?: string;
@@ -51,6 +60,8 @@ export interface Run {
   status: 'running' | 'done' | 'error';
   createdAt: string;
   results: AgentRunResult[];
+  retryCount?: number;
+  maxRetries?: number;
 }
 
 export interface RunSummary {
