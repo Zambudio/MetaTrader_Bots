@@ -1,4 +1,4 @@
-import type { Agent, StrategyProposalLite } from '../types.js';
+import type { Agent, StrategyProposalLite, VerdictResult } from '../types.js';
 import { getWikiContextBlock } from '../store/wikiStore.js';
 
 const REQUEST_TIMEOUT_MS = Number(process.env.OMNIROUTE_TIMEOUT_MS) || 120_000;
@@ -8,6 +8,7 @@ const RETRY_DELAY_MS = 2000;
 export interface RealExecutionResult {
   output?: string;
   strategy?: StrategyProposalLite;
+  verdict?: VerdictResult;
 }
 
 const STRATEGY_TOOL = {
@@ -34,6 +35,34 @@ const STRATEGY_TOOL = {
     },
   },
 };
+
+const VERDICT_TOOL = {
+  type: 'function' as const,
+  function: {
+    name: 'emitir_veredicto',
+    description: 'Emite el veredicto final sobre la propuesta de estrategia tras revisar las críticas de los validadores.',
+    parameters: {
+      type: 'object',
+      properties: {
+        veredicto: {
+          type: 'string',
+          enum: ['go', 'ajustar', 'no_operar'],
+          description:
+            "'go' si la propuesta es sólida y las críticas no la invalidan, 'ajustar' si hay objeciones concretas y corregibles, 'no_operar' si las condiciones u objeciones son serias y ninguna propuesta de entrada tiene sentido ahora mismo.",
+        },
+        razon: { type: 'string', description: 'Explicación breve del veredicto.' },
+        objeciones: {
+          type: 'array',
+          items: { type: 'string' },
+          description: "Objeciones concretas y corregibles. Rellenar siempre que veredicto sea 'ajustar'.",
+        },
+      },
+      required: ['veredicto', 'razon'],
+    },
+  },
+};
+
+type Tool = typeof STRATEGY_TOOL | typeof VERDICT_TOOL;
 
 interface ChatMessage {
   role: 'system' | 'user';
@@ -67,7 +96,7 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
   }
 }
 
-async function chatCompletion(model: string, messages: ChatMessage[], forceStrategyTool: boolean): Promise<any> {
+async function chatCompletion(model: string, messages: ChatMessage[], tool: Tool | null): Promise<any> {
   const baseUrl = process.env.OMNIROUTE_BASE_URL;
   const apiKey = process.env.OMNIROUTE_API_KEY;
   if (!baseUrl || !apiKey) {
@@ -94,9 +123,7 @@ async function chatCompletion(model: string, messages: ChatMessage[], forceStrat
             model,
             messages,
             stream: false,
-            ...(forceStrategyTool
-              ? { tools: [STRATEGY_TOOL], tool_choice: { type: 'function', function: { name: 'propose_strategy' } } }
-              : {}),
+            ...(tool ? { tools: [tool], tool_choice: { type: 'function', function: { name: tool.function.name } } } : {}),
           }),
         },
         REQUEST_TIMEOUT_MS
@@ -136,6 +163,14 @@ function buildUserPrompt(pair: string, timeframe: string, context: string, snaps
     .join('\n\n');
 }
 
+function parseToolArgs(data: any): any {
+  const message = data?.choices?.[0]?.message;
+  const toolCall = message?.tool_calls?.[0];
+  if (toolCall?.function?.arguments) return JSON.parse(sanitizeJsonResponse(toolCall.function.arguments));
+  if (typeof message?.content === 'string' && message.content.trim()) return JSON.parse(sanitizeJsonResponse(message.content));
+  throw new Error('El modelo no devolvió la respuesta estructurada esperada');
+}
+
 export async function runRealAgent(
   agent: Agent,
   context: string,
@@ -152,22 +187,8 @@ export async function runRealAgent(
   ];
 
   if (agent.outputType === 'strategy') {
-    const data = await chatCompletion(model, messages, true);
-    const message = data?.choices?.[0]?.message;
-    const toolCall = message?.tool_calls?.[0];
-
-    let args: any;
-    if (toolCall?.function?.arguments) {
-      const sanitized = sanitizeJsonResponse(toolCall.function.arguments);
-      args = JSON.parse(sanitized);
-    } else if (typeof message?.content === 'string' && message.content.trim()) {
-      // Fallback: some models return JSON directly in content instead of a tool call.
-      const sanitized = sanitizeJsonResponse(message.content);
-      args = JSON.parse(sanitized);
-    } else {
-      throw new Error('El modelo no devolvió la estrategia estructurada esperada');
-    }
-
+    const data = await chatCompletion(model, messages, STRATEGY_TOOL);
+    const args = parseToolArgs(data);
     const strategy: StrategyProposalLite = {
       pair,
       timeframe,
@@ -182,7 +203,21 @@ export async function runRealAgent(
     return { strategy };
   }
 
-  const data = await chatCompletion(model, messages, false);
+  if (agent.outputType === 'verdict') {
+    const data = await chatCompletion(model, messages, VERDICT_TOOL);
+    const args = parseToolArgs(data);
+    if (args.veredicto !== 'go' && args.veredicto !== 'ajustar' && args.veredicto !== 'no_operar') {
+      throw new Error(`Veredicto inválido devuelto por el modelo: ${String(args.veredicto)}`);
+    }
+    const verdict: VerdictResult = {
+      veredicto: args.veredicto,
+      razon: typeof args.razon === 'string' ? args.razon : '',
+      objeciones: Array.isArray(args.objeciones) ? args.objeciones : undefined,
+    };
+    return { verdict };
+  }
+
+  const data = await chatCompletion(model, messages, null);
   const content = data?.choices?.[0]?.message?.content;
   if (typeof content !== 'string' || !content.trim()) {
     throw new Error('El modelo no devolvió contenido');

@@ -39,7 +39,7 @@ agentsRouter.post(
       role: typeof role === 'string' && role ? role : 'Agente',
       systemPrompt: typeof systemPrompt === 'string' ? systemPrompt : '',
       dependsOn: dependsOnList,
-      outputType: outputType === 'strategy' ? 'strategy' : 'text',
+      outputType: outputType === 'strategy' || outputType === 'verdict' ? outputType : 'text',
       photo: typeof photo === 'string' && photo ? photo : undefined,
       model: typeof model === 'string' && model ? model : undefined,
     };
@@ -79,6 +79,14 @@ agentsRouter.put(
           res.status(400).json({ error: 'this dependency would create a cycle' });
           return;
         }
+      }
+    }
+
+    if ('outputType' in updates) {
+      const newOutputType = updates.outputType;
+      if (newOutputType !== 'text' && newOutputType !== 'strategy' && newOutputType !== 'verdict') {
+        res.status(400).json({ error: "outputType must be one of 'text', 'strategy', 'verdict'" });
+        return;
       }
     }
 

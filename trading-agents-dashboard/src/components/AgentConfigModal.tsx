@@ -161,6 +161,9 @@ export const AgentConfigModal = ({ agent, otherAgents, onClose, onSave, onDelete
               <option value="strategy" className="bg-panel">
                 Estrategia final
               </option>
+              <option value="verdict" className="bg-panel">
+                Veredicto (validación final)
+              </option>
             </select>
           </div>
         </div>

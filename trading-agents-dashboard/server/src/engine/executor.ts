@@ -1,10 +1,11 @@
-import type { Agent, StrategyProposalLite } from '../types.js';
+import type { Agent, StrategyProposalLite, VerdictResult } from '../types.js';
 import { runMockAgent } from './mockExecutor.js';
 import { runRealAgent } from './realExecutor.js';
 
 export interface ExecutionResult {
   output?: string;
   strategy?: StrategyProposalLite;
+  verdict?: VerdictResult;
 }
 
 export async function runAgent(

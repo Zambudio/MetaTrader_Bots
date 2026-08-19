@@ -1,4 +1,4 @@
-export type OutputType = 'text' | 'strategy';
+export type OutputType = 'text' | 'strategy' | 'verdict';
 
 export interface Agent {
   id: string;
