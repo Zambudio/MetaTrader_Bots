@@ -1,7 +1,9 @@
 import type { Agent, StrategyProposalLite } from '../types.js';
 import { getWikiContextBlock } from '../store/wikiStore.js';
 
-const REQUEST_TIMEOUT_MS = 60_000;
+const REQUEST_TIMEOUT_MS = Number(process.env.OMNIROUTE_TIMEOUT_MS) || 120_000;
+const MAX_RETRIES = 1;
+const RETRY_DELAY_MS = 2000;
 
 export interface RealExecutionResult {
   output?: string;
@@ -38,6 +40,33 @@ interface ChatMessage {
   content: string;
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function sanitizeJsonResponse(raw: string): string {
+  let cleaned = raw.trim();
+  // Strip markdown code fences if present (```json ... ```)
+  if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  }
+  // Strip SSE prefix if present
+  if (cleaned.startsWith('data: ')) {
+    cleaned = cleaned.replace(/^data:\s*/, '').trim();
+  }
+  return cleaned;
+}
+
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 async function chatCompletion(model: string, messages: ChatMessage[], forceStrategyTool: boolean): Promise<any> {
   const baseUrl = process.env.OMNIROUTE_BASE_URL;
   const apiKey = process.env.OMNIROUTE_API_KEY;
@@ -45,40 +74,64 @@ async function chatCompletion(model: string, messages: ChatMessage[], forceStrat
     throw new Error('OMNIROUTE_BASE_URL/OMNIROUTE_API_KEY no están configurados');
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(`${baseUrl}/v1/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        stream: false,
-        ...(forceStrategyTool
-          ? { tools: [STRATEGY_TOOL], tool_choice: { type: 'function', function: { name: 'propose_strategy' } } }
-          : {}),
-      }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      const body = await response.text().catch(() => '');
-      throw new Error(`OmniRoute respondió ${response.status}: ${body.slice(0, 300)}`);
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      console.warn(`[realExecutor] Reintentando llamada a ${model} tras error previo (intento ${attempt + 1}/${MAX_RETRIES + 1})...`);
+      await delay(RETRY_DELAY_MS * attempt);
     }
 
-    return await response.json();
-  } finally {
-    clearTimeout(timeout);
+    try {
+      const response = await fetchWithTimeout(
+        `${baseUrl}/v1/chat/completions`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages,
+            stream: false,
+            ...(forceStrategyTool
+              ? { tools: [STRATEGY_TOOL], tool_choice: { type: 'function', function: { name: 'propose_strategy' } } }
+              : {}),
+          }),
+        },
+        REQUEST_TIMEOUT_MS
+      );
+
+      if (!response.ok) {
+        const body = await response.text().catch(() => '');
+        throw new Error(`OmniRoute respondió ${response.status}: ${body.slice(0, 300)}`);
+      }
+
+      const text = await response.text();
+      try {
+        return JSON.parse(sanitizeJsonResponse(text));
+      } catch (parseErr) {
+        throw new Error(`Respuesta inválida de OmniRoute: ${text.slice(0, 200)}`);
+      }
+    } catch (err: any) {
+      if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
+        lastError = new Error(`Tiempo de espera agotado (${Math.round(REQUEST_TIMEOUT_MS / 1000)}s) al consultar modelo ${model}`);
+      } else {
+        lastError = err;
+      }
+    }
   }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
-function buildUserPrompt(pair: string, timeframe: string, context: string): string {
-  return [`Par: ${pair}`, `Timeframe: ${timeframe}`, context ? `Contexto de agentes anteriores:\n${context}` : null]
+function buildUserPrompt(pair: string, timeframe: string, context: string, snapshot?: string | null): string {
+  return [
+    `Par: ${pair}`,
+    `Timeframe: ${timeframe}`,
+    snapshot ? snapshot : null,
+    context ? `Contexto de agentes anteriores:\n${context}` : null,
+  ]
     .filter((part): part is string => Boolean(part))
     .join('\n\n');
 }
@@ -87,14 +140,15 @@ export async function runRealAgent(
   agent: Agent,
   context: string,
   pair: string,
-  timeframe: string
+  timeframe: string,
+  snapshot?: string | null
 ): Promise<RealExecutionResult> {
   const model = agent.model || process.env.OMNIROUTE_DEFAULT_MODEL || 'auto/best-reasoning';
   const baseSystemPrompt = agent.systemPrompt || `Eres ${agent.name}, ${agent.role}.`;
   const wikiBlock = await getWikiContextBlock(`${agent.role}\n${agent.systemPrompt}`, { maxPages: 3 });
   const messages: ChatMessage[] = [
     { role: 'system', content: wikiBlock ? `${baseSystemPrompt}\n\n${wikiBlock}` : baseSystemPrompt },
-    { role: 'user', content: buildUserPrompt(pair, timeframe, context) },
+    { role: 'user', content: buildUserPrompt(pair, timeframe, context, snapshot) },
   ];
 
   if (agent.outputType === 'strategy') {
@@ -104,10 +158,12 @@ export async function runRealAgent(
 
     let args: any;
     if (toolCall?.function?.arguments) {
-      args = JSON.parse(toolCall.function.arguments);
+      const sanitized = sanitizeJsonResponse(toolCall.function.arguments);
+      args = JSON.parse(sanitized);
     } else if (typeof message?.content === 'string' && message.content.trim()) {
-      // Fallback: some models return the JSON directly in content instead of a tool call.
-      args = JSON.parse(message.content);
+      // Fallback: some models return JSON directly in content instead of a tool call.
+      const sanitized = sanitizeJsonResponse(message.content);
+      args = JSON.parse(sanitized);
     } else {
       throw new Error('El modelo no devolvió la estrategia estructurada esperada');
     }

@@ -1,6 +1,7 @@
 import type { Agent, Run } from '../types.js';
 import { runAgent } from './executor.js';
 import { saveRun } from '../store/runsStore.js';
+import { buildMarketSnapshot } from './marketSnapshot.js';
 
 export function detectCycle(agents: Agent[], agentId: string, candidateParentId: string): boolean {
   if (candidateParentId === agentId) return true;
@@ -79,42 +80,44 @@ export function ancestorChain(agents: Agent[], agentId: string): Agent[] {
 }
 
 export async function executeRun(run: Run, agents: Agent[]): Promise<void> {
+  // 1. Obtener snapshot de mercado real para el par y timeframe
+  const snapshot = await buildMarketSnapshot(run.pair, run.timeframe);
+
   const levels = buildLevels(agents);
   const resultsById = new Map(run.results.map((r) => [r.agentId, r]));
 
   for (const level of levels) {
-    await Promise.all(
-      level.map(async (agent) => {
-        const result = resultsById.get(agent.id);
-        if (!result) return;
+    // Ejecutar agentes del nivel secuencialmente para garantizar estabilidad en OmniRoute
+    for (const agent of level) {
+      const result = resultsById.get(agent.id);
+      if (!result) continue;
 
-        result.status = 'running';
-        result.startedAt = new Date().toISOString();
+      result.status = 'running';
+      result.startedAt = new Date().toISOString();
+      await saveRun(run);
+
+      try {
+        const context = ancestorChain(agents, agent.id)
+          .map((ancestor) => {
+            const ancestorResult = resultsById.get(ancestor.id);
+            const text =
+              ancestorResult?.output ?? (ancestorResult?.strategy ? JSON.stringify(ancestorResult.strategy) : '');
+            return `${ancestor.name}: ${text}`;
+          })
+          .join('\n\n');
+
+        const { output, strategy } = await runAgent(agent, context, run.pair, run.timeframe, snapshot);
+        result.output = output;
+        result.strategy = strategy;
+        result.status = 'done';
+      } catch (err) {
+        result.status = 'error';
+        result.error = err instanceof Error ? err.message : 'error desconocido';
+      } finally {
+        result.finishedAt = new Date().toISOString();
         await saveRun(run);
-
-        try {
-          const context = ancestorChain(agents, agent.id)
-            .map((ancestor) => {
-              const ancestorResult = resultsById.get(ancestor.id);
-              const text =
-                ancestorResult?.output ?? (ancestorResult?.strategy ? JSON.stringify(ancestorResult.strategy) : '');
-              return `${ancestor.name}: ${text}`;
-            })
-            .join('\n\n');
-
-          const { output, strategy } = await runAgent(agent, context, run.pair, run.timeframe);
-          result.output = output;
-          result.strategy = strategy;
-          result.status = 'done';
-        } catch (err) {
-          result.status = 'error';
-          result.error = err instanceof Error ? err.message : 'error desconocido';
-        } finally {
-          result.finishedAt = new Date().toISOString();
-          await saveRun(run);
-        }
-      })
-    );
+      }
+    }
   }
 
   run.status = run.results.some((r) => r.status === 'error') ? 'error' : 'done';

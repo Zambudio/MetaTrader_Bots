@@ -13,19 +13,21 @@ export async function runMockAgent(
   agent: Agent,
   context: string,
   pair: string,
-  timeframe: string
+  timeframe: string,
+  snapshot?: string | null
 ): Promise<MockExecutionResult> {
   await delay(600 + Math.floor(Math.random() * 600));
 
   if (agent.outputType === 'strategy') {
     return { strategy: buildMockStrategy(agent, pair, timeframe) };
   }
-  return { output: buildMockText(agent, context, pair, timeframe) };
+  return { output: buildMockText(agent, context, pair, timeframe, snapshot) };
 }
 
-function buildMockText(agent: Agent, context: string, pair: string, timeframe: string): string {
+function buildMockText(agent: Agent, context: string, pair: string, timeframe: string, snapshot?: string | null): string {
+  const snapshotNote = snapshot ? `\n\n${snapshot}` : '';
   const contextNote = context ? `\n\nContexto recibido de agentes anteriores:\n${context}` : '';
-  return `[SIMULADO] ${agent.name} (${agent.role}) analizando ${pair} en ${timeframe}.\n\nPrompt configurado: "${
+  return `[SIMULADO] ${agent.name} (${agent.role}) analizando ${pair} en ${timeframe}.${snapshotNote}\n\nPrompt configurado: "${
     agent.systemPrompt || '(sin prompt configurado)'
   }"${contextNote}\n\nEsta es una salida de relleno para probar el flujo — conecta un LLM real para obtener un análisis de verdad.`;
 }

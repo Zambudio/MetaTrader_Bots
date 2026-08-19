@@ -11,11 +11,12 @@ export async function runAgent(
   agent: Agent,
   context: string,
   pair: string,
-  timeframe: string
+  timeframe: string,
+  snapshot?: string | null
 ): Promise<ExecutionResult> {
   const useReal = Boolean(process.env.OMNIROUTE_API_KEY && process.env.OMNIROUTE_BASE_URL);
   if (useReal) {
-    return runRealAgent(agent, context, pair, timeframe);
+    return runRealAgent(agent, context, pair, timeframe, snapshot);
   }
-  return runMockAgent(agent, context, pair, timeframe);
+  return runMockAgent(agent, context, pair, timeframe, snapshot);
 }
