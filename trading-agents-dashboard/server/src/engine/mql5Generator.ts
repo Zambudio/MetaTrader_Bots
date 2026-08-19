@@ -38,20 +38,26 @@ Reglas obligatorias:
    enviar cualquier orden.
 6. Valida SL/TP contra SYMBOL_TRADE_STOPS_LEVEL y SYMBOL_TRADE_FREEZE_LEVEL.
 7. Usa un Magic Number fijo para todas las operaciones del EA.
-8. Trata explícitamente MqlTradeResult.retcode — nunca asumas que OrderSend() == true implica
-   fill.
+8. Trata explícitamente MqlTradeResult.retcode o usa métodos de CTrade (trade.Buy / trade.Sell) —
+   nunca asumas que OrderSend() == true implica fill.
 9. Usa OnTradeTransaction() para reconstruir el estado real de posiciones/órdenes; impide
    duplicar entradas por ticks repetidos o reinicios del Terminal.
-10. Si la estrategia es bar-based, distingue barra nueva de tick nuevo (compara el timestamp de
-    la última barra procesada).
+10. Si la estrategia es bar-based, coloca un guard estricto al inicio de OnTick():
+    datetime currentBarTime = iTime(_Symbol, _Period, 0);
+    if(currentBarTime == lastBarTime) return;
+    lastBarTime = currentBarTime;
 11. Como máximo una operación por señal — no reevalúes la misma condición en cada tick mientras
     siga siendo verdadera.
-12. Documenta cada input (input group "Estrategia"/"Riesgo"/"Filtros") con un comentario breve de
+12. PREVENCIÓN DE LOG SPAM: NUNCA hagas Print() en ramas 'else' o condiciones no cumplidas dentro de OnTick()
+    (ej. "Señal filtrada por RSI..."), ya que en backtests genera archivos de log de varios gigabytes y congela MetaTrader.
+    Solo imprime en OnInit/OnDeinit, cuando se ejecute una acción real (orden enviada) o un error real de ejecución.
+13. EJECUCIÓN Y FILLING MODE: Si usas CTrade, utiliza directamente sus métodos (trade.Buy(), trade.Sell(), trade.PositionOpen())
+    o configura trade.SetTypeFillingBySymbol(_Symbol). NUNCA hardcodees ORDER_FILLING_IOC a ciegas en MqlTradeRequest
+    sin verificar SYMBOL_FILLING_MODE, ya que muchos brokers/símbolos lo rechazan con error 10030.
+14. Documenta cada input (input group "Estrategia"/"Riesgo"/"Filtros") con un comentario breve de
     qué representa y su unidad (puntos, pips, %, etc.).
-13. Logging suficiente: registra señal generada, señal filtrada (y por qué), orden enviada y
-    resultado recibido.
 
-Errores de compilación frecuentes en MQL5 — verificados, evítalos siempre:
+Errores de compilación y ejecución frecuentes en MQL5 — verificados, evítalos siempre:
 - SYMBOL_VOLUME_STEP, SYMBOL_VOLUME_MIN, SYMBOL_VOLUME_MAX, SYMBOL_POINT,
   SYMBOL_TRADE_TICK_SIZE, SYMBOL_TRADE_TICK_VALUE y SYMBOL_TRADE_CONTRACT_SIZE son
   propiedades DOUBLE — consúltalas con SymbolInfoDouble, nunca con SymbolInfoInteger.

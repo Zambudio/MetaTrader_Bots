@@ -45,6 +45,7 @@ Sin LLM en el bucle de ejecución. Ver [`00_Contexto_y_Objetivos_Proyecto.md`](0
 | [17_Estandar_Desarrollo_EAs_con_IA.md](17_Estandar_Desarrollo_EAs_con_IA.md) | BORRADOR | 2026-08-07 | 22 reglas obligatorias + plantilla de prompt estándar | Sí |
 | [18_Primeros_Bots_Laboratorio.md](18_Primeros_Bots_Laboratorio.md) | BORRADOR | 2026-08-07 | 3 EAs con objetivos de aprendizaje explícitos, sin parámetros fijados | No |
 | [19_Plan_Puesta_en_Marcha.md](19_Plan_Puesta_en_Marcha.md) | BORRADOR | 2026-08-07 | Incorpora resolución práctica de Q-001, Q-004, Q-005 como pasos explícitos | Sí |
+| [20_Pipeline_Validacion_Backtest_Automatizado_e_Iteracion_Agentica.md](20_Pipeline_Validacion_Backtest_Automatizado_e_Iteracion_Agentica.md) | BORRADOR | 2026-08-19 | Pipeline cerrado de backtest headless, Quality Gate e iteración agéntica autónoma | Sí |
 | [ROADMAP.md](ROADMAP.md) | BORRADOR | 2026-08-07 | Fase 7 (real) explícitamente fuera de alcance | No |
 | [GLOSARIO.md](GLOSARIO.md) | BORRADOR | 2026-08-07 | — | No |
 
