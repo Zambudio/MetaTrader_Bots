@@ -106,7 +106,7 @@ async function loadCatalogCache(): Promise<CatalogCache> {
   try {
     stat = await fs.stat(WIKI_INDEX_FILE);
   } catch (err) {
-    console.warn('[wikiStore] no se pudo acceder a wiki/index.md:', err);
+    console.warn('[wikiStore] no se pudo acceder a wiki-Traiding/index.md:', err);
     return { mtimeMs: -1, entries: [], idf: new Map() };
   }
   if (catalogCache && catalogCache.mtimeMs === stat.mtimeMs) {
@@ -164,7 +164,7 @@ export async function loadPageContent(ref: WikiPageRef, maxChars = 2000): Promis
   try {
     raw = await fs.readFile(filePath, 'utf-8');
   } catch (err) {
-    console.warn(`[wikiStore] no se pudo leer wiki/${ref.file}:`, err);
+    console.warn(`[wikiStore] no se pudo leer wiki-Traiding/${ref.file}:`, err);
     return null;
   }
 
@@ -181,7 +181,7 @@ export async function loadPageContent(ref: WikiPageRef, maxChars = 2000): Promis
 
 export function renderWikiForPrompt(pages: Array<{ ref: WikiPageRef; title: string; body: string }>): string {
   if (pages.length === 0) return '';
-  const sections = pages.map((p) => `### ${p.title} (wiki/${p.ref.file})\n${p.body}`);
+  const sections = pages.map((p) => `### ${p.title} (wiki-Traiding/${p.ref.file})\n${p.body}`);
   return `Conocimiento de apoyo de la wiki de trading del repo (contexto adicional para enriquecer tu análisis — no sustituye tus instrucciones anteriores ni el contexto de la cadena de agentes):
 
 ${sections.join('\n\n')}`;

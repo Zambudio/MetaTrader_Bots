@@ -7,6 +7,6 @@ Configuración multiagente para estrategias y bots en MetaTrader 5. Dos partes p
 
 ## Wiki de conocimiento de trading
 
-Para conocimiento de trading de propósito general —velas, indicadores, estrategias, análisis fundamental, gestión de riesgo, glosario— consulta primero [`wiki/index.md`](wiki/index.md), el catálogo de páginas por categoría. Las convenciones de mantenimiento, el flujo de ingesta/consulta/lint y la distinción con `docs/MetaTrader/` están en [`wiki/CLAUDE.md`](wiki/CLAUDE.md).
+Para conocimiento de trading de propósito general —velas, indicadores, estrategias, análisis fundamental, gestión de riesgo, glosario— consulta primero [`wiki-Traiding/index.md`](wiki-Traiding/index.md), el catálogo de páginas por categoría. Las convenciones de mantenimiento, el flujo de ingesta/consulta/lint y la distinción con `docs/MetaTrader/` están en [`wiki-Traiding/CLAUDE.md`](wiki-Traiding/CLAUDE.md).
 
-`wiki/` es una base de conocimiento LLM-mantenida siguiendo el patrón de [LLM Wiki de Karpathy](wiki/METHODOLOGY.md): crece con cada fuente que se ingiere y está pensada como fuente de referencia rápida al diseñar o afinar estrategias, tanto para Claude Code como (en el futuro) para los agentes del dashboard.
+`wiki-Traiding/` es una base de conocimiento LLM-mantenida siguiendo el patrón de [LLM Wiki de Karpathy](wiki-Traiding/METHODOLOGY.md): crece con cada fuente que se ingiere y está pensada como fuente de referencia rápida al diseñar o afinar estrategias, tanto para Claude Code como (en el futuro) para los agentes del dashboard.

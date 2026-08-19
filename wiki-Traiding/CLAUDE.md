@@ -10,7 +10,7 @@ Base de conocimiento de trading de propósito general: desde lo más básico (ve
 
 `docs/MetaTrader/` (ver [`../docs/MetaTrader/00_INDEX.md`](../docs/MetaTrader/00_INDEX.md)) es un corpus **distinto**: investigación de ingeniería para construir *este* sistema concreto de bots (arquitectura de MetaTrader 5, modelo de órdenes/deals/posiciones, MCP, despliegue en VPS, estándar de generación de EAs con IA, selección de broker...). Es una investigación fija, auditada, ligada a decisiones de este proyecto — no una wiki de conocimiento de trading que vaya creciendo con el tiempo.
 
-Esta wiki (`wiki/`) es lo contrario: conocimiento de trading de propósito general, reutilizable fuera de este proyecto concreto, que crece con cada fuente que se ingiere. Si una página de aquí necesita mencionar algo específico de este proyecto (p. ej. cómo se usa un indicador en el dashboard), enlaza a `docs/MetaTrader/` o a `trading-agents-dashboard/`, no dupliques ese contenido.
+Esta wiki (`wiki-Traiding/`) es lo contrario: conocimiento de trading de propósito general, reutilizable fuera de este proyecto concreto, que crece con cada fuente que se ingiere. Si una página de aquí necesita mencionar algo específico de este proyecto (p. ej. cómo se usa un indicador en el dashboard), enlaza a `docs/MetaTrader/` o a `trading-agents-dashboard/`, no dupliques ese contenido.
 
 ## Idioma y convenciones
 
@@ -29,7 +29,7 @@ Esta wiki (`wiki/`) es lo contrario: conocimiento de trading de propósito gener
 ## Estructura
 
 ```
-wiki/
+wiki-Traiding/
   CLAUDE.md          <- este archivo (schema)
   METHODOLOGY.md      <- patrón original (Karpathy), íntegro
   index.md             <- catálogo de páginas, por categoría

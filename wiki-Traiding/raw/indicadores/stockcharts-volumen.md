@@ -1,5 +1,5 @@
 > Fuente original: https://chartschool.stockcharts.com/table-of-contents/technical-indicators-and-overlays/technical-indicators/on-balance-volume-obv.md — descargado 2026-08-16
-> Captura completa vía WebFetch. Cubre On Balance Volume (OBV) como indicador representativo de volumen; el índice de StockCharts ChartSchool también lista Chaikin Money Flow (CMF) y Money Flow Index (MFI) como indicadores de volumen relacionados, no descargados individualmente en esta ingesta (ver `wiki/raw/README.md` — quedan como pendiente si se quiere ampliar).
+> Captura completa vía WebFetch. Cubre On Balance Volume (OBV) como indicador representativo de volumen; el índice de StockCharts ChartSchool también lista Chaikin Money Flow (CMF) y Money Flow Index (MFI) como indicadores de volumen relacionados, no descargados individualmente en esta ingesta (ver `wiki-Traiding/raw/README.md` — quedan como pendiente si se quiere ampliar).
 
 # On Balance Volume (OBV) (StockCharts ChartSchool)
 

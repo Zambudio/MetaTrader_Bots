@@ -1,7 +1,7 @@
 ---
 tags: [glosario]
 updated: 2026-08-16
-fuentes: [todas las páginas de wiki/]
+fuentes: [todas las páginas de wiki-Traiding/]
 ---
 
 # Glosario de trading
