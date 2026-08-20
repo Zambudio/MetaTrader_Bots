@@ -6,6 +6,14 @@ Servidor Express que persiste en disco (JSON) la configuración de agentes y el 
 
 `src/engine/executor.ts` decide en cada ejecución: si `OMNIROUTE_BASE_URL` y `OMNIROUTE_API_KEY` están configurados (ver `.env.example`), usa `realExecutor.ts` para llamar a OmniRoute (gateway de IA self-hosted en el NAS, API compatible con OpenAI) con el modelo del agente (o `OMNIROUTE_DEFAULT_MODEL` si no se ha elegido uno). Si no están configurados, usa `mockExecutor.ts` (salidas de relleno etiquetadas `[SIMULADO]`) sin llamar a ningún LLM. No hay fallback silencioso de real a mock en caliente: si OmniRoute falla a mitad de una ejecución con la clave configurada, ese agente termina en estado `error` con el mensaje real, en vez de disfrazarse de resultado simulado.
 
+## Orquestador de la cadena de agentes (`src/engine/orchestrator.ts`)
+
+Ejecuta los agentes por niveles topológicos (`buildLevels`) y valida cada estrategia numéricamente (`strategyValidator.ts`: geometría de la orden y R:R mínimo) antes de dejarla pasar a los siguientes agentes. Si el agente de estrategia (`outputType: 'strategy'`) falla esa validación — típicamente el LLM calculando mal su propio R:R —, se reintenta **in-situ** hasta 2 veces más, reenviándole el error exacto en el contexto, antes de detener el run; es un fallo de aritmética puntual, no una objeción de fondo, así que no tiene sentido tumbar todo el análisis por él (mismo patrón que ya usa `mql5Generator.ts` con los errores de compilación).
+
+Aparte de eso, el agente de veredicto (`outputType: 'verdict'`) puede pedir "ajustar": el orquestador reejecuta solo el subgrafo relevante (agente de estrategia + validadores + el propio veredicto, no los especialistas de nivel 0) hasta `maxRetries` veces (0-3, elegible en la UI), inyectando las objeciones del veredicto como contexto extra a los agentes que dependen de algo fuera del subgrafo.
+
+**Reconciliación de runs huérfanos al arrancar** (`reconcileOrphanedRuns` en `runsStore.ts`, llamado desde `index.ts` antes de `app.listen`): cualquier run con `status: 'running'` persistido es necesariamente huérfano al arrancar un proceso nuevo — la ejecución en memoria que lo llevaba murió con el proceso anterior (reinicio de `tsx watch` por una edición de código, caída, redeploy) y nadie va a reanudarla sola. Sin esto, el agente que estuviera en curso (y cualquiera aguas abajo en `waiting`) se quedaba mostrando un spinner infinito en el frontend para siempre, sin ningún botón de "reintentar" porque ese solo aparece para `status: 'error'`.
+
 ## Conocimiento de apoyo de la wiki (`src/store/wikiStore.ts`)
 
 Tanto la cadena de agentes de análisis como el generador de MQL5 reciben automáticamente contexto de la wiki de trading del repo (`wiki-Traiding/`, ver `wiki-Traiding/CLAUDE.md`) como apoyo adicional — nunca como única fuente, y sin ningún campo nuevo en `agents.json` ni en el tipo `Agent`.
@@ -21,8 +29,14 @@ En ambos casos el bloque de wiki se concatena al `systemPrompt` existente (mismo
 
 Es un heurístico de primera pasada — si en uso real resulta demasiado ruidoso o demasiado escaso, ajustar `minScore`/`maxPages` en las dos llamadas a `getWikiContextBlock(...)` antes de plantearse algo más sofisticado.
 
-## Endpoints
+## Endpoints y Autenticación
 
+Por defecto en desarrollo local, todos los endpoints están abiertos. Si se define la variable de entorno `DASHBOARD_API_KEY` en `.env` (p. ej. `DASHBOARD_API_KEY=mi-clave-secreta`), todos los endpoints de modificación (POST, PUT, DELETE, PATCH) exigirán autenticación mediante:
+- Header `x-api-key: mi-clave-secreta` o
+- Header `Authorization: Bearer mi-clave-secreta`.
+Las peticiones sin clave válida recibirán un error `401 Unauthorized`.
+
+### Rutas principales:
 - `GET/POST /api/agents`, `PUT/DELETE /api/agents/:id`
 - `GET /api/pairs` (favoritos primero), `PATCH /api/pairs/:symbol/favorite` (marca/desmarca favorito; crea el par si no existía), `DELETE /api/pairs/:symbol`
 - `GET /api/symbols/search?q=` (proxy a Twelve Data `/symbol_search`, hasta 20 resultados)
@@ -37,7 +51,7 @@ Es un heurístico de primera pasada — si en uso real resulta demasiado ruidoso
 Convierte la `StrategyProposalLite` de un agente en un Expert Advisor `.mq5`, lo compila de verdad contra MetaEditor y itera automáticamente sobre los errores reales que reporte el compilador — así se cierra el bucle "generar → compilar → corregir" en vez de entregar código sin verificar.
 
 **Flujo (`mql5Generator.ts` → `generateMql5`)**:
-1. Llama a OmniRoute (`chatCompletion`, tool-calling forzado a `deliver_ea`) con el estándar del proyecto (`docs/MetaTrader/17_Estandar_Desarrollo_EAs_con_IA.md`) como system prompt, más las lecciones ya confirmadas de generaciones anteriores (`loadTopIssues` + `renderIssuesForPrompt`, ver knowledge store abajo).
+1. Llama a OmniRoute (`chatCompletion`, tool-calling forzado a `deliver_ea`) con el estándar del proyecto (`wiki-Traiding/proyecto-mt5-bots/17_Estandar_Desarrollo_EAs_con_IA.md`) como system prompt, más las lecciones ya confirmadas de generaciones anteriores (`loadTopIssues` + `renderIssuesForPrompt`, ver knowledge store abajo).
 2. Compila el `.mq5` recibido contra MetaEditor real (`mql5Compiler.ts` → `metaeditor64.exe /compile`, parseando el `.log`; ruta configurable con `METAEDITOR_PATH`, ver `.env.example`). Si MetaEditor no está instalado en la máquina, `compileStatus` queda en `'unverified'` en vez de fallar.
 3. Si hay errores reales de compilación, se los pasa tal cual al modelo (`buildFixPrompt`) pidiendo que corrija únicamente eso — hasta 3 intentos en total.
 4. Cada intento (errores, warnings, si se resolvió algo del intento anterior) se registra en `server/src/data/mql5-attempts-log.jsonl`. Cuando un intento corrige errores del anterior Y el modelo declara `fixSummary`, esa corrección queda confirmada por compilación real y se guarda en `server/src/data/mql5-known-issues.json` (`mql5KnowledgeStore.ts` → `recordConfirmedFix`), que a su vez regenera `docs/MQL5_ERRORES_CONOCIDOS.md` — documento **autogenerado, no editar a mano** — y esas lecciones se inyectan automáticamente en el prompt de la *siguiente* generación (paso 1), para que un análisis nuevo no repita errores ya resueltos en análisis anteriores.
@@ -47,6 +61,18 @@ Convierte la `StrategyProposalLite` de un agente en un Expert Advisor `.mq5`, lo
 **Requisitos para compilación real** (si faltan, sigue funcionando pero sin verificar código): MetaTrader 5 instalado (ruta por defecto `C:\Program Files\MetaTrader 5\metaeditor64.exe`, o `METAEDITOR_PATH`) y `OMNIROUTE_API_KEY`/`OMNIROUTE_BASE_URL` configurados — sin esto último, `/generate` devuelve un esqueleto `[SIMULADO]` (mismo mecanismo que `mockExecutor.ts`).
 
 **Warnings de MetaEditor filtrados por origen:** el log de compilación también reporta errores/warnings de los headers estándar que el EA incluye (p. ej. `Trade.mqh`: "declaration of 'request'/'result' hides global variable" en prácticamente cualquier EA que use `CTrade`) — no son accionables porque no forman parte del código generado. `mql5Compiler.ts` → `parseLog` solo conserva las líneas cuyo path coincide con el `.mq5` que se acaba de compilar, así que `compileWarnings` deja de mostrar ruido ajeno al archivo. También se añadió una regla al prompt de generación para el warning 68 más frecuente que sí era del propio archivo (`#property version "1.0.1"` en formato de 3 números en vez de `"x.yy"`).
+
+## Backtest headless automático y bucle de auto-optimización (`src/engine/mql5Backtester.ts`)
+
+Tras compilar limpio, `generateMql5`/`optimizeMql5` lanzan automáticamente un backtest real contra MetaTrader (`terminal64.exe /config:<ini>`, símbolo/timeframe/rango de la estrategia, 2025.08.01–2026.08.18), sin que el usuario pegue ningún log a mano. `runHeadlessBacktest` sondea el log del agente de tester (`Tester/<perfil>/Agent-N/logs/`) hasta encontrar la marca `final balance` (backtest terminado) o agotar 180s, calcula el Quality Gate cuantitativo (Doc 20 §4: ≥15 operaciones, 0 rechazadas, esperanza >0.10R, PF≥1.20, beneficio neto>0, drawdown≤15%) sobre la sesión parseada, y si no lo pasa reintenta hasta 2 veces más regenerando el código con los motivos de fallo concretos (`buildOptimizationPrompt`) antes de entregar el EA.
+
+**Los logs de MetaTrader (agente de tester y terminal principal) son siempre UTF-16LE con BOM, nunca UTF-8** — un `fs.readFile(path, 'utf-8')` sobre ellos no lanza excepción, solo decodifica cada carácter de 2 bytes como basura silenciosa. Esto hizo que la detección de "final balance" nunca funcionara (ni en backtests exitosos ni con operaciones reales): todo backtest, sin importar su resultado real en MetaTrader, se reportaba como "no se pudo confirmar la finalización" tras agotar el timeout. Corregido leyendo siempre como `utf16le` (`readLogFileAnyEncoding`).
+
+El sondeo también revisa el log **principal** del terminal (no solo el del agente) para dos fallos deterministas que antes se confundían con "puede seguir corriendo, prueba más tarde":
+- **Símbolo inexistente en la cuenta conectada** (`tester didn't start` / `symbol X not exist`) — no corregible regenerando código, se reporta de inmediato (2-3s) con el nombre del símbolo y la sugerencia de revisar el Market Watch del bróker.
+- **Crash en tiempo de ejecución del EA** (`critical runtime error ... array out of range...`, típico de `CopyBuffer`/`CopyClose` con menos elementos copiados que índices accedidos después) — SÍ corregible: el mensaje exacto (módulo/archivo/línea/columna) se pasa como motivo al bucle de auto-optimización para que el modelo corrija esa causa concreta en el siguiente intento, igual que ya hacía con fallos de Quality Gate. Lo mismo aplica si el EA corre limpio pero no abre ninguna operación en todo el histórico (condiciones de entrada demasiado restrictivas).
+
+El botón manual "🧠 Iterar con IA (Optimizar)" de la UI reutiliza el código y el backtest previos de verdad (antes era un stub que llamaba a `generateMql5` desde cero, ignorando ambos) y, cuando no hay sesión previa con estadísticas (crash, símbolo inexistente), usa las `qualityNotes`/`optimizationNotes` ya mostradas al usuario en el intento anterior como motivo, en vez de caer directo al mensaje genérico de "sin operaciones".
 
 ## Validación de backtest (`src/engine/mt5LogParser.ts`)
 

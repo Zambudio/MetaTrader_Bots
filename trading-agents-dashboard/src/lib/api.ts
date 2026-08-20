@@ -1,4 +1,4 @@
-import type { Agent } from '../types/agent';
+import type { Agent, AgentConfigPreset } from '../types/agent';
 import type { Run, RunSummary } from '../types/run';
 import type { Candle } from '../types/candle';
 import type { SavedPair, SymbolSearchResult } from '../types/pair';
@@ -25,10 +25,22 @@ export const api = {
     request<Agent>(`/agents/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
   deleteAgent: (id: string) =>
     request<{ ok: boolean }>(`/agents/${id}`, { method: 'DELETE' }),
+  listAgentConfigs: () =>
+    request<{ presets: AgentConfigPreset[]; activePresetId: string | null }>('/agent-configs'),
+  createAgentConfig: (name: string) =>
+    request<AgentConfigPreset>('/agent-configs', { method: 'POST', body: JSON.stringify({ name }) }),
+  updateAgentConfig: (id: string) =>
+    request<AgentConfigPreset>(`/agent-configs/${id}`, { method: 'PUT' }),
+  loadAgentConfig: (id: string) =>
+    request<{ agents: Agent[]; activePresetId: string }>(`/agent-configs/${id}/load`, { method: 'POST' }),
+  deleteAgentConfig: (id: string) =>
+    request<{ ok: boolean }>(`/agent-configs/${id}`, { method: 'DELETE' }),
   listPairs: () => request<SavedPair[]>('/pairs'),
   listModels: () => request<string[]>('/models'),
-  startRun: (pair: string, timeframe: string) =>
-    request<Run>('/runs', { method: 'POST', body: JSON.stringify({ pair, timeframe }) }),
+  startRun: (pair: string, timeframe: string, maxRetries?: number) =>
+    request<Run>('/runs', { method: 'POST', body: JSON.stringify({ pair, timeframe, maxRetries }) }),
+  resumeRun: (id: string, agentId?: string) =>
+    request<Run>(`/runs/${id}/resume`, { method: 'POST', body: JSON.stringify({ agentId }) }),
   getRun: (id: string) => request<Run>(`/runs/${id}`),
   listRuns: () => request<RunSummary[]>('/runs'),
   deleteRun: (id: string) => request<{ ok: boolean }>(`/runs/${id}`, { method: 'DELETE' }),
@@ -42,11 +54,38 @@ export const api = {
   removePair: (symbol: string) =>
     request<SavedPair[]>(`/pairs/${encodeURIComponent(symbol)}`, { method: 'DELETE' }),
   searchSymbols: (query: string) => request<SymbolSearchResult[]>(`/symbols/search?q=${encodeURIComponent(query)}`),
-  startMql5Generation: (strategy: StrategyProposalLite, model?: string) =>
-    request<{ jobId: string }>('/mql5/generate', { method: 'POST', body: JSON.stringify({ strategy, model }) }),
+  startMql5Generation: (strategy: StrategyProposalLite, model?: string, runId?: string) =>
+    request<{ jobId: string }>('/mql5/generate', { method: 'POST', body: JSON.stringify({ strategy, model, runId }) }),
+  startMql5Optimization: (
+    strategy: StrategyProposalLite,
+    previousCode: string,
+    previousBacktest: Mt5LogSession | null,
+    iteration: number,
+    model?: string,
+    runId?: string,
+    previousNotes?: string[]
+  ) =>
+    request<{ jobId: string }>('/mql5/optimize', {
+      method: 'POST',
+      body: JSON.stringify({ strategy, previousCode, previousBacktest, iteration, model, runId, previousNotes }),
+    }),
   getMql5Job: (jobId: string) => request<Mql5Job>(`/mql5/generate/${jobId}`),
-  generateMql5: (strategy: StrategyProposalLite, model: string | undefined, onProgress?: (progress: Mql5GenerationProgress) => void) =>
-    generateMql5WithPolling(strategy, model, onProgress),
+  generateMql5: (
+    strategy: StrategyProposalLite,
+    model: string | undefined,
+    runId?: string,
+    onProgress?: (progress: Mql5GenerationProgress) => void
+  ) => generateMql5WithPolling(strategy, model, runId, onProgress),
+  optimizeMql5: (
+    strategy: StrategyProposalLite,
+    previousCode: string,
+    previousBacktest: Mt5LogSession | null,
+    iteration: number,
+    model: string | undefined,
+    runId?: string,
+    onProgress?: (progress: Mql5GenerationProgress) => void,
+    previousNotes?: string[]
+  ) => optimizeMql5WithPolling(strategy, previousCode, previousBacktest, iteration, model, runId, onProgress, previousNotes),
   analyzeBacktestLog: (logText: string) =>
     request<{ sessions: Mt5LogSession[] }>('/backtest/analyze', { method: 'POST', body: JSON.stringify({ logText }) }),
 };
@@ -55,18 +94,10 @@ const MQL5_POLL_INTERVAL_MS = 2000;
 const MQL5_MAX_CONSECUTIVE_NETWORK_FAILURES = 5;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// The generation itself (LLM + up to 3 MetaEditor compiles) can take minutes, so it runs as a
-// server-side job (api.startMql5Generation) that we poll instead of one long blocking request —
-// a multi-minute single fetch dies outright on any dev-server restart or network blip
-// ("Failed to fetch"), while a poll tick that fails just retries on the next tick. A definitive
-// HTTP error (e.g. 404 "job not found", which happens if the server restarted mid-job) is not
-// retried — only raw network failures (TypeError) are, since those are the transient kind.
-async function generateMql5WithPolling(
-  strategy: StrategyProposalLite,
-  model: string | undefined,
+async function pollJob(
+  jobId: string,
   onProgress?: (progress: Mql5GenerationProgress) => void
 ): Promise<Mql5GenerationResult> {
-  const { jobId } = await api.startMql5Generation(strategy, model);
   let consecutiveNetworkFailures = 0;
 
   while (true) {
@@ -88,9 +119,34 @@ async function generateMql5WithPolling(
 
     if (job.status === 'running') {
       onProgress?.(job.progress);
-      continue;
+    } else if (job.status === 'done') {
+      return job.result;
+    } else if (job.status === 'error') {
+      throw new Error(job.message);
     }
-    if (job.status === 'done') return job.result;
-    throw new Error(job.message);
   }
+}
+
+async function generateMql5WithPolling(
+  strategy: StrategyProposalLite,
+  model: string | undefined,
+  runId?: string,
+  onProgress?: (progress: Mql5GenerationProgress) => void
+): Promise<Mql5GenerationResult> {
+  const { jobId } = await api.startMql5Generation(strategy, model, runId);
+  return pollJob(jobId, onProgress);
+}
+
+async function optimizeMql5WithPolling(
+  strategy: StrategyProposalLite,
+  previousCode: string,
+  previousBacktest: Mt5LogSession | null,
+  iteration: number,
+  model: string | undefined,
+  runId?: string,
+  onProgress?: (progress: Mql5GenerationProgress) => void,
+  previousNotes?: string[]
+): Promise<Mql5GenerationResult> {
+  const { jobId } = await api.startMql5Optimization(strategy, previousCode, previousBacktest, iteration, model, runId, previousNotes);
+  return pollJob(jobId, onProgress);
 }

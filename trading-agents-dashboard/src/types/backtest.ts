@@ -35,6 +35,10 @@ export interface Mt5LogStats {
   grossLossApprox: number | null;
   profitFactorApprox: number | null;
   expectancyR: number | null;
+  maxDrawdownPct: number | null;
+  maxDrawdownUSD: number | null;
+  rejectedOrdersCount: number;
+  isApproximationUSD?: boolean;
   periodStart: string | null;
   periodEnd: string | null;
   flags: string[];

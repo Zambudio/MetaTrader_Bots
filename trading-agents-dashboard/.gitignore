@@ -21,6 +21,11 @@ dist-ssr
 *.ntvs*
 *.njsproj
 *.sln
-*.sw?
-server/src/data/
+server/src/data/*
+!server/src/data/agents.json
+!server/src/data/pairs.json
+server/src/data/runs/
+server/src/data/mql5-tmp/
+server/src/data/deliverables/
+server/src/data/*.jsonl
 server/.env

@@ -100,7 +100,7 @@ El paquete se comunica con el terminal MT5 via IPC local — **el terminal debe 
 1. **Latencia**: MQL5 nativo (`OnTick`) < Python via MT5 < APIs REST externas. Para estrategias sensibles a la latencia, MQL5 nativo es preferible.
 2. **Fiabilidad**: manejo de reconexión, timeouts, validación de datos. Un bot que no gestiona desconexiones puede dejar posiciones huérfanas.
 3. **Calidad de datos históricos**: los datos de MT5 vienen del broker y pueden variar entre brokers. Para backtests rigurosos, considerar fuentes independientes (Dukascopy, TrueFX para forex tick data).
-4. **VPS**: para operación 24/5, el terminal MT5 debe correr en un VPS Windows — ver la documentación de despliegue de este proyecto en `docs/MetaTrader/`.
+4. **VPS**: para operación 24/5, el terminal MT5 debe correr en un VPS Windows — ver la documentación de despliegue de este proyecto en [`../proyecto-mt5-bots/14_Despliegue_24x7_VPS.md`](../proyecto-mt5-bots/14_Despliegue_24x7_VPS.md).
 
 ## Relación con otras páginas
 

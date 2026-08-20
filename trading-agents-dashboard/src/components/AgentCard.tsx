@@ -7,7 +7,12 @@ import { MarkdownText } from './MarkdownText';
 interface Props {
   agent: Agent;
   runResult?: AgentRunResult;
+  isOrphanedByDisabled?: boolean;
+  onToggleEnabled?: () => void;
   onConfigure: () => void;
+  onRetry?: () => void;
+  isAnalysing?: boolean;
+  hasCurrentRun?: boolean;
   isDragging?: boolean;
   dropState?: 'valid' | 'invalid' | null;
   onDragStart?: (e: DragEvent<HTMLDivElement>) => void;
@@ -60,11 +65,29 @@ function initials(name: string) {
 
 export const AgentCard = forwardRef<HTMLDivElement, Props>(
   (
-    { agent, runResult, onConfigure, isDragging, dropState, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop },
+    {
+      agent,
+      runResult,
+      isOrphanedByDisabled,
+      onToggleEnabled,
+      onConfigure,
+      onRetry,
+      isAnalysing,
+      hasCurrentRun,
+      isDragging,
+      dropState,
+      onDragStart,
+      onDragEnd,
+      onDragOver,
+      onDragLeave,
+      onDrop,
+    },
     ref,
   ) => {
     const status = runResult?.status ?? 'idle';
     const isRunning = status === 'running';
+    const isError = status === 'error';
+    const isDisabled = agent.enabled === false;
     const [photoFailed, setPhotoFailed] = useState(false);
     const showPhoto = Boolean(agent.photo) && !photoFailed;
 
@@ -84,7 +107,7 @@ export const AgentCard = forwardRef<HTMLDivElement, Props>(
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
-        className={`w-72 bg-panel border border-line/70 rounded-2xl p-5 cursor-grab active:cursor-grabbing transition-[opacity,box-shadow] ${isDragging ? 'opacity-40' : ''} ${dropRing}`}
+        className={`w-72 bg-panel border border-line/70 rounded-2xl p-5 cursor-grab active:cursor-grabbing transition-[opacity,box-shadow] ${isDragging ? 'opacity-40' : isDisabled ? 'opacity-50' : ''} ${dropRing}`}
       >
         <div className="flex flex-col items-center text-center">
           <div className={`relative rounded-full ring-2 ${RING[status]} ${isRunning ? 'pulse-soft' : ''} p-0.5`}>
@@ -110,6 +133,15 @@ export const AgentCard = forwardRef<HTMLDivElement, Props>(
             <span className={`text-sm font-medium ${STATUS_TEXT[status]}`}>{STATUS_LABELS[status]}</span>
           </div>
 
+          {isDisabled && (
+            <span className="mt-1.5 text-xs font-semibold text-muted uppercase tracking-wider">Inactivo</span>
+          )}
+          {!isDisabled && isOrphanedByDisabled && (
+            <span className="mt-1.5 text-xs font-medium text-amber-400/90">
+              Omitido: depende de un agente inactivo
+            </span>
+          )}
+
           {(agent.dependsOn.length > 0 || agent.model || (runResult?.attempt ?? 1) > 1) && (
             <div className="flex flex-col items-center gap-0.5 mt-2 text-sm text-muted">
               {agent.dependsOn.length > 0 && <span>Encadenado</span>}
@@ -118,17 +150,61 @@ export const AgentCard = forwardRef<HTMLDivElement, Props>(
             </div>
           )}
 
-          <button
-            onClick={onConfigure}
-            className="mt-3 text-base font-medium text-cyan hover:text-cyan-soft transition-colors"
-          >
-            Configurar
-          </button>
+          <div className="flex items-center justify-center gap-3 mt-3 flex-wrap">
+            <button
+              onClick={onConfigure}
+              className="text-sm font-medium text-cyan hover:text-cyan-soft transition-colors"
+            >
+              Configurar
+            </button>
+            {onToggleEnabled && (
+              <>
+                <span className="text-line/80">·</span>
+                <button
+                  onClick={onToggleEnabled}
+                  className={`text-sm font-medium transition-colors ${
+                    isDisabled ? 'text-bull hover:text-bull/80' : 'text-muted hover:text-paper'
+                  }`}
+                >
+                  {isDisabled ? 'Activar' : 'Desactivar'}
+                </button>
+              </>
+            )}
+            {hasCurrentRun && onRetry && (
+              <>
+                <span className="text-line/80">·</span>
+                <button
+                  onClick={onRetry}
+                  disabled={isAnalysing}
+                  title="Reejecutar el análisis a partir de este agente"
+                  className={`text-sm font-medium transition-all flex items-center gap-1 ${
+                    isError
+                      ? 'text-bear hover:text-bear/80 font-semibold underline'
+                      : 'text-muted hover:text-cyan disabled:opacity-30 disabled:cursor-not-allowed'
+                  }`}
+                >
+                  ↻ {isError ? 'Reintentar' : 'Reejecutar'}
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {runResult?.error && (
-          <div className="mt-4 p-3 bg-bear/10 border border-bear/25 rounded-xl">
-            <p className="text-base text-bear">{runResult.error}</p>
+          <div className="mt-4 p-3 bg-bear/10 border border-bear/25 rounded-xl text-left">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <p className="text-xs font-semibold text-bear uppercase tracking-wider">Error en este agente</p>
+              {onRetry && (
+                <button
+                  onClick={onRetry}
+                  disabled={isAnalysing}
+                  className="text-xs text-bear font-bold hover:underline disabled:opacity-40"
+                >
+                  ↻ Reintentar
+                </button>
+              )}
+            </div>
+            <p className="text-sm text-bear/90 break-words">{runResult.error}</p>
           </div>
         )}
 

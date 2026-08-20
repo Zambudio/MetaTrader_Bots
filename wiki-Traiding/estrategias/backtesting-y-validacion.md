@@ -6,7 +6,7 @@ fuentes: [raw/estrategias/bailey-pseudo-mathematics-financial-charlatanism.pdf, 
 
 # Backtesting y validación de estrategias
 
-> Esta página es teoría **general** sobre cómo validar rigurosamente cualquier estrategia de trading antes de operarla en real, aplicable en cualquier contexto y plataforma. No es una guía de cómo hacer backtesting en este repo concreto — para eso ver [`../../docs/MetaTrader/07_Backtesting_Optimizacion_y_Validacion_Quant.md`](../../docs/MetaTrader/07_Backtesting_Optimizacion_y_Validacion_Quant.md), que cubre la implementación específica (Strategy Tester de MT5, datos históricos, flujo de optimización de este proyecto).
+> Esta página es teoría **general** sobre cómo validar rigurosamente cualquier estrategia de trading antes de operarla en real, aplicable en cualquier contexto y plataforma. No es una guía de cómo hacer backtesting en este repo concreto — para eso ver [`../proyecto-mt5-bots/07_Backtesting_Optimizacion_y_Validacion_Quant.md`](../proyecto-mt5-bots/07_Backtesting_Optimizacion_y_Validacion_Quant.md), que cubre la implementación específica (Strategy Tester de MT5, datos históricos, flujo de optimización de este proyecto).
 
 ## Qué es un backtest y por qué es tan fácil de engañarse con uno
 
@@ -81,7 +81,7 @@ Como resumen los propios autores: el disclaimer habitual "rendimientos pasados n
 - El caso de "Stocks in Play" en [ruptura-breakout.md](ruptura-breakout.md) es un ejemplo de estrategia validada con una muestra libre de sesgo de supervivencia (más de 7.000 acciones, incluyendo las que quebraron) — el tipo de rigor de diseño que esta página recomienda exigir.
 - El [scalping](scalping.md) es, por su altísima rotación y su dependencia extrema de costes de transacción bien modelados, la categoría de estrategia donde los errores de backtesting descritos aquí (sobre todo costes mal modelados) tienen el efecto más distorsionador.
 - El overfitting de parámetros descrito aquí (probar demasiadas configuraciones hasta encontrar una ganadora por azar) es el equivalente, a nivel de diseño de estrategia, del error de "apilar indicadores redundantes para una falsa sensación de robustez" que describe [Cómo combinar indicadores](../indicadores/como-combinar-indicadores.md) — ambos son formas de curve-fitting: confundir ruido explotado con señal real.
-- Para la implementación concreta de backtesting y optimización en este proyecto (Strategy Tester de MetaTrader 5, walk-forward práctico con datos históricos de MT5), ver [`../../docs/MetaTrader/07_Backtesting_Optimizacion_y_Validacion_Quant.md`](../../docs/MetaTrader/07_Backtesting_Optimizacion_y_Validacion_Quant.md) — esta página cubre solo la teoría general, no esa implementación.
+- Para la implementación concreta de backtesting y optimización en este proyecto (Strategy Tester de MetaTrader 5, walk-forward práctico con datos históricos de MT5), ver [`../proyecto-mt5-bots/07_Backtesting_Optimizacion_y_Validacion_Quant.md`](../proyecto-mt5-bots/07_Backtesting_Optimizacion_y_Validacion_Quant.md) — esta página cubre solo la teoría general, no esa implementación.
 
 ## Fuentes
 

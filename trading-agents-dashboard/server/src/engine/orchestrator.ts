@@ -2,9 +2,19 @@ import type { Agent, AgentRunResult, Run, VerdictResult } from '../types.js';
 import { runAgent } from './executor.js';
 import { saveRun } from '../store/runsStore.js';
 import { buildMarketSnapshot } from './marketSnapshot.js';
+import { validateStrategyProposal } from './strategyValidator.js';
 
 export const DEFAULT_MAX_RETRIES = 2;
 export const MAX_RETRIES_CAP = 3;
+
+/**
+ * Reintentos in-situ del propio agente cuando su estrategia falla la validación numérica
+ * determinista (p. ej. R:R por debajo del mínimo). Es un fallo de aritmética del LLM, no una
+ * objeción del Razonador — no tiene sentido tumbar todo el run por un desliz corregible
+ * reenviando el error exacto al mismo agente, igual que ya hace mql5Generator con los errores
+ * de compilación.
+ */
+const MAX_STRATEGY_VALIDATION_RETRIES = 2;
 
 export function detectCycle(agents: Agent[], agentId: string, candidateParentId: string): boolean {
   if (candidateParentId === agentId) return true;
@@ -20,6 +30,59 @@ export function detectCycle(agents: Agent[], agentId: string, candidateParentId:
     if (agent) queue.push(...agent.dependsOn);
   }
   return false;
+}
+
+/**
+ * Quita los agentes desactivados (`enabled === false`) y, transitivamente,
+ * cualquier agente que dependa de uno ya quitado — aunque él mismo esté
+ * activo, se queda sin input y no puede ejecutarse.
+ */
+export function filterEnabledAgents(agents: Agent[]): Agent[] {
+  const removed = new Set<string>(agents.filter((a) => a.enabled === false).map((a) => a.id));
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const agent of agents) {
+      if (removed.has(agent.id)) continue;
+      if (agent.dependsOn.some((depId) => removed.has(depId))) {
+        removed.add(agent.id);
+        changed = true;
+      }
+    }
+  }
+
+  return agents.filter((a) => !removed.has(a.id));
+}
+
+export function validateGraphIntegrity(agents: Agent[]): { valid: boolean; error?: string } {
+  const byId = new Map(agents.map((a) => [a.id, a]));
+
+  // 1. Validar que no haya dependencias huérfanas
+  for (const agent of agents) {
+    for (const depId of agent.dependsOn) {
+      if (!byId.has(depId)) {
+        return {
+          valid: false,
+          error: `El agente "${agent.name}" (${agent.id}) depende de un agente inexistente (${depId}).`,
+        };
+      }
+    }
+  }
+
+  // 2. Validar que no haya ciclos
+  for (const agent of agents) {
+    for (const depId of agent.dependsOn) {
+      if (detectCycle(agents, agent.id, depId)) {
+        return {
+          valid: false,
+          error: `Dependencia cíclica detectada involucrando al agente "${agent.name}" (${agent.id}) y "${depId}".`,
+        };
+      }
+    }
+  }
+
+  return { valid: true };
 }
 
 export function buildLevels(agents: Agent[]): Agent[][] {
@@ -38,7 +101,7 @@ export function buildLevels(agents: Agent[]): Agent[][] {
 
   const levels: Agent[][] = [];
   const seen = new Set<string>();
-  let currentLevel = agents.filter((agent) => inDegree.get(agent.id) === 0);
+  let currentLevel = agents.filter((agent) => (inDegree.get(agent.id) ?? 0) === 0);
 
   while (currentLevel.length > 0) {
     levels.push(currentLevel);
@@ -122,7 +185,7 @@ interface RunPassOptions {
   extraContextByAgentId?: Map<string, string>;
 }
 
-async function runPass(run: Run, agents: Agent[], snapshot: string | null, options: RunPassOptions = {}): Promise<void> {
+async function runPass(run: Run, agents: Agent[], snapshot: string | null, options: RunPassOptions = {}): Promise<boolean> {
   const levels = buildLevels(agents);
   const resultsById = new Map(run.results.map((r) => [r.agentId, r]));
 
@@ -130,14 +193,28 @@ async function runPass(run: Run, agents: Agent[], snapshot: string | null, optio
     const toRun = options.onlyAgentIds ? level.filter((a) => options.onlyAgentIds!.has(a.id)) : level;
     if (toRun.length === 0) continue;
 
-    // Ejecutar agentes del nivel secuencialmente (en vez de en paralelo) para garantizar
-    // estabilidad frente a OmniRoute.
     for (const agent of toRun) {
       const result = resultsById.get(agent.id);
       if (!result) continue;
 
+      // Si ya está completado con éxito y no se forzó su reintento explícito, no repetir
+      if (result.status === 'done' && !options.onlyAgentIds?.has(agent.id)) continue;
+
+      // Si alguno de sus ancestros directos falló o no está completado, no puede ejecutarse
+      const ancestorsIncomplete = agent.dependsOn.some((depId) => {
+        const depResult = resultsById.get(depId);
+        return !depResult || depResult.status !== 'done';
+      });
+
+      if (ancestorsIncomplete) {
+        result.status = 'waiting';
+        await saveRun(run);
+        continue;
+      }
+
       result.status = 'running';
       result.startedAt = new Date().toISOString();
+      result.error = undefined;
       await saveRun(run);
 
       try {
@@ -148,20 +225,60 @@ async function runPass(run: Run, agents: Agent[], snapshot: string | null, optio
         const extra = options.extraContextByAgentId?.get(agent.id);
         if (extra) context = context ? `${extra}\n\n${context}` : extra;
 
-        const { output, strategy, verdict } = await runAgent(agent, context, run.pair, run.timeframe, snapshot);
+        let output: string | undefined;
+        let strategy: typeof result.strategy;
+        let verdict: typeof result.verdict;
+        let lastValidationError: string | undefined;
+
+        for (let validationAttempt = 0; validationAttempt <= MAX_STRATEGY_VALIDATION_RETRIES; validationAttempt++) {
+          const attemptContext = lastValidationError
+            ? `${context}\n\nTu propuesta anterior fue rechazada por incoherencia numérica: ${lastValidationError}\nCorrige los precios de entrada/stop loss/take profit para que sean matemáticamente coherentes con la dirección y cumplan el R:R mínimo exigido.`
+            : context;
+
+          ({ output, strategy, verdict } = await runAgent(agent, attemptContext, run.pair, run.timeframe, snapshot));
+
+          // 1.1: Validación determinista de coherencia numérica tras generación de estrategia
+          if (!strategy) break;
+
+          const valResult = validateStrategyProposal(strategy);
+          if (valResult.valid) {
+            if (valResult.normalized) {
+              strategy.direction = valResult.normalized.direction;
+              strategy.entryPriceNum = valResult.normalized.entryPriceNum;
+              strategy.stopLossNum = valResult.normalized.stopLossNum;
+              strategy.takeProfitNum = valResult.normalized.takeProfitNum;
+            }
+            lastValidationError = undefined;
+            break;
+          }
+
+          lastValidationError = valResult.error;
+          if (validationAttempt === MAX_STRATEGY_VALIDATION_RETRIES) {
+            throw new Error(`Incoherencia numérica en estrategia tras ${MAX_STRATEGY_VALIDATION_RETRIES + 1} intentos: ${valResult.error}`);
+          }
+        }
+
         result.output = output;
         result.strategy = strategy;
         result.verdict = verdict;
         result.status = 'done';
+        result.finishedAt = new Date().toISOString();
+        await saveRun(run);
       } catch (err) {
         result.status = 'error';
         result.error = err instanceof Error ? err.message : 'error desconocido';
-      } finally {
         result.finishedAt = new Date().toISOString();
+        run.status = 'error';
         await saveRun(run);
+
+        // DETENCIÓN INMEDIATA: no continuar con agentes dependientes ni niveles posteriores
+        console.warn(`[orchestrator] Agente ${agent.name} (${agent.id}) falló. Flujo detenido.`);
+        return false;
       }
     }
   }
+
+  return true;
 }
 
 function resetForRetry(run: Run, subgraph: Set<string>): void {
@@ -169,13 +286,31 @@ function resetForRetry(run: Run, subgraph: Set<string>): void {
 }
 
 export async function executeRun(run: Run, agents: Agent[]): Promise<void> {
+  // 2.1: Validar integridad del grafo antes de iniciar
+  const graphValidation = validateGraphIntegrity(agents);
+  if (!graphValidation.valid) {
+    run.status = 'error';
+    const firstResult = run.results[0];
+    if (firstResult) {
+      firstResult.status = 'error';
+      firstResult.error = `Error de grafo de agentes: ${graphValidation.error}`;
+    }
+    await saveRun(run);
+    return;
+  }
+
   run.maxRetries = Math.min(MAX_RETRIES_CAP, Math.max(0, run.maxRetries ?? DEFAULT_MAX_RETRIES));
   run.retryCount = run.retryCount ?? 0;
 
   // 1. Obtener snapshot de mercado real para el par y timeframe
   const snapshot = await buildMarketSnapshot(run.pair, run.timeframe);
 
-  await runPass(run, agents, snapshot);
+  const passed = await runPass(run, agents, snapshot);
+  if (!passed) {
+    run.status = 'error';
+    await saveRun(run);
+    return;
+  }
 
   const verdictAgent = agents.find((a) => a.outputType === 'verdict');
   while (verdictAgent) {
@@ -185,8 +320,6 @@ export async function executeRun(run: Run, agents: Agent[]): Promise<void> {
     if (run.retryCount >= run.maxRetries) break;
 
     const subgraph = computeRetrySubgraph(agents, verdictAgent.id);
-    // Si algún agente del subgrafo ha fallado con error técnico, reintentar solo repetiría
-    // el mismo fallo (el run terminará en 'error' igualmente): no gastamos más llamadas.
     if (run.results.some((r) => subgraph.has(r.agentId) && r.status === 'error')) break;
 
     run.retryCount += 1;
@@ -197,9 +330,43 @@ export async function executeRun(run: Run, agents: Agent[]): Promise<void> {
     resetForRetry(run, subgraph);
     await saveRun(run);
 
-    await runPass(run, agents, snapshot, { onlyAgentIds: subgraph, extraContextByAgentId });
+    const retryPassed = await runPass(run, agents, snapshot, { onlyAgentIds: subgraph, extraContextByAgentId });
+    if (!retryPassed) {
+      run.status = 'error';
+      await saveRun(run);
+      return;
+    }
   }
 
-  run.status = run.results.some((r) => r.status === 'error') ? 'error' : 'done';
+  // 2.1: Si quedan agentes en waiting o running que no se pudieron ejecutar, marcar como error en vez de colgado
+  const hasErrors = run.results.some((r) => r.status === 'error');
+  const hasPending = run.results.some((r) => r.status === 'waiting' || r.status === 'running');
+
+  if (hasErrors || hasPending) {
+    run.status = 'error';
+    // Si quedaron en waiting sin error explícito, marcarlos
+    for (const r of run.results) {
+      if (r.status === 'waiting' || r.status === 'running') {
+        r.status = 'error';
+        r.error = r.error || 'Flujo interrumpido antes de completar la ejecución.';
+      }
+    }
+  } else {
+    run.status = 'done';
+  }
+
   await saveRun(run);
+}
+
+export async function resumeRun(run: Run, agents: Agent[], specificAgentId?: string): Promise<void> {
+  run.status = 'running';
+  for (const r of run.results) {
+    if (r.status === 'error' || (specificAgentId && r.agentId === specificAgentId)) {
+      r.status = 'waiting';
+      r.error = undefined;
+      r.attempt = (r.attempt ?? 1) + 1;
+    }
+  }
+  await saveRun(run);
+  return executeRun(run, agents);
 }

@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Mql5GenerationProgress, Mql5GenerationResult, StrategyProposalLite } from '../types/strategy';
+import type { Veredicto } from '../types/verdict';
 import { MarkdownText } from './MarkdownText';
 import { Mql5CodeBlock } from './Mql5CodeBlock';
 import { BacktestLogAnalyzer } from './BacktestLogAnalyzer';
@@ -9,25 +10,78 @@ interface Props {
   agentName: string;
   strategy: StrategyProposalLite;
   agentModel?: string;
+  runId?: string;
+  isRunComplete?: boolean;
+  verdictDecision?: Veredicto;
+  initialResult?: Mql5GenerationResult;
 }
 
-export const StrategyResultCard = ({ agentName, strategy, agentModel }: Props) => {
+export const StrategyResultCard = ({
+  agentName,
+  strategy,
+  agentModel,
+  runId,
+  isRunComplete = true,
+  verdictDecision,
+  initialResult,
+}: Props) => {
   const [mql5State, setMql5State] = useState<
     | { status: 'idle' }
     | { status: 'loading'; progress?: Mql5GenerationProgress }
     | { status: 'error'; message: string }
     | { status: 'done'; result: Mql5GenerationResult }
-  >({ status: 'idle' });
+  >(initialResult ? { status: 'done', result: initialResult } : { status: 'idle' });
+  const [acknowledgeAdjust, setAcknowledgeAdjust] = useState(false);
+
+  useEffect(() => {
+    if (initialResult) {
+      setMql5State({ status: 'done', result: initialResult });
+    } else {
+      setMql5State({ status: 'idle' });
+    }
+  }, [initialResult, runId]);
 
   const handleGenerate = async () => {
     setMql5State({ status: 'loading' });
     try {
-      const result = await api.generateMql5(strategy, agentModel, (progress) => setMql5State({ status: 'loading', progress }));
+      const result = await api.generateMql5(strategy, agentModel, runId, (progress) =>
+        setMql5State({ status: 'loading', progress })
+      );
       setMql5State({ status: 'done', result });
     } catch (err) {
       setMql5State({ status: 'error', message: err instanceof Error ? err.message : 'Error desconocido' });
     }
   };
+
+  const handleOptimize = async () => {
+    if (mql5State.status !== 'done') return;
+    const currentResult = mql5State.result;
+    const nextIteration = (currentResult.iteration ?? 1) + 1;
+
+    setMql5State({
+      status: 'loading',
+      progress: { attempt: 1, maxAttempts: 3, phase: 'optimizing', details: `Optimizando (Iteración #${nextIteration})…` },
+    });
+
+    try {
+      const optimizedResult = await api.optimizeMql5(
+        strategy,
+        currentResult.code,
+        currentResult.backtestSession ?? null,
+        nextIteration,
+        agentModel,
+        runId,
+        (progress) => setMql5State({ status: 'loading', progress }),
+        currentResult.optimizationNotes
+      );
+      setMql5State({ status: 'done', result: optimizedResult });
+    } catch (err) {
+      setMql5State({ status: 'error', message: err instanceof Error ? err.message : 'Error en la optimización' });
+    }
+  };
+
+  const isAdjustPending = verdictDecision === 'ajustar' && !acknowledgeAdjust;
+  const canGenerate = isRunComplete && verdictDecision !== 'no_operar' && !isAdjustPending;
 
   return (
     <div className="bg-panel border border-cyan/30 rounded-2xl overflow-hidden glow-cyan">
@@ -92,41 +146,109 @@ export const StrategyResultCard = ({ agentName, strategy, agentModel }: Props) =
           </p>
         )}
 
+        {/* Generation & Backtest Controls */}
         {mql5State.status === 'idle' && (
-          <button
-            onClick={handleGenerate}
-            className="mt-6 text-sm font-medium px-4 py-2 rounded-lg bg-cyan/10 text-cyan hover:bg-cyan/20 transition-colors border border-cyan/30"
-          >
-            Generar código MQL5
-          </button>
+          <div className="mt-6 pt-6 border-t border-line/60">
+            {!isRunComplete ? (
+              <div className="p-4 rounded-xl bg-paper/5 border border-line text-sm text-muted flex items-center gap-3">
+                <span className="text-lg">⏳</span>
+                <span>
+                  El flujo de agentes está en ejecución. El código MQL5 se habilitará automáticamente al completar el análisis.
+                </span>
+              </div>
+            ) : verdictDecision === 'no_operar' ? (
+              <div className="p-4 rounded-xl bg-bear/10 border border-bear/30 text-sm text-bear flex items-center gap-3">
+                <span className="text-lg">🛑</span>
+                <span>
+                  El Razonador ha emitido un veredicto de <strong>NO OPERAR</strong> para este par y condiciones de mercado.
+                </span>
+              </div>
+            ) : isAdjustPending ? (
+              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2.5">
+                <div className="flex items-start gap-3 text-sm text-amber-300">
+                  <span className="text-lg">⚠️</span>
+                  <span>
+                    El Razonador pidió <strong>AJUSTAR</strong> la propuesta y quedan objeciones sin resolver (se agotaron los
+                    reintentos automáticos). Generar el EA ahora codificaría esos niveles de entrada/SL/TP tal cual, sin corregir
+                    lo que el Refutador señaló como débil.
+                  </span>
+                </div>
+                <label className="flex items-center gap-2 pt-1.5 border-t border-amber-500/20 cursor-pointer text-xs text-paper/80">
+                  <input
+                    type="checkbox"
+                    checked={acknowledgeAdjust}
+                    onChange={(e) => setAcknowledgeAdjust(e.target.checked)}
+                    className="rounded bg-panel border-line text-amber-400 focus:ring-amber-400/40"
+                  />
+                  <span>Entiendo las objeciones pendientes y quiero generar el código de todas formas bajo mi responsabilidad.</span>
+                </label>
+              </div>
+            ) : (
+              <div className="flex items-center gap-4 flex-wrap">
+                <button
+                  onClick={handleGenerate}
+                  disabled={!canGenerate}
+                  className="px-5 py-2.5 rounded-xl bg-cyan/20 hover:bg-cyan/30 text-cyan border border-cyan/50 font-semibold text-sm transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(6,182,212,0.2)]"
+                >
+                  🚀 Generar código MQL5 y Simular en MT5
+                </button>
+                <span className="text-xs text-muted">
+                  Incluye compilación con MetaEditor64 y backtest headless automático.
+                </span>
+              </div>
+            )}
+          </div>
         )}
 
         {mql5State.status === 'loading' && (
-          <p className="mt-6 text-sm text-muted">
-            {mql5State.progress
-              ? `Generando código MQL5… intento ${mql5State.progress.attempt}/${mql5State.progress.maxAttempts} (${
-                  mql5State.progress.phase === 'generating' ? 'escribiendo código' : 'compilando en MetaEditor'
-                })`
-              : 'Generando código MQL5…'}
-          </p>
+          <div className="mt-6 pt-6 border-t border-line/60">
+            <div className="p-4 rounded-xl bg-cyan/10 border border-cyan/30 space-y-2">
+              <div className="flex items-center justify-between text-sm text-cyan font-semibold">
+                <span className="flex items-center gap-2">
+                  <span className="animate-spin text-base">⏳</span>
+                  {mql5State.progress?.details ?? 'Procesando pipeline MQL5…'}
+                </span>
+                {mql5State.progress && (
+                  <span className="text-xs font-mono">
+                    Paso: {mql5State.progress.phase.toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted">
+                {mql5State.progress?.phase === 'generating' && 'Generando estructura de inputs, CTrade, indicadores y control de lotaje...'}
+                {mql5State.progress?.phase === 'compiling' && 'Verificando compilación con MetaEditor64...'}
+                {mql5State.progress?.phase === 'backtesting' && 'Lanzando simulación desatendida en MetaTrader 5 y analizando operaciones...'}
+                {mql5State.progress?.phase === 'optimizing' && 'Ajustando reglas de entrada, R:R y filtros técnicos con IA...'}
+              </p>
+            </div>
+          </div>
         )}
 
         {mql5State.status === 'error' && (
-          <div className="mt-6">
-            <p className="text-sm text-bear">Error al generar el código: {mql5State.message}</p>
-            <button
-              onClick={handleGenerate}
-              className="mt-2 text-sm font-medium px-4 py-2 rounded-lg bg-cyan/10 text-cyan hover:bg-cyan/20 transition-colors border border-cyan/30"
-            >
-              Reintentar
-            </button>
+          <div className="mt-6 pt-6 border-t border-line/60">
+            <div className="p-4 bg-bear/10 border border-bear/30 rounded-xl space-y-3">
+              <p className="text-sm text-bear font-medium">Error en el pipeline MQL5: {mql5State.message}</p>
+              <button
+                onClick={handleGenerate}
+                className="px-4 py-2 rounded-lg bg-cyan/10 text-cyan hover:bg-cyan/20 transition-colors border border-cyan/30 text-sm font-semibold"
+              >
+                Reintentar generación
+              </button>
+            </div>
           </div>
         )}
 
         {mql5State.status === 'done' && (
           <>
-            <Mql5CodeBlock result={mql5State.result} />
-            <BacktestLogAnalyzer />
+            <Mql5CodeBlock
+              result={mql5State.result}
+              onOptimize={handleOptimize}
+              isOptimizing={false}
+            />
+            <div className="mt-6 pt-6 border-t border-line/60">
+              <p className="text-xs text-muted uppercase tracking-wider mb-3">Analizador de logs complementario</p>
+              <BacktestLogAnalyzer />
+            </div>
           </>
         )}
       </div>

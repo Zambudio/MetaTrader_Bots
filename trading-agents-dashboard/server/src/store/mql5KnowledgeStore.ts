@@ -19,6 +19,7 @@ export interface KnownIssue {
   signature: string;
   example: string;
   fixDescription: string;
+  correctCodeSnippet?: string;
   timesSeen: number;
   timesConfirmedFixed: number;
   firstSeenAt: string;
@@ -73,7 +74,7 @@ ${rows}`}
 `;
 }
 
-export async function recordConfirmedFix(rawError: string, fixDescription: string): Promise<void> {
+export async function recordConfirmedFix(rawError: string, fixDescription: string, correctCodeSnippet?: string): Promise<void> {
   const signature = normalizeSignature(rawError);
   const id = signatureId(signature);
   const issues = await loadAllIssues();
@@ -83,6 +84,7 @@ export async function recordConfirmedFix(rawError: string, fixDescription: strin
   if (existing) {
     existing.example = rawError;
     existing.fixDescription = fixDescription;
+    if (correctCodeSnippet) existing.correctCodeSnippet = correctCodeSnippet;
     existing.timesSeen += 1;
     existing.timesConfirmedFixed += 1;
     existing.lastSeenAt = now;
@@ -93,6 +95,7 @@ export async function recordConfirmedFix(rawError: string, fixDescription: strin
       signature,
       example: rawError,
       fixDescription,
+      correctCodeSnippet,
       timesSeen: 1,
       timesConfirmedFixed: 1,
       firstSeenAt: now,
@@ -113,8 +116,14 @@ export async function loadTopIssues(maxEntries = 20): Promise<KnownIssue[]> {
 
 export function renderIssuesForPrompt(issues: KnownIssue[]): string {
   if (issues.length === 0) return '';
-  const lines = issues.map((i) => `- ${i.signature} → ${i.fixDescription}`);
-  return `Lecciones aprendidas de generaciones anteriores (verificadas por compilación real —
-aplícalas de entrada para no repetir estos errores):
+  const lines = issues.map((i) => {
+    let text = `- ${i.signature} → ${i.fixDescription}`;
+    if (i.correctCodeSnippet) {
+      text += `\n  Ejemplo de código correcto:\n  \`\`\`mql5\n  ${i.correctCodeSnippet}\n  \`\`\``;
+    }
+    return text;
+  });
+
+  return `Lecciones aprendidas de compilaciones anteriores en MetaEditor (aplicar obligatoriamente para no repetir):
 ${lines.join('\n')}`;
 }

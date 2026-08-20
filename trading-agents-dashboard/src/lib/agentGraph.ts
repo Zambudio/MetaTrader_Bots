@@ -37,6 +37,31 @@ export function buildLevels(agents: Agent[]): Agent[][] {
   return levels;
 }
 
+/**
+ * Quita los agentes desactivados (`enabled === false`) y, transitivamente,
+ * cualquier agente que dependa de uno ya quitado. Duplicado del mismo
+ * cálculo en `server/src/engine/orchestrator.ts` (mismo patrón que
+ * `buildLevels` arriba); se usa para atenuar en la UI los agentes activos
+ * pero huérfanos, sin llamar al servidor.
+ */
+export function filterEnabledAgents(agents: Agent[]): Agent[] {
+  const removed = new Set<string>(agents.filter((a) => a.enabled === false).map((a) => a.id));
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const agent of agents) {
+      if (removed.has(agent.id)) continue;
+      if (agent.dependsOn.some((depId) => removed.has(depId))) {
+        removed.add(agent.id);
+        changed = true;
+      }
+    }
+  }
+
+  return agents.filter((a) => !removed.has(a.id));
+}
+
 /** ¿Añadir candidateParentId como padre de agentId crearía un ciclo (incluye autoreferencia)? */
 export function wouldCreateCycle(agents: Agent[], agentId: string, candidateParentId: string): boolean {
   if (candidateParentId === agentId) return true;

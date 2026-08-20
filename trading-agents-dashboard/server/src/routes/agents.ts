@@ -25,6 +25,18 @@ agentsRouter.post(
       return;
     }
 
+    const resolvedOutputType = outputType === 'strategy' || outputType === 'verdict' ? outputType : 'text';
+
+    // 4.3 Protección de unicidad para 'verdict' y 'strategy'
+    if (resolvedOutputType === 'verdict' && agents.some((a) => a.outputType === 'verdict')) {
+      res.status(400).json({ error: 'Solo puede existir un único agente con outputType "verdict" en el flujo.' });
+      return;
+    }
+    if (resolvedOutputType === 'strategy' && agents.some((a) => a.outputType === 'strategy')) {
+      res.status(400).json({ error: 'Solo puede existir un único agente con outputType "strategy" en el flujo.' });
+      return;
+    }
+
     const dependsOnList: string[] = Array.isArray(dependsOn) ? dependsOn : [];
     for (const parentId of dependsOnList) {
       if (!agents.some((a) => a.id === parentId)) {
@@ -39,7 +51,7 @@ agentsRouter.post(
       role: typeof role === 'string' && role ? role : 'Agente',
       systemPrompt: typeof systemPrompt === 'string' ? systemPrompt : '',
       dependsOn: dependsOnList,
-      outputType: outputType === 'strategy' || outputType === 'verdict' ? outputType : 'text',
+      outputType: resolvedOutputType,
       photo: typeof photo === 'string' && photo ? photo : undefined,
       model: typeof model === 'string' && model ? model : undefined,
     };
@@ -86,6 +98,16 @@ agentsRouter.put(
       const newOutputType = updates.outputType;
       if (newOutputType !== 'text' && newOutputType !== 'strategy' && newOutputType !== 'verdict') {
         res.status(400).json({ error: "outputType must be one of 'text', 'strategy', 'verdict'" });
+        return;
+      }
+      // 4.3 Protección de unicidad para 'verdict' y 'strategy'
+      if (
+        (newOutputType === 'verdict' || newOutputType === 'strategy') &&
+        agents.some((a) => a.id !== req.params.id && a.outputType === newOutputType)
+      ) {
+        res.status(400).json({
+          error: `Solo puede existir un único agente con outputType "${newOutputType}" en el flujo.`,
+        });
         return;
       }
     }

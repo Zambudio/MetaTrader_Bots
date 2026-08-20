@@ -58,3 +58,39 @@ export async function deleteRun(id: string): Promise<void> {
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
   }
 }
+
+/**
+ * Al arrancar el proceso, cualquier run con status 'running' es necesariamente huérfano: la
+ * ejecución en memoria que lo estaba llevando murió con el proceso anterior (reinicio de
+ * tsx watch, caída, redeploy) y nadie va a reanudarla sola. Sin esto, el agente que estuviera
+ * en curso (y cualquiera aguas abajo en estado 'waiting') se queda mostrando un spinner infinito
+ * en el frontend para siempre, sin ningún botón de "reintentar" porque ese solo aparece para
+ * status 'error'. Se corre una vez en el arranque del servidor, antes de aceptar peticiones.
+ */
+export async function reconcileOrphanedRuns(): Promise<number> {
+  let files: string[];
+  try {
+    files = await fs.readdir(RUNS_DIR);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return 0;
+    throw err;
+  }
+
+  let reconciled = 0;
+  for (const f of files.filter((f) => f.endsWith('.json'))) {
+    const run = await readJson<Run | null>(path.join(RUNS_DIR, f), null);
+    if (!run || run.status !== 'running') continue;
+
+    for (const r of run.results) {
+      if (r.status === 'running' || r.status === 'waiting') {
+        r.status = 'error';
+        r.error = 'El servidor se reinició mientras este análisis estaba en curso. Pulsa "Reintentar" para reanudarlo.';
+      }
+    }
+    run.status = 'error';
+    await saveRun(run);
+    reconciled += 1;
+  }
+
+  return reconciled;
+}

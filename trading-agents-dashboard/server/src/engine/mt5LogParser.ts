@@ -35,6 +35,10 @@ export interface Mt5LogStats {
   grossLossApprox: number | null;
   profitFactorApprox: number | null;
   expectancyR: number | null;
+  maxDrawdownPct: number | null;
+  maxDrawdownUSD: number | null;
+  rejectedOrdersCount: number;
+  isApproximationUSD: boolean;
   periodStart: string | null;
   periodEnd: string | null;
   flags: string[];
@@ -61,6 +65,8 @@ const DEAL_RE =
   /^(\d{4}\.\d{2}\.\d{2} \d{2}:\d{2}:\d{2})\s+deal #(\d+) (buy|sell) ([\d.]+) (\S+) at ([\d.]+) done \(based on order #(\d+)\)/;
 const TRIGGER_RE =
   /^(\d{4}\.\d{2}\.\d{2} \d{2}:\d{2}:\d{2})\s+(stop loss|take profit) triggered #(\d+) (buy|sell) ([\d.]+) (\S+) ([\d.]+) sl: ([\d.]+) tp: ([\d.]+) \[#(\d+) (?:buy|sell) [\d.]+ \S+ at ([\d.]+)\]/;
+const REJECTED_ORDER_RE =
+  /(?:order\s+#\d+\s+rejected|trade\s+failed|request\s+rejected|cannot\s+open\s+position|retcode\s+(?:10004|10006|10011|10012|10013|10014|10015|10016|10017|10018|10019|10021|10022|10024|10026|10027|10028|10029|10030))/i;
 
 function emptySession(): Mt5LogSession {
   return {
@@ -86,6 +92,10 @@ function emptySession(): Mt5LogSession {
       grossLossApprox: null,
       profitFactorApprox: null,
       expectancyR: null,
+      maxDrawdownPct: null,
+      maxDrawdownUSD: null,
+      rejectedOrdersCount: 0,
+      isApproximationUSD: false,
       periodStart: null,
       periodEnd: null,
       flags: [],
@@ -93,7 +103,7 @@ function emptySession(): Mt5LogSession {
   };
 }
 
-function computeStats(session: Mt5LogSession): Mt5LogStats {
+function computeStats(session: Mt5LogSession, rejectedOrdersCount = 0): Mt5LogStats {
   const wins = session.triggers.filter((t) => t.type === 'take_profit').length;
   const losses = session.triggers.filter((t) => t.type === 'stop_loss').length;
   const closedTrades = wins + losses;
@@ -108,22 +118,48 @@ function computeStats(session: Mt5LogSession): Mt5LogStats {
     .filter((v): v is number => v !== null);
   const avgRR = rrRatios.length > 0 ? rrRatios.reduce((a, b) => a + b, 0) / rrRatios.length : null;
 
-  // Aproximación en USD asumiendo par cotizado directo contra USD (p.ej. EURUSD) y contrato
-  // estándar de 100 000 unidades — ignora comisión y swap. Sirve para una lectura orientativa
-  // rápida (profit factor, ganancia/pérdida bruta); para cifras exactas usar el informe .htm
-  // del Strategy Tester.
+  const symbol = (session.symbol || '').toUpperCase();
+  const isDirectUsd = symbol.endsWith('USD') || symbol === 'EURUSD' || symbol === 'GBPUSD' || symbol === 'AUDUSD' || symbol === 'NZDUSD';
+  const isApproximationUSD = !isDirectUsd;
+
   let grossProfitApprox = 0;
   let grossLossApprox = 0;
+
+  // Curva de balance acumulada para calcular Drawdown Máximo exacto
+  const initialBal = session.initialDeposit ?? 10000;
+  let runningBalance = initialBal;
+  let peakBalance = initialBal;
+  let maxDrawdownUSD = 0;
+  let maxDrawdownPct = 0;
+
   for (const t of session.triggers) {
     const signedLots = t.openSide === 'buy' ? t.lots : -t.lots;
     const pnl = (t.closePrice - t.entryPrice) * signedLots * 100_000;
     if (pnl >= 0) grossProfitApprox += pnl;
     else grossLossApprox += Math.abs(pnl);
+
+    runningBalance += pnl;
+    if (runningBalance > peakBalance) {
+      peakBalance = runningBalance;
+    }
+    const currentDdUSD = peakBalance - runningBalance;
+    const currentDdPct = peakBalance > 0 ? (currentDdUSD / peakBalance) * 100 : 0;
+
+    if (currentDdUSD > maxDrawdownUSD) {
+      maxDrawdownUSD = currentDdUSD;
+    }
+    if (currentDdPct > maxDrawdownPct) {
+      maxDrawdownPct = currentDdPct;
+    }
   }
-  const profitFactorApprox = session.triggers.length > 0 ? (grossLossApprox > 0 ? grossProfitApprox / grossLossApprox : null) : null;
+
+  const profitFactorApprox = session.triggers.length > 0 ? (grossLossApprox > 0 ? grossProfitApprox / grossLossApprox : (grossProfitApprox > 0 ? 99.99 : null)) : null;
 
   const netProfit =
-    session.finalBalance !== null && session.initialDeposit !== null ? session.finalBalance - session.initialDeposit : null;
+    session.finalBalance !== null && session.initialDeposit !== null
+      ? session.finalBalance - session.initialDeposit
+      : (session.triggers.length > 0 ? grossProfitApprox - grossLossApprox : null);
+
   const netProfitPct = netProfit !== null && session.initialDeposit ? (netProfit / session.initialDeposit) * 100 : null;
 
   const expectancyR =
@@ -145,9 +181,19 @@ function computeStats(session: Mt5LogSession): Mt5LogStats {
       `Esperanza matemática negativa (~${expectancyR.toFixed(2)} R por operación): el win rate no compensa el ratio riesgo/beneficio real.`
     );
   }
-  if (closedTrades > 0 && closedTrades < 20) {
-    flags.push(`Muestra pequeña (${closedTrades} operaciones cerradas) — resultado poco fiable estadísticamente.`);
+  if (closedTrades > 0 && closedTrades < 15) {
+    flags.push(`Muestra pequeña (${closedTrades} operaciones cerradas) — mínimo recomendado 15.`);
   }
+  if (rejectedOrdersCount > 0) {
+    flags.push(`Se registraron ${rejectedOrdersCount} órdenes rechazadas durante el test.`);
+  }
+  if (maxDrawdownPct > 15.0) {
+    flags.push(`Drawdown máximo elevado (${maxDrawdownPct.toFixed(1)}% > 15.0% límite).`);
+  }
+  if (isApproximationUSD && session.triggers.length > 0) {
+    flags.push(`Nota: cifras en USD calculadas por estimación de contrato para el par ${symbol || 'no directo USD'}.`);
+  }
+
   const unclosed = session.deals.length - closedTrades * 2;
   if (unclosed > 0) {
     flags.push(
@@ -168,6 +214,10 @@ function computeStats(session: Mt5LogSession): Mt5LogStats {
     grossLossApprox: session.triggers.length > 0 ? grossLossApprox : null,
     profitFactorApprox,
     expectancyR,
+    maxDrawdownPct: session.triggers.length > 0 ? maxDrawdownPct : null,
+    maxDrawdownUSD: session.triggers.length > 0 ? maxDrawdownUSD : null,
+    rejectedOrdersCount,
+    isApproximationUSD,
     periodStart,
     periodEnd,
     flags,
@@ -180,16 +230,26 @@ export function parseMt5Log(rawText: string): Mt5LogSession[] {
 
   const sessions: Mt5LogSession[] = [];
   let current: Mt5LogSession | null = null;
+  let rejectedCount = 0;
 
   for (const line of lines) {
     if (!line) continue;
+
+    if (REJECTED_ORDER_RE.test(line)) {
+      rejectedCount++;
+    }
+
     const cols = line.split('\t');
     if (cols.length < 5) continue;
     const message = cols.slice(4).join('\t');
 
     const expertMatch = message.match(EXPERT_ADDED_RE);
     if (expertMatch) {
-      if (current) sessions.push(current);
+      if (current) {
+        current.stats = computeStats(current, rejectedCount);
+        sessions.push(current);
+        rejectedCount = 0;
+      }
       current = emptySession();
       current.expertFile = expertMatch[1];
       continue;
@@ -217,42 +277,45 @@ export function parseMt5Log(rawText: string): Mt5LogSession[] {
       continue;
     }
 
-    const dealMatch = message.match(DEAL_RE);
+    const fullEntry = `${cols[0]} ${message}`;
+    const dealMatch = fullEntry.match(DEAL_RE) || message.match(/deal #(\d+) (buy|sell) ([\d.]+) (\S+) at ([\d.]+) done \(based on order #(\d+)\)/);
     if (dealMatch) {
+      const isFull = dealMatch.length === 8;
       current.deals.push({
-        time: dealMatch[1],
-        dealId: Number(dealMatch[2]),
-        side: dealMatch[3] as 'buy' | 'sell',
-        lots: Number(dealMatch[4]),
-        symbol: dealMatch[5],
-        price: Number(dealMatch[6]),
-        orderId: Number(dealMatch[7]),
+        time: isFull ? dealMatch[1] : cols[0],
+        dealId: Number(isFull ? dealMatch[2] : dealMatch[1]),
+        side: (isFull ? dealMatch[3] : dealMatch[2]) as 'buy' | 'sell',
+        lots: Number(isFull ? dealMatch[4] : dealMatch[3]),
+        symbol: isFull ? dealMatch[5] : dealMatch[4],
+        price: Number(isFull ? dealMatch[6] : dealMatch[5]),
+        orderId: Number(isFull ? dealMatch[7] : dealMatch[6]),
       });
       continue;
     }
 
-    const triggerMatch = message.match(TRIGGER_RE);
+    const triggerMatch = fullEntry.match(TRIGGER_RE) || message.match(/(stop loss|take profit) triggered #(\d+) (buy|sell) ([\d.]+) (\S+) ([\d.]+) sl: ([\d.]+) tp: ([\d.]+) \[#(\d+) (?:buy|sell) [\d.]+ \S+ at ([\d.]+)\]/);
     if (triggerMatch) {
+      const isFull = triggerMatch.length === 12;
       current.triggers.push({
-        time: triggerMatch[1],
-        type: triggerMatch[2] === 'take profit' ? 'take_profit' : 'stop_loss',
-        dealId: Number(triggerMatch[3]),
-        openSide: triggerMatch[4] as 'buy' | 'sell',
-        lots: Number(triggerMatch[5]),
-        symbol: triggerMatch[6],
-        entryPrice: Number(triggerMatch[7]),
-        sl: Number(triggerMatch[8]),
-        tp: Number(triggerMatch[9]),
-        closeDealId: Number(triggerMatch[10]),
-        closePrice: Number(triggerMatch[11]),
+        time: isFull ? triggerMatch[1] : cols[0],
+        type: (isFull ? triggerMatch[2] : triggerMatch[1]) === 'take profit' ? 'take_profit' : 'stop_loss',
+        dealId: Number(isFull ? triggerMatch[3] : triggerMatch[2]),
+        openSide: (isFull ? triggerMatch[4] : triggerMatch[3]) as 'buy' | 'sell',
+        lots: Number(isFull ? triggerMatch[5] : triggerMatch[4]),
+        symbol: isFull ? triggerMatch[6] : triggerMatch[5],
+        entryPrice: Number(isFull ? triggerMatch[7] : triggerMatch[6]),
+        sl: Number(isFull ? triggerMatch[8] : triggerMatch[7]),
+        tp: Number(isFull ? triggerMatch[9] : triggerMatch[8]),
+        closeDealId: Number(isFull ? triggerMatch[10] : triggerMatch[9]),
+        closePrice: Number(isFull ? triggerMatch[11] : triggerMatch[10]),
       });
       continue;
     }
   }
-  if (current) sessions.push(current);
 
-  for (const session of sessions) {
-    session.stats = computeStats(session);
+  if (current) {
+    current.stats = computeStats(current, rejectedCount);
+    sessions.push(current);
   }
 
   return sessions;

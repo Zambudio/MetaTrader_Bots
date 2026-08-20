@@ -1,6 +1,12 @@
 import { nanoid } from 'nanoid';
 import type { Mql5GenerationResult } from '../types.js';
-import type { Mql5GenerationProgress } from './mql5Generator.js';
+
+export interface Mql5GenerationProgress {
+  attempt: number;
+  maxAttempts: number;
+  phase: 'generating' | 'compiling' | 'backtesting' | 'evaluating' | 'optimizing';
+  details?: string;
+}
 
 export type Mql5Job =
   | { id: string; status: 'running'; progress: Mql5GenerationProgress }

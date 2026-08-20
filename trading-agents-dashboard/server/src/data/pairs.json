@@ -1,0 +1,60 @@
+[
+  {
+    "symbol": "EUR/USD",
+    "favorite": true
+  },
+  {
+    "symbol": "GBP/USD",
+    "favorite": false
+  },
+  {
+    "symbol": "USD/JPY",
+    "favorite": false
+  },
+  {
+    "symbol": "USD/CHF",
+    "favorite": false
+  },
+  {
+    "symbol": "AUD/USD",
+    "favorite": false
+  },
+  {
+    "symbol": "USD/CAD",
+    "favorite": false
+  },
+  {
+    "symbol": "NZD/USD",
+    "favorite": false
+  },
+  {
+    "symbol": "BTC/USD",
+    "favorite": false
+  },
+  {
+    "symbol": "ETH/USD",
+    "favorite": false
+  },
+  {
+    "symbol": "XAU/USD",
+    "favorite": false
+  },
+  {
+    "symbol": "AAPL",
+    "name": "Apple Inc.",
+    "type": "Common Stock",
+    "exchange": "NASDAQ",
+    "favorite": true
+  },
+  {
+    "symbol": "BTC/EUR",
+    "favorite": true,
+    "name": "Bitcoin Euro",
+    "type": "Digital Currency",
+    "exchange": "Binance"
+  },
+  {
+    "symbol": "GBP/CAD",
+    "favorite": true
+  }
+]

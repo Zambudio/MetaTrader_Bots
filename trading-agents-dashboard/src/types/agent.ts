@@ -9,4 +9,13 @@ export interface Agent {
   dependsOn: string[];
   outputType: OutputType;
   model?: string;
+  enabled?: boolean;
+}
+
+export interface AgentConfigPreset {
+  id: string;
+  name: string;
+  agents: Agent[];
+  createdAt: string;
+  updatedAt: string;
 }

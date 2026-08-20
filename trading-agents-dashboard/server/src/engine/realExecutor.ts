@@ -1,9 +1,7 @@
 import type { Agent, StrategyProposalLite, VerdictResult } from '../types.js';
 import { getWikiContextBlock } from '../store/wikiStore.js';
-
-const REQUEST_TIMEOUT_MS = Number(process.env.OMNIROUTE_TIMEOUT_MS) || 120_000;
-const MAX_RETRIES = 1;
-const RETRY_DELAY_MS = 2000;
+import { chatCompletion, sanitizeJsonResponse, type ChatMessage } from './omniClient.js';
+import { parsePriceFromText } from './strategyValidator.js';
 
 export interface RealExecutionResult {
   output?: string;
@@ -15,23 +13,32 @@ const STRATEGY_TOOL = {
   type: 'function' as const,
   function: {
     name: 'propose_strategy',
-    description: 'Propone una estrategia de trading concreta y accionable para el par y timeframe indicados.',
+    description: 'Propone una estrategia de trading concreta y accionable para el par y timeframe indicados con coherencia numérica verificable.',
     parameters: {
       type: 'object',
       properties: {
-        resumen: { type: 'string', description: 'Resumen ejecutivo de la propuesta.' },
+        resumen: { type: 'string', description: 'Resumen ejecutivo de la propuesta (no puede estar vacío).' },
         indicadoresClave: {
           type: 'array',
           items: { type: 'string' },
           description: 'Indicadores/factores clave usados para la propuesta.',
         },
-        puntoEntrada: { type: 'string', description: 'Zona o nivel de entrada sugerido.' },
-        stopLoss: { type: 'string', description: 'Nivel de stop loss sugerido.' },
-        takeProfit: { type: 'string', description: 'Nivel de take profit sugerido.' },
+        direction: {
+          type: 'string',
+          enum: ['buy', 'sell'],
+          description: "Dirección de la operación: 'buy' para compra (largo) o 'sell' para venta (corto).",
+        },
+        puntoEntrada: { type: 'string', description: 'Zona o nivel de entrada sugerido en texto.' },
+        stopLoss: { type: 'string', description: 'Nivel de stop loss sugerido en texto.' },
+        takeProfit: { type: 'string', description: 'Nivel de take profit sugerido en texto.' },
+        entryPriceNum: { type: 'number', description: 'Precio numérico exacto de entrada (p. ej. 1.0850).' },
+        stopLossNum: { type: 'number', description: 'Precio numérico exacto de Stop Loss (p. ej. 1.0820).' },
+        takeProfitNum: { type: 'number', description: 'Precio numérico exacto de Take Profit (p. ej. 1.0910).' },
+        riskPercent: { type: 'number', description: '% de riesgo de cuenta sugerido por trade (p. ej. 1.0 o 0.5).' },
         entradasEscalonadas: { type: 'string', description: 'Plan de entradas escalonadas, si procede.' },
         confianza: { type: 'string', description: 'Nivel de confianza de la propuesta.' },
       },
-      required: ['resumen', 'indicadoresClave', 'puntoEntrada', 'stopLoss', 'takeProfit'],
+      required: ['resumen', 'indicadoresClave', 'puntoEntrada', 'stopLoss', 'takeProfit', 'direction', 'entryPriceNum', 'stopLossNum', 'takeProfitNum'],
     },
   },
 };
@@ -50,7 +57,7 @@ const VERDICT_TOOL = {
           description:
             "'go' si la propuesta es sólida y las críticas no la invalidan, 'ajustar' si hay objeciones concretas y corregibles, 'no_operar' si las condiciones u objeciones son serias y ninguna propuesta de entrada tiene sentido ahora mismo.",
         },
-        razon: { type: 'string', description: 'Explicación breve del veredicto.' },
+        razon: { type: 'string', description: 'Explicación breve del veredicto (no puede estar vacía).' },
         objeciones: {
           type: 'array',
           items: { type: 'string' },
@@ -62,101 +69,16 @@ const VERDICT_TOOL = {
   },
 };
 
-type Tool = typeof STRATEGY_TOOL | typeof VERDICT_TOOL;
-
-interface ChatMessage {
-  role: 'system' | 'user';
-  content: string;
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function sanitizeJsonResponse(raw: string): string {
-  let cleaned = raw.trim();
-  // Strip markdown code fences if present (```json ... ```)
-  if (cleaned.startsWith('```')) {
-    cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-  }
-  // Strip SSE prefix if present
-  if (cleaned.startsWith('data: ')) {
-    cleaned = cleaned.replace(/^data:\s*/, '').trim();
-  }
-  return cleaned;
-}
-
-async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-async function chatCompletion(model: string, messages: ChatMessage[], tool: Tool | null): Promise<any> {
-  const baseUrl = process.env.OMNIROUTE_BASE_URL;
-  const apiKey = process.env.OMNIROUTE_API_KEY;
-  if (!baseUrl || !apiKey) {
-    throw new Error('OMNIROUTE_BASE_URL/OMNIROUTE_API_KEY no están configurados');
-  }
-
-  let lastError: unknown;
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    if (attempt > 0) {
-      console.warn(`[realExecutor] Reintentando llamada a ${model} tras error previo (intento ${attempt + 1}/${MAX_RETRIES + 1})...`);
-      await delay(RETRY_DELAY_MS * attempt);
-    }
-
-    try {
-      const response = await fetchWithTimeout(
-        `${baseUrl}/v1/chat/completions`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model,
-            messages,
-            stream: false,
-            ...(tool ? { tools: [tool], tool_choice: { type: 'function', function: { name: tool.function.name } } } : {}),
-          }),
-        },
-        REQUEST_TIMEOUT_MS
-      );
-
-      if (!response.ok) {
-        const body = await response.text().catch(() => '');
-        throw new Error(`OmniRoute respondió ${response.status}: ${body.slice(0, 300)}`);
-      }
-
-      const text = await response.text();
-      try {
-        return JSON.parse(sanitizeJsonResponse(text));
-      } catch (parseErr) {
-        throw new Error(`Respuesta inválida de OmniRoute: ${text.slice(0, 200)}`);
-      }
-    } catch (err: any) {
-      if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
-        lastError = new Error(`Tiempo de espera agotado (${Math.round(REQUEST_TIMEOUT_MS / 1000)}s) al consultar modelo ${model}`);
-      } else {
-        lastError = err;
-      }
-    }
-  }
-
-  throw lastError instanceof Error ? lastError : new Error(String(lastError));
-}
-
+// 1.8: Aviso explícito cuando el snapshot de mercado es null en modo real
 function buildUserPrompt(pair: string, timeframe: string, context: string, snapshot?: string | null): string {
+  const snapshotBlock = snapshot
+    ? snapshot
+    : 'Snapshot de mercado recibido: no (sin velas disponibles). IMPORTANTE: No inventes datos de precio ni niveles de indicadores específicos no provistos; señala explícitamente esta limitación en tu análisis.';
+
   return [
     `Par: ${pair}`,
     `Timeframe: ${timeframe}`,
-    snapshot ? snapshot : null,
+    snapshotBlock,
     context ? `Contexto de agentes anteriores:\n${context}` : null,
   ]
     .filter((part): part is string => Boolean(part))
@@ -166,8 +88,12 @@ function buildUserPrompt(pair: string, timeframe: string, context: string, snaps
 function parseToolArgs(data: any): any {
   const message = data?.choices?.[0]?.message;
   const toolCall = message?.tool_calls?.[0];
-  if (toolCall?.function?.arguments) return JSON.parse(sanitizeJsonResponse(toolCall.function.arguments));
-  if (typeof message?.content === 'string' && message.content.trim()) return JSON.parse(sanitizeJsonResponse(message.content));
+  if (toolCall?.function?.arguments) {
+    return JSON.parse(sanitizeJsonResponse(toolCall.function.arguments));
+  }
+  if (typeof message?.content === 'string' && message.content.trim()) {
+    return JSON.parse(sanitizeJsonResponse(message.content));
+  }
   throw new Error('El modelo no devolvió la respuesta estructurada esperada');
 }
 
@@ -178,6 +104,7 @@ export async function runRealAgent(
   timeframe: string,
   snapshot?: string | null
 ): Promise<RealExecutionResult> {
+  // 4.5: Se usa 'auto/best-reasoning' por diseño para agentes de análisis estratégico y validación lógica
   const model = agent.model || process.env.OMNIROUTE_DEFAULT_MODEL || 'auto/best-reasoning';
   const baseSystemPrompt = agent.systemPrompt || `Eres ${agent.name}, ${agent.role}.`;
   const wikiBlock = await getWikiContextBlock(`${agent.role}\n${agent.systemPrompt}`, { maxPages: 3 });
@@ -189,14 +116,44 @@ export async function runRealAgent(
   if (agent.outputType === 'strategy') {
     const data = await chatCompletion(model, messages, STRATEGY_TOOL);
     const args = parseToolArgs(data);
+
+    // 2.5: Validar no-vacío en campos críticos
+    const resumen = typeof args.resumen === 'string' ? args.resumen.trim() : '';
+    const puntoEntrada = typeof args.puntoEntrada === 'string' ? args.puntoEntrada.trim() : '';
+    const stopLoss = typeof args.stopLoss === 'string' ? args.stopLoss.trim() : '';
+    const takeProfit = typeof args.takeProfit === 'string' ? args.takeProfit.trim() : '';
+
+    if (!resumen || !puntoEntrada || !stopLoss || !takeProfit) {
+      throw new Error(`El agente de estrategia devolvió campos esenciales vacíos (resumen, puntoEntrada, stopLoss o takeProfit).`);
+    }
+
+    const direction = args.direction === 'buy' || args.direction === 'sell' ? args.direction : undefined;
+    const entryPriceNum = typeof args.entryPriceNum === 'number' && Number.isFinite(args.entryPriceNum)
+      ? args.entryPriceNum
+      : parsePriceFromText(puntoEntrada) ?? undefined;
+    const stopLossNum = typeof args.stopLossNum === 'number' && Number.isFinite(args.stopLossNum)
+      ? args.stopLossNum
+      : parsePriceFromText(stopLoss) ?? undefined;
+    const takeProfitNum = typeof args.takeProfitNum === 'number' && Number.isFinite(args.takeProfitNum)
+      ? args.takeProfitNum
+      : parsePriceFromText(takeProfit) ?? undefined;
+    const riskPercent = typeof args.riskPercent === 'number' && Number.isFinite(args.riskPercent)
+      ? args.riskPercent
+      : 1.0;
+
     const strategy: StrategyProposalLite = {
       pair,
       timeframe,
-      resumen: typeof args.resumen === 'string' ? args.resumen : '',
+      resumen,
       indicadoresClave: Array.isArray(args.indicadoresClave) ? args.indicadoresClave : [],
-      puntoEntrada: typeof args.puntoEntrada === 'string' ? args.puntoEntrada : '',
-      stopLoss: typeof args.stopLoss === 'string' ? args.stopLoss : '',
-      takeProfit: typeof args.takeProfit === 'string' ? args.takeProfit : '',
+      direction,
+      puntoEntrada,
+      stopLoss,
+      takeProfit,
+      entryPriceNum,
+      stopLossNum,
+      takeProfitNum,
+      riskPercent,
       entradasEscalonadas: typeof args.entradasEscalonadas === 'string' ? args.entradasEscalonadas : undefined,
       confianza: typeof args.confianza === 'string' ? args.confianza : undefined,
     };
@@ -209,9 +166,16 @@ export async function runRealAgent(
     if (args.veredicto !== 'go' && args.veredicto !== 'ajustar' && args.veredicto !== 'no_operar') {
       throw new Error(`Veredicto inválido devuelto por el modelo: ${String(args.veredicto)}`);
     }
+
+    // 2.5: Validar no-vacío en razón del veredicto
+    const razon = typeof args.razon === 'string' ? args.razon.trim() : '';
+    if (!razon) {
+      throw new Error('El agente de veredicto devolvió una razón vacía.');
+    }
+
     const verdict: VerdictResult = {
       veredicto: args.veredicto,
-      razon: typeof args.razon === 'string' ? args.razon : '',
+      razon,
       objeciones: Array.isArray(args.objeciones) ? args.objeciones : undefined,
     };
     return { verdict };

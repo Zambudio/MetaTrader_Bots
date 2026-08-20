@@ -6,6 +6,8 @@ export interface MarketSnapshotData {
   pair: string;
   timeframe: string;
   timestamp: string;
+  isStale?: boolean;
+  staleDetails?: string;
   currentPrice: {
     open: number;
     high: number;
@@ -55,7 +57,38 @@ function roundTo(value: number, decimals = 5): number {
   return Math.round(value * factor) / factor;
 }
 
-export function computeSnapshotFromCandles(candles: Candle[], pair: string, timeframe: string): MarketSnapshotData | null {
+// 3.2 Tabla de especificación de multiplicador por instrumento
+export function getInstrumentPipMultiplier(symbol: string): number {
+  const s = symbol.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (s.includes('JPY')) return 100;
+  if (s.startsWith('XAU') || s.includes('GOLD')) return 10;
+  if (s.startsWith('XAG') || s.includes('SILVER')) return 100;
+  if (s.includes('OIL') || s.includes('WTI') || s.includes('BRENT')) return 100;
+  if (s.includes('BTC') || s.includes('ETH') || s.includes('XBT') || s.includes('SOL')) return 1;
+  if (s.includes('US30') || s.includes('NAS100') || s.includes('SPX500') || s.includes('GER40') || s.includes('DAX')) return 1;
+  // Forex estándar de 4/5 dígitos
+  return 10000;
+}
+
+function getTimeframeSeconds(tf: string): number {
+  const clean = tf.toUpperCase().trim();
+  if (clean === 'M1') return 60;
+  if (clean === 'M5') return 300;
+  if (clean === 'M15') return 900;
+  if (clean === 'M30') return 1800;
+  if (clean === 'H1') return 3600;
+  if (clean === 'H4') return 14400;
+  if (clean === 'D1') return 86400;
+  if (clean === 'W1') return 604800;
+  return 3600;
+}
+
+export function computeSnapshotFromCandles(
+  candles: Candle[],
+  pair: string,
+  timeframe: string,
+  nowTimestampMs: number = Date.now()
+): MarketSnapshotData | null {
   if (!candles || candles.length < 15) {
     return null;
   }
@@ -69,6 +102,18 @@ export function computeSnapshotFromCandles(candles: Candle[], pair: string, time
   const changePct = prevCandle
     ? ((lastCandle.close - prevCandle.close) / prevCandle.close) * 100
     : 0;
+
+  // 3.1 Validación de frescura temporal
+  const candleTimeMs = lastCandle.time * 1000;
+  const elapsedSec = Math.max(0, Math.floor((nowTimestampMs - candleTimeMs) / 1000));
+  const tfSec = getTimeframeSeconds(timeframe);
+  const isStale = elapsedSec > tfSec * 3.5; // Si excede 3.5 barras de desfase
+
+  let staleDetails: string | undefined;
+  if (isStale) {
+    const elapsedHours = (elapsedSec / 3600).toFixed(1);
+    staleDetails = `Última vela recibida con retraso de ${elapsedHours}h respecto al tiempo actual.`;
+  }
 
   // Medias Móviles
   const sma20Values = SMA.calculate({ period: 20, values: closes });
@@ -135,14 +180,14 @@ export function computeSnapshotFromCandles(candles: Candle[], pair: string, time
     bollinger = { upper, middle, lower, bandwidthPct, pricePosition };
   }
 
-  // ATR (14)
+  // ATR (14) con multiplicador específico de instrumento
   const atrValues = closes.length >= 14
     ? ATR.calculate({ period: 14, high: highs, low: lows, close: closes })
     : [];
   let atr14: MarketSnapshotData['atr14'];
   if (atrValues.length > 0) {
     const rawAtr = roundTo(atrValues[atrValues.length - 1]);
-    const pipMultiplier = pair.includes('JPY') ? 100 : pair.includes('XBT') || pair.includes('BTC') ? 1 : 10000;
+    const pipMultiplier = getInstrumentPipMultiplier(pair);
     const pipsEstimate = roundTo(rawAtr * pipMultiplier, 1);
     atr14 = { value: rawAtr, pipsEstimate };
   }
@@ -166,6 +211,8 @@ export function computeSnapshotFromCandles(candles: Candle[], pair: string, time
     pair,
     timeframe,
     timestamp: isoTime,
+    isStale,
+    staleDetails,
     currentPrice: {
       open: roundTo(lastCandle.open),
       high: roundTo(lastCandle.high),
@@ -184,13 +231,18 @@ export function computeSnapshotFromCandles(candles: Candle[], pair: string, time
 }
 
 export function formatSnapshotText(snapshot: MarketSnapshotData): string {
-  const { pair, timeframe, timestamp, currentPrice, movingAverages, rsi14, macd, bollinger, atr14, recentRange } = snapshot;
+  const { pair, timeframe, timestamp, isStale, staleDetails, currentPrice, movingAverages, rsi14, macd, bollinger, atr14, recentRange } = snapshot;
 
   const lines: string[] = [
     `=== SNAPSHOT DE MERCADO REAL (${pair} · ${timeframe}) ===`,
     `Fecha/Hora última vela: ${timestamp}`,
-    `Precio Actual (Cierre): ${currentPrice.close} | Apertura: ${currentPrice.open} | Máx: ${currentPrice.high} | Mín: ${currentPrice.low} (Var: ${currentPrice.changePct > 0 ? '+' : ''}${currentPrice.changePct}%)`,
   ];
+
+  if (isStale) {
+    lines.push(`⚠ AVISO DE FRESCURA TEMPORAL: ${staleDetails || 'Snapshot con desfase temporal respecto a la hora actual.'}`);
+  }
+
+  lines.push(`Precio Actual (Cierre): ${currentPrice.close} | Apertura: ${currentPrice.open} | Máx: ${currentPrice.high} | Mín: ${currentPrice.low} (Var: ${currentPrice.changePct > 0 ? '+' : ''}${currentPrice.changePct}%)`);
 
   const maParts: string[] = [];
   if (movingAverages.ema20 !== undefined) maParts.push(`EMA(20): ${movingAverages.ema20}`);

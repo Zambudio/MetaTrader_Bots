@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { nanoid } from 'nanoid';
 import { listAgents } from '../store/agentsStore.js';
 import { saveRun, loadRun, listRuns, deleteRun } from '../store/runsStore.js';
-import { executeRun, DEFAULT_MAX_RETRIES } from '../engine/orchestrator.js';
+import { executeRun, filterEnabledAgents, DEFAULT_MAX_RETRIES } from '../engine/orchestrator.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import type { Run } from '../types.js';
 
@@ -25,7 +25,7 @@ runsRouter.post(
       return;
     }
 
-    const agents = await listAgents();
+    const agents = filterEnabledAgents(await listAgents());
     if (agents.length === 0) {
       res.status(400).json({ error: 'no hay agentes configurados' });
       return;
@@ -45,6 +45,29 @@ runsRouter.post(
 
     executeRun(run, agents).catch(async (err) => {
       console.error('[runs] execution failed', err);
+      run.status = 'error';
+      await saveRun(run).catch(() => {});
+    });
+
+    res.status(202).json(run);
+  })
+);
+
+runsRouter.post(
+  '/:id/resume',
+  asyncHandler(async (req, res) => {
+    const run = await loadRun(req.params.id);
+    if (!run) {
+      res.status(404).json({ error: 'run not found' });
+      return;
+    }
+
+    const agents = filterEnabledAgents(await listAgents());
+    const { agentId } = req.body ?? {};
+
+    const { resumeRun } = await import('../engine/orchestrator.js');
+    resumeRun(run, agents, typeof agentId === 'string' ? agentId : undefined).catch(async (err) => {
+      console.error('[runs] resume failed', err);
       run.status = 'error';
       await saveRun(run).catch(() => {});
     });

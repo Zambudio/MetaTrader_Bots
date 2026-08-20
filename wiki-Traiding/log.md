@@ -147,4 +147,68 @@ A petición explícita de Pedro ("si algún artículo es un curso al que no se p
    - **Páginas huérfanas**: **0**.
    - **Fuentes raw sin enlazar**: **0**.
 
+## [2026-08-19] restructure | Fusión de `docs/MetaTrader/` dentro de la wiki como `proyecto-mt5-bots/`
+
+Pedro pidió explícitamente revertir la separación documentada en la sesión de setup (2026-08-16, ver primera entrada de este log): "la wiki es la base de conocimiento... quiero que muevas los documentos dentro de wiki". Confirmado el alcance como fusión completa (frente a extracción selectiva) antes de tocar archivos.
+
+**Movido**: los 26 documentos de `docs/MetaTrader/` (incluida `DECISIONS/`) a `wiki-Traiding/proyecto-mt5-bots/` vía `git mv` (historial de git preservado; los 2 archivos con ediciones sin commitear en el working tree conservaron sus cambios).
+
+**Reestructuración e indexado**:
+- `wiki-Traiding/CLAUDE.md`: eliminada la sección "No confundir con `docs/MetaTrader/`", sustituida por "Dos convenciones distintas bajo un mismo techo" — `proyecto-mt5-bots/` mantiene sus propias convenciones (tabla de estados BORRADOR/REVISADO/VERIFICADO en su propio `00_INDEX.md`, `GLOSARIO.md` técnico propio, `DECISIONS/`, `PREGUNTAS_ABIERTAS.md`, `ROADMAP.md`, `FUENTES.md`) en vez de forzar el flujo estándar de Ingest (no deriva de fuentes en `raw/`, es investigación escrita directamente).
+- `index.md`: nueva sección "Proyecto — Ingeniería MT5 Bots" enlazando a `proyecto-mt5-bots/00_INDEX.md`. Escrita deliberadamente en prosa (no con el formato exacto de viñeta `- [`file`](path) — desc`) para quedar **fuera** del catálogo de coincidencia automática de `wikiStore.ts` (evita diluir el IDF de tokens compartidos e inyectar contexto de ingeniería irrelevante — VPS, brokers, seguridad — en agentes de diseño de estrategia).
+- Referencias corregidas tras el `git mv`: `CLAUDE.md` raíz, `README.md`, `wiki-Traiding/estrategias/backtesting-y-validacion.md`, `wiki-Traiding/infraestructura/apis-datos-mercado.md`, rutas internas de `proyecto-mt5-bots/17_Estandar_Desarrollo_EAs_con_IA.md` (su propia plantilla de prompt se autorreferenciaba), `proyecto-mt5-bots/00_INDEX.md`, `proyecto-mt5-bots/19_Plan_Puesta_en_Marcha.md`, `trading-agents-dashboard/server/README.md`, `trading-agents-dashboard/server/src/engine/mql5Generator.ts` (comentario + texto del `MQL5_STANDARD_SYSTEM_PROMPT`), y `promp-auditoria1908.md` (23 referencias, reemplazo mecánico verificado sin falsos positivos).
+- No tocadas por ser registro histórico (principio append-only): la entrada de este log del 2026-08-16 sobre la separación original, y el árbol de "Archivos creados en esta sesión" en `proyecto-mt5-bots/ESTADO_INVESTIGACION.md` (documentan el estado en su momento, no el actual).
+
+**Sin cambios de contenido**: ningún documento de `proyecto-mt5-bots/` fue reescrito ni resumido — solo movido y con sus rutas internas corregidas.
+
+## [2026-08-19] restructure | Eliminación completa de `docs/`, planes del dashboard movidos, huérfanos re-enlazados
+
+Pedro señaló dos cosas pendientes de la restructuración anterior: (1) `docs/superpowers/` seguía existiendo con planes de implementación, y (2) desde Obsidian veía `PREGUNTAS_ABIERTAS.md`, `DECISIONS/README.md`, `ESTADO_INVESTIGACION.md` y `FUENTES.md` como nodos huérfanos en el grafo — "no quiero documentos sin relacionar".
+
+**Movido y eliminado `docs/`**:
+- `docs/superpowers/plans/{2026-08-15-multi-parent-dependencies,2026-08-17-esquema-agentes-analisis}.md` y `docs/superpowers/specs/2026-08-15-multi-parent-dependencies-design.md` → nueva categoría `wiki-Traiding/proyecto-dashboard/{planes,specs}/` (`git mv`, historial preservado).
+- Creado `proyecto-dashboard/00_INDEX.md` (no existía ningún índice para estos 3 archivos) enlazando a los tres con descripción y estado ("ya ejecutados, registro histórico").
+- Corregida la única ruta rota (`docs/superpowers/specs/...` → `../specs/...` dentro del plan de multi-parent-dependencies); la otra referencia cruzada (`trading-agents-dashboard/docs/ESQUEMA_AGENTES_ANALISIS.md`) seguía resolviendo bien porque la nueva ubicación tiene la misma profundidad de carpetas que la antigua.
+- `docs/` verificado vacío de archivos (`find docs -type f` sin resultados) y eliminado con `rmdir` recursivo (falla si hay algo dentro — no se usó borrado destructivo ciego).
+- `index.md`, `wiki-Traiding/CLAUDE.md` (estructura + convenciones) y `CLAUDE.md` raíz actualizados con la nueva categoría. Añadida nota en `CLAUDE.md` raíz para que futuros planes de `superpowers:writing-plans` se escriban directamente en `proyecto-dashboard/` en vez de recrear `docs/`.
+
+**Causa raíz de los huérfanos y arreglo**: `PREGUNTAS_ABIERTAS.md`, `ESTADO_INVESTIGACION.md` y `FUENTES.md` se mencionaban en más de 25 sitios del corpus `proyecto-mt5-bots/`, pero **siempre** como texto entre backticks (`` `FUENTES.md` ``), nunca como enlace markdown real — Obsidian no dibuja arista con eso, exactamente el mismo patrón de fallo que la entrada de lint del 2026-08-16 sobre `fuentes:` en frontmatter. `DECISIONS/README.md` no se mencionaba en ningún sitio salvo la carpeta `DECISIONS/` a secas.
+
+**Arreglo**: conversión sistemática (`sed` acotado a `wiki-Traiding/proyecto-mt5-bots/`, verificado archivo por archivo) de toda mención entre backticks de esos 3 nombres de archivo a enlace markdown real, más la única mención sin backticks en `15_Seguridad_Credenciales_y_Permisos.md`. Además, nueva sección "Documentos de seguimiento y meta" en `00_INDEX.md` con enlace directo a los 4 archivos (los 3 anteriores + `DECISIONS/README.md`) para que cada uno tenga como mínimo un enlace de entrada fuerte desde el índice maestro, no solo menciones dispersas.
+
+**Error cometido y corregido en el propio proceso**: el `sed` masivo, al aplicarse después de escribir a mano los enlaces de la nueva sección de `00_INDEX.md`, los envolvió dos veces (`[[texto](enlace)](enlace)`) porque el patrón buscaba el mismo texto entre backticks que yo ya había enlazado. Detectado con un grep de `]](` sobre todo el corpus tras la pasada masiva y corregido antes de dar la tarea por terminada — verificación explícita, no asumida.
+
+**Verificado al cerrar**: `grep -r "docs/MetaTrader\|docs/superpowers"` sobre el repo solo devuelve menciones históricas intencionales (esta misma entrada de log, la entrada anterior, y el árbol "Archivos creados en esta sesión" de `ESTADO_INVESTIGACION.md`) — cero rutas rotas activas.
+
+## [2026-08-19] restructure | `Web_METATRADER5.md` a `raw/`, README y `CLAUDE.md` con la regla permanente de documentación
+
+Cierre de la restructuración: Pedro pidió mover también `Web_METATRADER5.md` (el informe de partida elaborado el 06/08/2026 desde el sitio oficial, que vivía suelto en la raíz del repo) a la wiki, indexarlo, y luego — con la wiki ya en condiciones — actualizar `README.md` y las instrucciones de Claude Code para que toda futura documentación del proyecto se añada siempre a la wiki, indexada y relacionada.
+
+**`Web_METATRADER5.md` movido**: a `wiki-Traiding/proyecto-mt5-bots/raw/Web_METATRADER5.md` (`git mv`) — es la primera fuente `raw/` de ese corpus (hasta ahora `proyecto-mt5-bots/` no tenía subcarpeta `raw/`, era investigación escrita directamente). Se trata como fuente inmutable, igual que el `raw/` general de la wiki: no se ha editado su contenido.
+
+**Relacionado** (5 menciones que eran texto entre backticks, convertidas a enlace markdown real hacia `raw/Web_METATRADER5.md`): `FUENTES.md` (fila F004, "Usado para"), `00_Contexto_y_Objetivos_Proyecto.md` §7, `01_Arquitectura_y_Funcionamiento_MetaTrader5.md` §1, `ESTADO_INVESTIGACION.md` (hallazgo de build vigente), `14_Despliegue_24x7_VPS.md` (límite de gráficos con EA). Añadida además entrada propia en la sección "Documentos de seguimiento y meta" de `00_INDEX.md`.
+
+**`wiki-Traiding/CLAUDE.md`**: nota añadida sobre el nuevo `proyecto-mt5-bots/raw/` (una fuente por ahora), mismo principio de inmutabilidad que el `raw/` general.
+
+**`README.md`**: sustituida la única línea que resumía la wiki por una sección completa "Wiki de conocimiento (`wiki-Traiding/`)" con las 7 categorías de conocimiento general y las 2 categorías de proyecto (`proyecto-mt5-bots/`, `proyecto-dashboard/`), cada una enlazada.
+
+**`CLAUDE.md` raíz**: la nota puntual sobre dónde van los planes de `trading-agents-dashboard/` (añadida en la sesión anterior) se sustituyó por una regla permanente y más general — "Regla permanente: toda la documentación va a la wiki, indexada" — cubriendo cualquier documento futuro (investigación, decisiones, planes, specs, auditorías, notas de progreso) de cualquier agente, con la instrucción explícita de que un documento no se da por terminado sin indexarlo y sin al menos un enlace markdown real de entrada (no basta con mencionarlo entre backticks — la lección de esta sesión, repetida ya dos veces).
+
+## [2026-08-20] audit | Prueba end-to-end real del ciclo agentes → MQL5 → backtest — 9 problemas encontrados y corregidos
+
+Pedro pidió una prueba completa y real (sin mocks) de todo el ciclo de `trading-agents-dashboard/`: lanzar el análisis desde la pestaña principal, verificar que los 6 agentes funcionan, generar código MQL5 desde una estrategia validada, compilarlo contra MetaEditor real y probarlo con backtest real contra MetaTrader, iterando hasta conseguir buen resultado — arreglando cualquier problema encontrado por el camino, sin detenerse.
+
+**Nueva categoría `informes/` en `proyecto-dashboard/`**: los informes de prueba/auditoría post-hoc (verificación en vivo de una implementación ya hecha) no encajaban en las convenciones existentes de `planes/`/`specs/` (documentos *previos* a implementar). Añadida como tercera subcarpeta de `proyecto-dashboard/`, indexada en su `00_INDEX.md` e ilustrada en `wiki-Traiding/index.md`.
+
+**Informe completo**: [`proyecto-dashboard/informes/2026-08-20-prueba-e2e-agentes-mql5-backtest.md`](proyecto-dashboard/informes/2026-08-20-prueba-e2e-agentes-mql5-backtest.md) — 9 hallazgos con reproducción y verificación en vivo contra infraestructura real (OmniRoute, MetaEditor64, MetaTrader 5 terminal), 3 críticos:
+
+1. La detección de backtests headless estaba silenciosamente rota desde su implementación (auditoría previa de 2026-08-19): los logs de MetaTrader son UTF-16LE con BOM, pero el código intentaba leerlos como UTF-8 primero (que no lanza excepción, solo corrompe el texto) — ningún backtest, exitoso o no, se detectaba nunca correctamente.
+2. El Refutador y el Razonador exigían datos (volumen OBV/CMF, profundidad de libro, flujos ETF) que el snapshot de mercado nunca puede aportar, bloqueando indefinidamente cualquier veredicto "go" en 3 de 3 análisis completos antes del fix.
+3. La validación numérica determinista de la estrategia (R:R, geometría) no tenía reintento in-situ — un solo desliz de aritmética del LLM tumbaba todo el análisis.
+
+También corregidos: `optimizeMql5` era un stub que ignoraba el código/backtest previos; runs que quedaban en `"running"` para siempre si el servidor se reiniciaba a mitad (reproducido en vivo); fallos deterministas del backtest (símbolo inexistente, crash de runtime por `array out of range`) reportados como timeout ambiguo en vez de con diagnóstico preciso; esos mismos crashes y el caso "0 operaciones" no disparaban el bucle de auto-optimización ya existente; la UI permitía generar MQL5 desde una estrategia con objeciones sin resolver.
+
+**`server/README.md` actualizado** con el comportamiento corregido del orquestador (reintento in-situ, reconciliación de runs huérfanos) y del pipeline de backtest headless (antes no documentado en absoluto).
+
+**Pendiente**: no se llegó a ver, dentro del presupuesto de esta sesión, un Quality Gate en verde con operaciones reales — los intentos reales llegaron a "compila limpio + backtest detectado correctamente" pero terminaron en "0 operaciones" (estrategia LLM con condiciones de entrada demasiado restrictivas para el histórico de 12 meses probado). El hallazgo 7 del informe ya conecta ese caso al bucle de auto-optimización; queda como continuación natural relanzar el ciclo ahora que la detección funciona de verdad. También queda como limitación de entorno conocida (no arreglable desde el código) que el símbolo `BTCUSD` no existe en la cuenta MetaQuotes-Demo conectada — el backtest automático de BTC/USD no puede completarse en esta máquina hasta identificar el nombre real del símbolo cripto de ese bróker.
 

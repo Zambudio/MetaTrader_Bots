@@ -2,7 +2,7 @@ import { promises as fs, constants as fsConstants } from 'node:fs';
 import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { nanoid } from 'nanoid';
-import { MQL5_COMPILE_DIR } from '../paths.js';
+import { MQL5_COMPILE_DIR, MQL5_DELIVERABLES_DIR } from '../paths.js';
 
 const DEFAULT_METAEDITOR_PATH = 'C:\\Program Files\\MetaTrader 5\\metaeditor64.exe';
 const COMPILE_TIMEOUT_MS = 30_000;
@@ -11,6 +11,19 @@ export interface CompileResult {
   status: 'ok' | 'errors' | 'unverified';
   errors: string[];
   warnings: string[];
+  compiledEx5Buffer?: Buffer;
+}
+
+export interface DeliverableProvenance {
+  filename: string;
+  timestamp: string;
+  model: string;
+  pair: string;
+  timeframe: string;
+  attempts: number;
+  compileStatus: 'ok' | 'errors' | 'unverified';
+  assumptions: string[];
+  qualityGatePassed?: boolean;
 }
 
 async function resolveMetaeditorPath(): Promise<string | null> {
@@ -29,10 +42,6 @@ function parseLog(raw: string, srcPath: string, displayName: string): { errors: 
   for (const rawLine of raw.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line) continue;
-    // MetaEditor también reporta errores/warnings de los headers estándar que el EA incluye
-    // (p.ej. Trade.mqh: "declaration of 'request' hides global variable" en casi cualquier EA
-    // que use CTrade) — no son accionables porque no forman parte del código generado, así que
-    // se descartan y solo se muestran los que apuntan al propio archivo compilado.
     if (!line.includes(srcPath)) continue;
     const readable = line.split(srcPath).join(displayName);
     if (/:\s*error\s+\d+:/i.test(line)) {
@@ -60,8 +69,6 @@ export async function compileMql5(code: string, displayName: string): Promise<Co
 
   try {
     await new Promise<void>((resolve) => {
-      // metaeditor's process exit code does not reliably reflect compile success/failure
-      // (observed both 0 and 1 for a clean compile) — the /log output is the source of truth.
       execFile(exe, [`/compile:${srcPath}`, `/log:${logPath}`], { timeout: COMPILE_TIMEOUT_MS }, () => resolve());
     });
 
@@ -73,12 +80,52 @@ export async function compileMql5(code: string, displayName: string): Promise<Co
     }
 
     const { errors, warnings } = parseLog(raw, srcPath, displayName);
-    return { status: errors.length > 0 ? 'errors' : 'ok', errors, warnings };
+    let compiledEx5Buffer: Buffer | undefined;
+
+    if (errors.length === 0) {
+      try {
+        compiledEx5Buffer = await fs.readFile(ex5Path);
+      } catch {
+        // Ignorar si no generó ex5
+      }
+    }
+
+    return {
+      status: errors.length > 0 ? 'errors' : 'ok',
+      errors,
+      warnings,
+      compiledEx5Buffer,
+    };
   } finally {
     await Promise.all([
       fs.unlink(srcPath).catch(() => {}),
       fs.unlink(logPath).catch(() => {}),
       fs.unlink(ex5Path).catch(() => {}),
     ]);
+  }
+}
+
+// 3.6: Trazabilidad completa del código entregado (agent_provenance)
+export async function persistDeliverable(
+  code: string,
+  provenance: DeliverableProvenance,
+  ex5Buffer?: Buffer
+): Promise<void> {
+  try {
+    await fs.mkdir(MQL5_DELIVERABLES_DIR, { recursive: true });
+    const baseName = provenance.filename.replace(/\.mq5$/i, '');
+    const timestampTag = new Date().toISOString().replace(/[:.]/g, '-');
+    const outMq5 = path.join(MQL5_DELIVERABLES_DIR, `${baseName}_${timestampTag}.mq5`);
+    const outMeta = path.join(MQL5_DELIVERABLES_DIR, `${baseName}_${timestampTag}.meta.json`);
+
+    await fs.writeFile(outMq5, code, 'utf-8');
+    await fs.writeFile(outMeta, JSON.stringify(provenance, null, 2), 'utf-8');
+
+    if (ex5Buffer) {
+      const outEx5 = path.join(MQL5_DELIVERABLES_DIR, `${baseName}_${timestampTag}.ex5`);
+      await fs.writeFile(outEx5, ex5Buffer);
+    }
+  } catch (err) {
+    console.warn(`[mql5Compiler] Error persistiendo entregable de trazabilidad:`, err);
   }
 }

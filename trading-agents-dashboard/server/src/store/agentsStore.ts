@@ -6,7 +6,7 @@ interface RawAgent extends Omit<Agent, 'dependsOn'> {
   dependsOn?: string | string[] | null;
 }
 
-const DEFAULT_AGENTS: Agent[] = [
+export const DEFAULT_AGENTS: Agent[] = [
   {
     id: 'agente-tecnico',
     name: 'Analista Técnico',
@@ -15,6 +15,7 @@ const DEFAULT_AGENTS: Agent[] = [
       'Recibes un snapshot de mercado real (precio, medias móviles, RSI, MACD, Bollinger, ATR, máximos/mínimos recientes) para el par y timeframe indicados. Interpreta la tendencia, el momentum y la volatilidad actuales basándote EXCLUSIVAMENTE en esos datos — no inventes valores ni comentes indicadores que no aparecen en el snapshot. Señala soportes y resistencias relevantes.',
     dependsOn: [],
     outputType: 'text',
+    photo: 'https://cdn-icons-png.flaticon.com/512/8637/8637114.png',
     model: 'auto/pro-fast',
   },
   {
@@ -25,6 +26,7 @@ const DEFAULT_AGENTS: Agent[] = [
       'Evalúa el contexto macroeconómico y de noticias relevante para el par y timeframe indicados. Si el timeframe es intradía (M15-H1), céntrate en riesgo de eventos programados (calendario económico) más que en sesgo direccional; si es de posición (H4+), pondera el sesgo macro de fondo (tipos de interés, política monetaria, flujos). Complementa el análisis técnico, no lo dupliques.',
     dependsOn: [],
     outputType: 'text',
+    photo: 'https://cdn-icons-png.flaticon.com/512/4736/4736348.png',
     model: 'auto/pro-chat',
   },
   {
@@ -32,19 +34,21 @@ const DEFAULT_AGENTS: Agent[] = [
     name: 'Gestor de Riesgos',
     role: 'Gestor de Riesgos',
     systemPrompt:
-      "A partir del análisis técnico y fundamental recibidos, propone una estrategia concreta: punto de entrada, stop loss, take profit y, si procede, un plan de entradas escalonadas. Si el contexto incluye objeciones de un intento anterior (marcadas 'Objeciones del Razonador'), corrígelas explícitamente en la nueva propuesta en vez de repetir la anterior.",
+      'A partir del análisis técnico y fundamental recibidos, propone una estrategia concreta y matemáticamente coherente: 1) Dirección inequívoca (COMPRA / BUY o VENTA / SELL). 2) Punto o zona de entrada. 3) Stop Loss y Take Profit obligatoriamente coherentes con la dirección: Para COMPRA, TakeProfit > Entrada > StopLoss; Para VENTA, StopLoss > Entrada > TakeProfit. Especifica los niveles tanto en precio como en distancia de pips/puntos y ratio Riesgo/Beneficio (R:R mínimo 1:1.5). 4) Si procede, plan de entradas escalonadas.',
     dependsOn: ['agente-tecnico', 'agente-fundamental'],
     outputType: 'strategy',
-    model: 'auto/chat',
+    photo: 'https://cdn-icons-png.flaticon.com/512/11126/11126203.png',
+    model: 'auto/best-chat',
   },
   {
     id: 'agente-validador-tecnico',
     name: 'Validador de Coherencia Técnica',
     role: 'Validador de Coherencia Técnica',
     systemPrompt:
-      '¿El stop loss queda fuera de estructura relevante? ¿el punto de entrada encaja con la tendencia/momentum descritos? ¿el ratio riesgo/beneficio es razonable dado el ATR/volatilidad actual? Comprueba si la propuesta de Gestor de Riesgos es coherente con el análisis técnico y el snapshot de mercado del contexto. Cita los números del snapshot al señalar inconsistencias; si no encuentras ninguna, dilo explícitamente.',
+      'AUDITORÍA DE COHERENCIA MATEMÁTICA Y TÉCNICA: 1) Comprueba la geometría de la orden: Si es COMPRA, ¿TakeProfit > Entrada > StopLoss? Si es VENTA, ¿StopLoss > Entrada > TakeProfit? Si los stops están invertidos o son contradictorios, RECHÁZALA INMEDIATAMENTE. 2) ¿El stop loss queda fuera de estructura relevante? 3) ¿El punto de entrada encaja con la tendencia/momentum? 4) ¿El ratio R:R es >= 1.5 y coherente con el ATR del snapshot? Cita los números del snapshot al señalar inconsistencias.',
     dependsOn: ['agente-riesgo'],
     outputType: 'text',
+    photo: 'https://www.shutterstock.com/image-vector/check-icon-lineal-color-style-260nw-2752163849.jpg',
     model: 'auto/pro-fast',
   },
   {
@@ -55,6 +59,7 @@ const DEFAULT_AGENTS: Agent[] = [
       'Tu trabajo es intentar tumbar la propuesta de Gestor de Riesgos: busca activamente motivos por los que la operación podría fallar — escenario técnico contrario, eventos de calendario próximos que la invalidarían, correlaciones con otros pares/activos, niveles de invalidación cercanos, falta de liquidez. No suavices la crítica por quedar bien; si la propuesta es sólida dilo, pero exige evidencia concreta del contexto antes de darla por buena.',
     dependsOn: ['agente-riesgo'],
     outputType: 'text',
+    photo: 'https://cdn-icons-png.flaticon.com/512/3300/3300148.png',
     model: 'auto/pro-fast',
   },
   {
@@ -65,6 +70,7 @@ const DEFAULT_AGENTS: Agent[] = [
       'Sintetiza el análisis técnico, fundamental, la propuesta de riesgo y las críticas del Validador de Coherencia Técnica y el Refutador. Emite un veredicto: GO si la propuesta es sólida y las críticas no la invalidan; AJUSTAR si hay objeciones concretas y corregibles (indícalas con precisión); NO_OPERAR si las condiciones o las objeciones son suficientemente serias como para que ninguna propuesta de entrada tenga sentido ahora mismo con estos datos.',
     dependsOn: ['agente-validador-tecnico', 'agente-refutador'],
     outputType: 'verdict',
+    photo: 'https://static.vecteezy.com/system/resources/previews/012/777/951/non_2x/artificial-intelligence-brain-colorful-icon-ai-sign-vector.jpg',
     model: 'auto/pro-reasoning',
   },
 ];

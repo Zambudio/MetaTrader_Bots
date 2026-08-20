@@ -1,5 +1,5 @@
 export type OutputType = 'text' | 'strategy' | 'verdict';
-export type AgentRunStatus = 'idle' | 'waiting' | 'running' | 'done' | 'error';
+export type AgentRunStatus = 'waiting' | 'running' | 'done' | 'error';
 export type Veredicto = 'go' | 'ajustar' | 'no_operar';
 
 export interface Agent {
@@ -11,6 +11,15 @@ export interface Agent {
   dependsOn: string[];
   outputType: OutputType;
   model?: string;
+  enabled?: boolean;
+}
+
+export interface AgentConfigPreset {
+  id: string;
+  name: string;
+  agents: Agent[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface StrategyProposalLite {
@@ -21,6 +30,11 @@ export interface StrategyProposalLite {
   puntoEntrada: string;
   stopLoss: string;
   takeProfit: string;
+  direction?: 'buy' | 'sell';
+  entryPriceNum?: number;
+  stopLossNum?: number;
+  takeProfitNum?: number;
+  riskPercent?: number;
   entradasEscalonadas?: string;
   confianza?: string;
 }
@@ -31,6 +45,8 @@ export interface VerdictResult {
   objeciones?: string[];
 }
 
+import type { Mt5LogSession } from './engine/mt5LogParser.js';
+
 export interface Mql5GenerationResult {
   code: string;
   filename: string;
@@ -39,6 +55,9 @@ export interface Mql5GenerationResult {
   compileErrors: string[];
   compileWarnings: string[];
   attempts: number;
+  iteration?: number;
+  backtestSession?: Mt5LogSession;
+  optimizationNotes?: string[];
 }
 
 export interface AgentRunResult {
@@ -62,6 +81,7 @@ export interface Run {
   results: AgentRunResult[];
   retryCount?: number;
   maxRetries?: number;
+  mql5Result?: Mql5GenerationResult;
 }
 
 export interface RunSummary {

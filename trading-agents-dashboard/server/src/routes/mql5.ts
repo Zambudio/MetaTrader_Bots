@@ -1,49 +1,94 @@
 import { Router } from 'express';
-import { generateMql5 } from '../engine/mql5Generator.js';
+import { generateMql5, optimizeMql5 } from '../engine/mql5Generator.js';
 import { createMql5Job, updateMql5JobProgress, completeMql5Job, failMql5Job, getMql5Job } from '../engine/mql5Jobs.js';
+import { loadRun, saveRun } from '../store/runsStore.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import type { StrategyProposalLite } from '../types.js';
 
 export const mql5Router = Router();
 
+import { validateStrategyProposal } from '../engine/strategyValidator.js';
+
 function isValidStrategy(value: unknown): value is StrategyProposalLite {
   if (!value || typeof value !== 'object') return false;
   const s = value as Record<string, unknown>;
-  return (
-    typeof s.pair === 'string' &&
-    typeof s.timeframe === 'string' &&
-    typeof s.resumen === 'string' &&
+  const hasFields =
+    typeof s.pair === 'string' && s.pair.trim().length > 0 &&
+    typeof s.timeframe === 'string' && s.timeframe.trim().length > 0 &&
+    typeof s.resumen === 'string' && s.resumen.trim().length > 0 &&
     Array.isArray(s.indicadoresClave) &&
-    typeof s.puntoEntrada === 'string' &&
-    typeof s.stopLoss === 'string' &&
-    typeof s.takeProfit === 'string'
-  );
+    typeof s.puntoEntrada === 'string' && s.puntoEntrada.trim().length > 0 &&
+    typeof s.stopLoss === 'string' && s.stopLoss.trim().length > 0 &&
+    typeof s.takeProfit === 'string' && s.takeProfit.trim().length > 0;
+
+  if (!hasFields) return false;
+  const val = validateStrategyProposal(s as unknown as StrategyProposalLite);
+  return val.valid;
 }
 
 mql5Router.post(
   '/generate',
   asyncHandler(async (req, res) => {
-    const { strategy, model } = req.body ?? {};
+    const { strategy, model, runId } = req.body ?? {};
     if (!isValidStrategy(strategy)) {
       res.status(400).json({ error: 'strategy inválida o incompleta' });
       return;
     }
 
-    // La generación real (LLM + hasta 3 compilaciones en MetaEditor) puede tardar varios
-    // minutos. Devolver eso como una única respuesta HTTP bloqueante es fragil: cualquier
-    // reinicio del dev server (tsx watch, al editar código mientras se genera) o cualquier
-    // corte de red de más de unos segundos tumba la conexión en curso — el navegador lo ve
-    // como "Failed to fetch" pese a que el trabajo en el servidor suele completarse igual.
-    // Por eso el POST solo arranca el job y devuelve un id; el cliente hace polling a
-    // GET /generate/:jobId, donde un corte solo afecta a un tick de sondeo, no a los minutos
-    // de trabajo ya invertidos.
     const jobId = createMql5Job();
     res.status(202).json({ jobId });
 
     void generateMql5(strategy, typeof model === 'string' ? model : undefined, (progress) =>
       updateMql5JobProgress(jobId, progress)
     )
-      .then((result) => completeMql5Job(jobId, result))
+      .then(async (result) => {
+        completeMql5Job(jobId, result);
+        if (typeof runId === 'string' && runId) {
+          const run = await loadRun(runId);
+          if (run) {
+            run.mql5Result = result;
+            await saveRun(run).catch(() => {});
+          }
+        }
+      })
+      .catch((err) => failMql5Job(jobId, err instanceof Error ? err.message : 'Error desconocido'));
+  })
+);
+
+mql5Router.post(
+  '/optimize',
+  asyncHandler(async (req, res) => {
+    const { strategy, previousCode, previousBacktest, iteration, model, runId, previousNotes } = req.body ?? {};
+    if (!isValidStrategy(strategy) || typeof previousCode !== 'string') {
+      res.status(400).json({ error: 'Parámetros de optimización incompletos' });
+      return;
+    }
+
+    const jobId = createMql5Job();
+    res.status(202).json({ jobId });
+
+    const iterNumber = typeof iteration === 'number' ? iteration : 2;
+    const notes = Array.isArray(previousNotes) ? previousNotes.filter((n): n is string => typeof n === 'string') : undefined;
+
+    void optimizeMql5(
+      strategy,
+      previousCode,
+      previousBacktest ?? null,
+      iterNumber,
+      typeof model === 'string' ? model : undefined,
+      (progress) => updateMql5JobProgress(jobId, progress),
+      notes
+    )
+      .then(async (result) => {
+        completeMql5Job(jobId, result);
+        if (typeof runId === 'string' && runId) {
+          const run = await loadRun(runId);
+          if (run) {
+            run.mql5Result = result;
+            await saveRun(run).catch(() => {});
+          }
+        }
+      })
       .catch((err) => failMql5Job(jobId, err instanceof Error ? err.message : 'Error desconocido'));
   })
 );

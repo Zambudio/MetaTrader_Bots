@@ -15,6 +15,8 @@ export interface AgentRunResult {
   error?: string;
 }
 
+import type { Mql5GenerationResult } from './strategy';
+
 export interface Run {
   id: string;
   pair: string;
@@ -24,6 +26,7 @@ export interface Run {
   results: AgentRunResult[];
   retryCount?: number;
   maxRetries?: number;
+  mql5Result?: Mql5GenerationResult;
 }
 
 export interface RunSummary {

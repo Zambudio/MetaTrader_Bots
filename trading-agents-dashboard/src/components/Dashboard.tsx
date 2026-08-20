@@ -2,14 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 import { useAgentStore } from '../lib/store';
 import { AgentCard } from './AgentCard';
+import { AgentConfigBar } from './AgentConfigBar';
 import { AgentConfigModal } from './AgentConfigModal';
 import { AgentConnections } from './AgentConnections';
+import { AgentLogsPanel } from './AgentLogsPanel';
 import { PairSelector } from './PairSelector';
 import { PriceChart } from './PriceChart';
 import { RunHistoryModal } from './RunHistoryModal';
 import { StrategyResultCard } from './StrategyResultCard';
 import { VerdictResultCard } from './VerdictResultCard';
-import { buildLevels, wouldCreateCycle } from '../lib/agentGraph';
+import { buildLevels, filterEnabledAgents, wouldCreateCycle } from '../lib/agentGraph';
 import type { Agent } from '../types/agent';
 
 export const Dashboard = () => {
@@ -24,6 +26,7 @@ export const Dashboard = () => {
     updateAgent,
     removeAgent,
     runWorkflow,
+    resumeWorkflow,
     loadRun,
   } = useAgentStore();
 
@@ -42,6 +45,7 @@ export const Dashboard = () => {
   const strategyResults = (currentRun?.results ?? []).filter((r) => r.strategy);
   const verdictResults = (currentRun?.results ?? []).filter((r) => r.verdict);
   const levels = buildLevels(agents);
+  const reachableIds = new Set(filterEnabledAgents(agents).map((a) => a.id));
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('¿Eliminar este agente? Los agentes que dependían de él dejarán de esperar respuesta.')) {
@@ -131,6 +135,22 @@ export const Dashboard = () => {
 
           <div className="flex items-end gap-3 flex-wrap">
             <PairSelector />
+            <div className="flex flex-col gap-1">
+              <label htmlFor="maxRetriesSelect" className="text-xs text-muted font-medium">
+                Reintentos máx.
+              </label>
+              <select
+                id="maxRetriesSelect"
+                value={useAgentStore.getState().maxRetries}
+                onChange={(e) => useAgentStore.getState().setMaxRetries(Number(e.target.value))}
+                className="bg-panel border border-line rounded-xl px-3 py-3 text-sm text-paper font-semibold focus:outline-none focus:border-cyan"
+              >
+                <option value={0}>0 reintentos</option>
+                <option value={1}>1 reintento</option>
+                <option value={2}>2 reintentos</option>
+                <option value={3}>3 reintentos</option>
+              </select>
+            </div>
             <button
               onClick={() => setShowHistory(true)}
               className="rounded-xl border border-line/70 text-paper/80 font-semibold text-base px-5 py-3 hover:text-cyan hover:border-cyan/50 transition-all whitespace-nowrap"
@@ -169,9 +189,10 @@ export const Dashboard = () => {
           <p className="text-muted text-base">Cargando agentes…</p>
         ) : (
           <>
-            <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center gap-3 mb-6 flex-wrap">
               <span className="text-base font-medium text-cyan whitespace-nowrap">Cadena de agentes</span>
               <span className="h-px flex-1 bg-line/60" aria-hidden="true" />
+              <AgentConfigBar />
             </div>
 
             {draggingId && (
@@ -206,7 +227,12 @@ export const Dashboard = () => {
                       }}
                       agent={agent}
                       runResult={resultsByAgentId.get(agent.id)}
+                      isOrphanedByDisabled={agent.enabled !== false && !reachableIds.has(agent.id)}
+                      onToggleEnabled={() => updateAgent(agent.id, { enabled: agent.enabled === false })}
                       onConfigure={() => setEditingAgent(agent)}
+                      onRetry={() => resumeWorkflow(agent.id)}
+                      isAnalysing={isAnalysing}
+                      hasCurrentRun={Boolean(currentRun)}
                       isDragging={draggingId === agent.id}
                       dropState={
                         dropTargetId === agent.id
@@ -231,6 +257,14 @@ export const Dashboard = () => {
                 + Añadir agente
               </button>
             </div>
+
+            {/* Panel de Registro y Logs de Respuestas de Agentes */}
+            <AgentLogsPanel
+              agents={agents}
+              currentRun={currentRun}
+              isAnalysing={isAnalysing}
+              onResume={resumeWorkflow}
+            />
 
             {verdictResults.length > 0 && (
               <div className="mt-14">
@@ -265,12 +299,17 @@ export const Dashboard = () => {
                 <div className="space-y-6">
                   {strategyResults.map((r) => {
                     const agent = agents.find((a) => a.id === r.agentId);
+                    const verdictRes = currentRun?.results.find((res) => res.verdict);
                     return r.strategy && agent ? (
                       <StrategyResultCard
                         key={r.agentId}
                         agentName={agent.name}
                         strategy={r.strategy}
                         agentModel={agent.model}
+                        runId={currentRun?.id}
+                        isRunComplete={currentRun?.status === 'done'}
+                        verdictDecision={verdictRes?.verdict?.veredicto}
+                        initialResult={currentRun?.mql5Result}
                       />
                     ) : null;
                   })}
