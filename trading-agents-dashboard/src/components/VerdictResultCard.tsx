@@ -36,6 +36,14 @@ export const VerdictResultCard = ({ agentName, verdict, attempt, retryCount, max
           </span>
         </div>
 
+        {verdict.veredicto === 'go' && (
+          <p className="text-xs text-muted mb-3">
+            GO = coherencia técnica de esta operación sobre el snapshot actual, no una confirmación de
+            rentabilidad histórica. Eso lo decide el Quality Gate cuantitativo tras el backtest real (ver
+            propuesta de estrategia abajo).
+          </p>
+        )}
+
         <p className="text-base text-paper/90 leading-relaxed">{verdict.razon}</p>
 
         {verdict.objeciones && verdict.objeciones.length > 0 && (

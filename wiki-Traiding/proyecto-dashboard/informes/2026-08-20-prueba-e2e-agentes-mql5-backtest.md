@@ -135,6 +135,7 @@ No se llegó a completar, dentro del presupuesto de esta sesión, un ciclo ínte
 
 ## Ver también
 
+- [`2026-08-20-diagnostico-veredicto-vs-backtest-real.md`](2026-08-20-diagnostico-veredicto-vs-backtest-real.md) — diagnóstico y fix de continuación: por qué, incluso con los 9 problemas de este informe corregidos, el panel podía seguir dando "GO" a estrategias que pierden dinero en backtest real.
 - [`docs/ESQUEMA_AGENTES_ANALISIS.md`](../../../trading-agents-dashboard/docs/ESQUEMA_AGENTES_ANALISIS.md) — diseño original del roster de 6 agentes que esta sesión pone a prueba.
 - [`server/README.md`](../../../trading-agents-dashboard/server/README.md) — arquitectura técnica actualizada con el comportamiento corregido (orquestador, pipeline de backtest headless).
 - [`promp-auditoria1908.md`](../../../promp-auditoria1908.md) (raíz del repo) — auditoría previa (2026-08-19) de la que procede la implementación base (Quality Gate, CodeReviewerAgent, validación numérica) que aquí se verifica en producción por primera vez.

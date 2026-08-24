@@ -79,6 +79,8 @@ Se construye un payload estructurado con el resultado del backtest:
 * Historial de operaciones cerradas y motivos (ej. *"30 SL vs 9 TP"*).
 * Diagnóstico de fallos (ej. *"Las posiciones alcanzan +1.2R y se giran a SL completo por falta de Breakeven"* o *"Falsas compras durante fases laterales"*).
 
+**Implementado (2026-08-20).** Hasta entonces el diagnóstico del Quality Gate solo volvía al LLM de código (retocaba SL/TP/filtros dentro de la misma tesis); esta reinyección al propio Agente Razonador — que sí puede reconsiderar indicadores/dirección/condición de entrada — es la que faltaba y motivó una revisión completa del pipeline (agentes dando "GO" a estrategias que luego perdían dinero en backtest real). Detalle técnico: [`server/README.md` §"Cierre del bucle con el panel de agentes cuando el backtest real falla"](../../trading-agents-dashboard/server/README.md#cierre-del-bucle-con-el-panel-de-agentes-cuando-el-backtest-real-falla-srcroutesmql5ts-srcengineorchestratorts).
+
 ### 2. Acciones Correctivas del Agente
 * **Ajuste de Gatillo (Trigger):** Exigir confirmación por acción del precio en lugar de entrar por simple toque de media móvil.
 * **Gestión de Posición:** Incorporar Breakeven dinámico al alcanzar $+1\text{R}$ o Trailing Stop basado en ATR.

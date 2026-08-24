@@ -3,6 +3,8 @@ export interface StrategyProposalLite {
   timeframe: string;
   resumen: string;
   indicadoresClave: string[];
+  /** Regla mecánica y repetible que dispara la entrada — no un nivel de precio anecdótico. */
+  condicionEntrada: string;
   puntoEntrada: string;
   stopLoss: string;
   takeProfit: string;
@@ -28,12 +30,19 @@ export interface Mql5GenerationResult {
   iteration?: number;
   backtestSession?: Mt5LogSession;
   optimizationNotes?: string[];
+  /** Estrategia realmente codificada, si el panel de agentes la replanteó tras un fallo de Quality Gate. */
+  finalStrategy?: StrategyProposalLite;
+  /** Nº de veces que un backtest real hizo que el panel de agentes reconsiderara la estrategia. */
+  strategyFeedbackCycles?: number;
+  /** El Razonador, ya informado del fallo real de backtest, decidió NO_OPERAR — descartada. */
+  discarded?: boolean;
+  discardReason?: string;
 }
 
 export interface Mql5GenerationProgress {
   attempt: number;
   maxAttempts: number;
-  phase: 'generating' | 'compiling' | 'backtesting' | 'evaluating' | 'optimizing';
+  phase: 'generating' | 'compiling' | 'backtesting' | 'evaluating' | 'optimizing' | 'restrategizing';
   details?: string;
 }
 

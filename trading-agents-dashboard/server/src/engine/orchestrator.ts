@@ -1,4 +1,4 @@
-import type { Agent, AgentRunResult, Run, VerdictResult } from '../types.js';
+import type { Agent, AgentRunResult, Run, StrategyProposalLite, VerdictResult } from '../types.js';
 import { runAgent } from './executor.js';
 import { saveRun } from '../store/runsStore.js';
 import { buildMarketSnapshot } from './marketSnapshot.js';
@@ -185,7 +185,7 @@ interface RunPassOptions {
   extraContextByAgentId?: Map<string, string>;
 }
 
-async function runPass(run: Run, agents: Agent[], snapshot: string | null, options: RunPassOptions = {}): Promise<boolean> {
+export async function runPass(run: Run, agents: Agent[], snapshot: string | null, options: RunPassOptions = {}): Promise<boolean> {
   const levels = buildLevels(agents);
   const resultsById = new Map(run.results.map((r) => [r.agentId, r]));
 
@@ -281,7 +281,7 @@ async function runPass(run: Run, agents: Agent[], snapshot: string | null, optio
   return true;
 }
 
-function resetForRetry(run: Run, subgraph: Set<string>): void {
+export function resetForRetry(run: Run, subgraph: Set<string>): void {
   run.results = run.results.map((r) => (subgraph.has(r.agentId) ? { agentId: r.agentId, status: 'waiting', attempt: (r.attempt ?? 1) + 1 } : r));
 }
 
@@ -356,6 +356,103 @@ export async function executeRun(run: Run, agents: Agent[]): Promise<void> {
   }
 
   await saveRun(run);
+}
+
+/**
+ * Límite de veces que un backtest real (no una objeción del propio Razonador) puede forzar a
+ * agente-riesgo/agente-razonador a reconsiderar la tesis. Cada ciclo implica una generación de
+ * MQL5 + compilación + backtest real completos (varios minutos), así que se mantiene bajo aun
+ * cuando doc 20 §5.3 habla de "3 a 5 ciclos completos" en términos generales.
+ */
+export const MAX_BACKTEST_STRATEGY_RETRIES = 2;
+
+export interface StrategyFeedbackRetryResult {
+  ok: boolean;
+  discarded?: boolean;
+  strategy?: StrategyProposalLite;
+  verdict?: VerdictResult;
+  error?: string;
+}
+
+/**
+ * Cierra el bucle que doc 20 §5.1 describe pero que hasta ahora no existía: cuando un backtest
+ * real (no la propia crítica del Razonador) revela que la estrategia no gana dinero, esto
+ * reejecuta agente-riesgo → validador → refutador → razonador con ese diagnóstico como contexto
+ * — para que puedan reconsiderar indicadores/dirección/condición de entrada, no solo para que el
+ * LLM de código retoque multiplicadores de ATR dentro de la misma tesis (eso ya lo hace
+ * mql5Generator.optimizeMql5 y sigue pasando primero). Reutiliza el mismo subgrafo y mecanismo de
+ * reintento por "ajustar" que ya usa executeRun, solo que el primer contexto inyectado es el
+ * resultado del backtest en vez de una objeción del propio Razonador.
+ */
+export async function retryStrategyForBacktestFailure(
+  run: Run,
+  agents: Agent[],
+  feedbackText: string
+): Promise<StrategyFeedbackRetryResult> {
+  const verdictAgent = agents.find((a) => a.outputType === 'verdict');
+  if (!verdictAgent) return { ok: false, error: 'No hay agente de veredicto configurado.' };
+
+  run.backtestFeedbackCount = run.backtestFeedbackCount ?? 0;
+  if (run.backtestFeedbackCount >= MAX_BACKTEST_STRATEGY_RETRIES) {
+    return { ok: false, error: 'Se agotaron los reintentos de estrategia tras fallos de backtest real.' };
+  }
+  run.backtestFeedbackCount += 1;
+
+  const subgraph = computeRetrySubgraph(agents, verdictAgent.id);
+  if (run.results.some((r) => subgraph.has(r.agentId) && r.status === 'error')) {
+    return { ok: false, error: 'Alguno de los agentes de estrategia quedó en estado de error en el run original.' };
+  }
+
+  const entryIds = retryEntryPoints(agents, subgraph);
+  const backtestContext = new Map(entryIds.map((id) => [id, feedbackText]));
+
+  resetForRetry(run, subgraph);
+  await saveRun(run);
+
+  const snapshot = await buildMarketSnapshot(run.pair, run.timeframe);
+  let passed = await runPass(run, agents, snapshot, { onlyAgentIds: subgraph, extraContextByAgentId: backtestContext });
+
+  // A partir de aquí, cualquier "ajustar" adicional lo resuelve el mismo mecanismo que
+  // executeRun ya usa para objeciones del propio Razonador (no las del backtest).
+  while (passed) {
+    const verdictResult = run.results.find((r) => r.agentId === verdictAgent.id);
+    const verdict = verdictResult?.verdict;
+    if (!verdict || verdict.veredicto !== 'ajustar') break;
+    if ((run.retryCount ?? 0) >= (run.maxRetries ?? 0)) break;
+
+    run.retryCount = (run.retryCount ?? 0) + 1;
+    const objectionContext = new Map(entryIds.map((id) => [id, formatObjections(verdict, run.retryCount!)]));
+
+    resetForRetry(run, subgraph);
+    await saveRun(run);
+    passed = await runPass(run, agents, snapshot, { onlyAgentIds: subgraph, extraContextByAgentId: objectionContext });
+  }
+
+  if (!passed) {
+    run.status = 'error';
+    await saveRun(run);
+    return { ok: false, error: 'Fallo al reejecutar el panel de agentes tras el diagnóstico de backtest.' };
+  }
+
+  const strategyAgent = agents.find((a) => a.outputType === 'strategy');
+  const verdictResult = run.results.find((r) => r.agentId === verdictAgent.id);
+  const strategyResult = strategyAgent ? run.results.find((r) => r.agentId === strategyAgent.id) : undefined;
+
+  const hasErrors = run.results.some((r) => r.status === 'error');
+  const hasPending = run.results.some((r) => r.status === 'waiting' || r.status === 'running');
+  run.status = hasErrors || hasPending ? 'error' : 'done';
+  await saveRun(run);
+
+  if (hasErrors || hasPending) {
+    return { ok: false, error: 'El panel de agentes no terminó de reejecutarse correctamente.' };
+  }
+
+  return {
+    ok: true,
+    discarded: verdictResult?.verdict?.veredicto === 'no_operar',
+    strategy: strategyResult?.strategy,
+    verdict: verdictResult?.verdict,
+  };
 }
 
 export async function resumeRun(run: Run, agents: Agent[], specificAgentId?: string): Promise<void> {

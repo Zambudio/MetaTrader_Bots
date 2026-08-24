@@ -42,6 +42,7 @@ function buildMockStrategy(agent: Agent, pair: string, timeframe: string): Strat
     timeframe,
     resumen: `[SIMULADO] Propuesta de ${agent.name} para ${pair} en ${timeframe}, combinando el análisis de los agentes anteriores de la cadena.`,
     indicadoresClave: ['Media móvil (mock)', 'RSI (mock)', 'Estructura de mercado (mock)'],
+    condicionEntrada: 'Condición de entrada simulada (mock) — pendiente de LLM real',
     puntoEntrada: 'Zona de entrada simulada — pendiente de LLM real',
     stopLoss: 'Nivel de stop loss simulado',
     takeProfit: 'Nivel de take profit simulado',

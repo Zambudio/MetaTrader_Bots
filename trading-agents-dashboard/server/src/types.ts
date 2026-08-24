@@ -27,6 +27,15 @@ export interface StrategyProposalLite {
   timeframe: string;
   resumen: string;
   indicadoresClave: string[];
+  /**
+   * Regla mecánica y repetible que dispara la entrada (p. ej. "EMA20 cruza por encima de EMA50
+   * Y RSI(14) cruza por encima de 50"), en términos de relaciones entre indicadores/precio — NO
+   * un nivel de precio anecdótico atado al snapshot del momento. Es lo que mql5Generator debe
+   * codificar literalmente como señal del EA; sin esto, el LLM de código tiene que inventar su
+   * propia lógica de entrada a partir de `puntoEntrada` (texto libre), y esa invención nunca
+   * vuelve a pasar por el Validador/Refutador/Razonador que dieron el visto bueno.
+   */
+  condicionEntrada: string;
   puntoEntrada: string;
   stopLoss: string;
   takeProfit: string;
@@ -58,6 +67,16 @@ export interface Mql5GenerationResult {
   iteration?: number;
   backtestSession?: Mt5LogSession;
   optimizationNotes?: string[];
+  /** Estrategia realmente codificada — puede diferir de la propuesta original si el panel de
+   * agentes la replanteó tras un fallo de Quality Gate (ver `strategyFeedbackCycles`). */
+  finalStrategy?: StrategyProposalLite;
+  /** Nº de veces que el resultado de un backtest real hizo que el panel de agentes (no solo el
+   * LLM de código) reconsiderara la estrategia — 0 si nunca hizo falta o no se solicitó. */
+  strategyFeedbackCycles?: number;
+  /** El Razonador, ya informado del fallo real de backtest, emitió NO_OPERAR — la estrategia se
+   * descarta en vez de seguir generando código. */
+  discarded?: boolean;
+  discardReason?: string;
 }
 
 export interface AgentRunResult {
@@ -82,6 +101,10 @@ export interface Run {
   retryCount?: number;
   maxRetries?: number;
   mql5Result?: Mql5GenerationResult;
+  /** Nº de veces que este run reejecutó agente-riesgo→razonador porque un backtest real falló
+   * el Quality Gate — contador independiente de `retryCount` (que cubre los "ajustar" previos
+   * a que exista ningún código). Ver `retryStrategyForBacktestFailure` en orchestrator.ts. */
+  backtestFeedbackCount?: number;
 }
 
 export interface RunSummary {

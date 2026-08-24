@@ -29,6 +29,11 @@ const STRATEGY_TOOL = {
           description: "Dirección de la operación: 'buy' para compra (largo) o 'sell' para venta (corto).",
         },
         puntoEntrada: { type: 'string', description: 'Zona o nivel de entrada sugerido en texto.' },
+        condicionEntrada: {
+          type: 'string',
+          description:
+            'Regla MECÁNICA y REPETIBLE que dispara la entrada, en relaciones entre indicadores/precio verificables en cualquier vela futura (p. ej. "EMA20 cruza por encima de EMA50 Y RSI(14) > 50"). NUNCA un nivel de precio anecdótico válido solo hoy — se codifica literalmente como señal del EA y se prueba contra un año de histórico.',
+        },
         stopLoss: { type: 'string', description: 'Nivel de stop loss sugerido en texto.' },
         takeProfit: { type: 'string', description: 'Nivel de take profit sugerido en texto.' },
         entryPriceNum: { type: 'number', description: 'Precio numérico exacto de entrada (p. ej. 1.0850).' },
@@ -38,7 +43,7 @@ const STRATEGY_TOOL = {
         entradasEscalonadas: { type: 'string', description: 'Plan de entradas escalonadas, si procede.' },
         confianza: { type: 'string', description: 'Nivel de confianza de la propuesta.' },
       },
-      required: ['resumen', 'indicadoresClave', 'puntoEntrada', 'stopLoss', 'takeProfit', 'direction', 'entryPriceNum', 'stopLossNum', 'takeProfitNum'],
+      required: ['resumen', 'indicadoresClave', 'condicionEntrada', 'puntoEntrada', 'stopLoss', 'takeProfit', 'direction', 'entryPriceNum', 'stopLossNum', 'takeProfitNum'],
     },
   },
 };
@@ -119,12 +124,13 @@ export async function runRealAgent(
 
     // 2.5: Validar no-vacío en campos críticos
     const resumen = typeof args.resumen === 'string' ? args.resumen.trim() : '';
+    const condicionEntrada = typeof args.condicionEntrada === 'string' ? args.condicionEntrada.trim() : '';
     const puntoEntrada = typeof args.puntoEntrada === 'string' ? args.puntoEntrada.trim() : '';
     const stopLoss = typeof args.stopLoss === 'string' ? args.stopLoss.trim() : '';
     const takeProfit = typeof args.takeProfit === 'string' ? args.takeProfit.trim() : '';
 
-    if (!resumen || !puntoEntrada || !stopLoss || !takeProfit) {
-      throw new Error(`El agente de estrategia devolvió campos esenciales vacíos (resumen, puntoEntrada, stopLoss o takeProfit).`);
+    if (!resumen || !condicionEntrada || !puntoEntrada || !stopLoss || !takeProfit) {
+      throw new Error(`El agente de estrategia devolvió campos esenciales vacíos (resumen, condicionEntrada, puntoEntrada, stopLoss o takeProfit).`);
     }
 
     const direction = args.direction === 'buy' || args.direction === 'sell' ? args.direction : undefined;
@@ -147,6 +153,7 @@ export async function runRealAgent(
       resumen,
       indicadoresClave: Array.isArray(args.indicadoresClave) ? args.indicadoresClave : [],
       direction,
+      condicionEntrada,
       puntoEntrada,
       stopLoss,
       takeProfit,

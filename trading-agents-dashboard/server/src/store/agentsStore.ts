@@ -34,7 +34,7 @@ export const DEFAULT_AGENTS: Agent[] = [
     name: 'Gestor de Riesgos',
     role: 'Gestor de Riesgos',
     systemPrompt:
-      'A partir del análisis técnico y fundamental recibidos, propone una estrategia concreta y matemáticamente coherente: 1) Dirección inequívoca (COMPRA / BUY o VENTA / SELL). 2) Punto o zona de entrada. 3) Stop Loss y Take Profit obligatoriamente coherentes con la dirección: Para COMPRA, TakeProfit > Entrada > StopLoss; Para VENTA, StopLoss > Entrada > TakeProfit. Especifica los niveles tanto en precio como en distancia de pips/puntos y ratio Riesgo/Beneficio (R:R mínimo 1:1.5). 4) Si procede, plan de entradas escalonadas.',
+      'A partir del análisis técnico y fundamental recibidos, propone una estrategia concreta y matemáticamente coherente: 1) Dirección inequívoca (COMPRA / BUY o VENTA / SELL). 2) Punto o zona de entrada. 3) CONDICIÓN DE ENTRADA MECÁNICA Y REPETIBLE: describe el disparador en términos de relaciones entre indicadores/precio verificables en cualquier vela futura (p. ej. "EMA20 cruza por encima de EMA50 Y RSI(14) > 50"), NUNCA como un nivel de precio anecdótico válido solo hoy — esta condición se codifica literalmente en el EA y se prueba contra un año de histórico, así que si no es una regla objetiva y repetible, el EA nunca reproducirá la idea que propones. 4) Stop Loss y Take Profit obligatoriamente coherentes con la dirección: Para COMPRA, TakeProfit > Entrada > StopLoss; Para VENTA, StopLoss > Entrada > TakeProfit. Especifica los niveles tanto en precio como en distancia de pips/puntos y ratio Riesgo/Beneficio (R:R mínimo 1:1.5). 5) Si procede, plan de entradas escalonadas.',
     dependsOn: ['agente-tecnico', 'agente-fundamental'],
     outputType: 'strategy',
     photo: 'https://cdn-icons-png.flaticon.com/512/11126/11126203.png',
@@ -45,7 +45,7 @@ export const DEFAULT_AGENTS: Agent[] = [
     name: 'Validador de Coherencia Técnica',
     role: 'Validador de Coherencia Técnica',
     systemPrompt:
-      'AUDITORÍA DE COHERENCIA MATEMÁTICA Y TÉCNICA: 1) Comprueba la geometría de la orden: Si es COMPRA, ¿TakeProfit > Entrada > StopLoss? Si es VENTA, ¿StopLoss > Entrada > TakeProfit? Si los stops están invertidos o son contradictorios, RECHÁZALA INMEDIATAMENTE. 2) ¿El stop loss queda fuera de estructura relevante? 3) ¿El punto de entrada encaja con la tendencia/momentum? 4) ¿El ratio R:R es >= 1.5 y coherente con el ATR del snapshot? Cita los números del snapshot al señalar inconsistencias.',
+      'AUDITORÍA DE COHERENCIA MATEMÁTICA Y TÉCNICA: 1) Comprueba la geometría de la orden: Si es COMPRA, ¿TakeProfit > Entrada > StopLoss? Si es VENTA, ¿StopLoss > Entrada > TakeProfit? Si los stops están invertidos o son contradictorios, RECHÁZALA INMEDIATAMENTE. 2) ¿El stop loss queda fuera de estructura relevante? 3) ¿El punto de entrada encaja con la tendencia/momentum? 4) ¿El ratio R:R es >= 1.5 y coherente con el ATR del snapshot? 5) ¿La condición de entrada es una regla mecánica y repetible (relación entre indicadores/precio evaluable en cualquier vela), o es una descripción anecdótica válida solo para el snapshot de hoy ("cuando toque 1.0950")? Si es lo segundo, RECHÁZALA: pide una regla objetiva, porque así es imposible codificarla como señal de un EA que se prueba contra un año de histórico. Cita los números del snapshot al señalar inconsistencias.',
     dependsOn: ['agente-riesgo'],
     outputType: 'text',
     photo: 'https://www.shutterstock.com/image-vector/check-icon-lineal-color-style-260nw-2752163849.jpg',

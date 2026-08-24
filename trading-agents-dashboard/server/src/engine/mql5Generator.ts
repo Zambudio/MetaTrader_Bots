@@ -63,6 +63,12 @@ REGLAS OBLIGATORIAS DE ARQUITECTURA Y EJECUCIÓN:
 14. DOCUMENTACIÓN DE INPUTS: Documenta cada input con grupos organizados y comentarios de su unidad (%, puntos, etc.).
 15. DIRECTIVAS: #property version "1.00" (formato x.yy exacto para evitar warnings).
 16. ZERO MEMORY: Nunca inicialices MqlTradeRequest con '= {0}'. Usa ZeroMemory(request); ZeroMemory(result);
+17. FIDELIDAD A LA CONDICIÓN DE ENTRADA: El "Generador de Señal" (sección 6) debe implementar EXACTAMENTE
+    la "Condición de entrada" recibida en el prompt de usuario — es la regla que ya auditaron y aprobaron
+    los agentes de análisis. No la sustituyas por tu propio criterio de cuándo entrar, no la relajes ni la
+    endurezcas, y no te bases en "Punto de entrada" (solo un nivel de referencia) para inventar una lógica
+    distinta. Si la condición usa un indicador que no citaste en OnInit(), créalo tú mismo con el handle
+    correspondiente (iMA, iRSI, iATR, etc.).
 
 ESTRUCTURA: Un único archivo .mq5 autocontenido (sin includes propios fuera del estándar de MT5), estructurado con
 secciones comentadas: (1) Inputs/Parámetros, (2) Variables globales/Estado, (3) OnInit/OnDeinit, (4) Hard Limits/Risk Check,
@@ -103,6 +109,7 @@ function buildUserPrompt(strategy: StrategyProposalLite): string {
     `Dirección: ${strategy.direction || 'analizar según propuesta'}`,
     `Resumen de la estrategia: ${strategy.resumen}`,
     `Indicadores clave: ${strategy.indicadoresClave.join(', ')}`,
+    `Condición de entrada (regla mecánica a implementar EXACTAMENTE — no inventes ni relajes/endurezcas otra distinta): ${strategy.condicionEntrada}`,
     `Punto de entrada: ${strategy.puntoEntrada} (${strategy.entryPriceNum ?? 'dinámico'})`,
     `Stop loss: ${strategy.stopLoss} (${strategy.stopLossNum ?? 'dinámico'})`,
     `Take profit: ${strategy.takeProfit} (${strategy.takeProfitNum ?? 'dinámico'})`,

@@ -116,6 +116,29 @@ export const Mql5CodeBlock = ({ result, onOptimize, isOptimizing }: Props) => {
         </div>
       </div>
 
+      {result.discarded && (
+        <div className="p-4 rounded-xl bg-bear/10 border border-bear/30 text-sm text-bear space-y-1.5">
+          <p className="font-semibold">🛑 Estrategia descartada tras backtest real</p>
+          <p>
+            El backtest no alcanzó el Quality Gate tras varios ajustes de código, así que el panel de agentes
+            reconsideró la tesis con esos datos — y el Razonador emitió NO_OPERAR
+            {result.strategyFeedbackCycles ? ` (ciclo ${result.strategyFeedbackCycles})` : ''}.
+          </p>
+          {result.discardReason && <p className="text-bear/90">{result.discardReason}</p>}
+        </div>
+      )}
+
+      {!result.discarded && result.strategyFeedbackCycles ? (
+        <div className="p-4 rounded-xl bg-violet/10 border border-violet/30 text-sm text-violet space-y-1.5">
+          <p className="font-semibold">🔄 Estrategia replanteada por el panel de agentes</p>
+          <p>
+            Un backtest real no pasó el Quality Gate, así que agente-riesgo/agente-razonador reconsideraron la
+            tesis ({result.strategyFeedbackCycles} {result.strategyFeedbackCycles === 1 ? 'ciclo' : 'ciclos'}) antes
+            de llegar a este código — no es la misma condición de entrada que viste arriba con otros parámetros.
+          </p>
+        </div>
+      ) : null}
+
       {/* 1.4 Bloqueo y advertencia para código con errores */}
       {hasErrors && (
         <div className="px-4 py-3 bg-bear/15 border border-bear/50 rounded-xl space-y-2.5">

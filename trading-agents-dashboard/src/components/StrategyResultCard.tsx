@@ -112,6 +112,15 @@ export const StrategyResultCard = ({
           </div>
         </div>
 
+        {strategy.condicionEntrada && (
+          <div className="mt-5 bg-void/50 rounded-xl p-4">
+            <p className="text-sm font-medium text-muted">Condición de entrada (regla que codificará el EA)</p>
+            <MarkdownText className="text-base text-paper/90 mt-2 leading-relaxed">
+              {strategy.condicionEntrada}
+            </MarkdownText>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6">
           <div className="bg-void/50 rounded-xl p-4">
             <p className="text-sm font-medium text-muted">Entrada</p>
@@ -184,17 +193,25 @@ export const StrategyResultCard = ({
                 </label>
               </div>
             ) : (
-              <div className="flex items-center gap-4 flex-wrap">
-                <button
-                  onClick={handleGenerate}
-                  disabled={!canGenerate}
-                  className="px-5 py-2.5 rounded-xl bg-cyan/20 hover:bg-cyan/30 text-cyan border border-cyan/50 font-semibold text-sm transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(6,182,212,0.2)]"
-                >
-                  🚀 Generar código MQL5 y Simular en MT5
-                </button>
-                <span className="text-xs text-muted">
-                  Incluye compilación con MetaEditor64 y backtest headless automático.
-                </span>
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-4 flex-wrap">
+                  <button
+                    onClick={handleGenerate}
+                    disabled={!canGenerate}
+                    className="px-5 py-2.5 rounded-xl bg-cyan/20 hover:bg-cyan/30 text-cyan border border-cyan/50 font-semibold text-sm transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(6,182,212,0.2)]"
+                  >
+                    🚀 Generar código MQL5 y Simular en MT5
+                  </button>
+                  <span className="text-xs text-muted">
+                    Incluye compilación con MetaEditor64 y backtest headless automático.
+                  </span>
+                </div>
+                <p className="text-xs text-muted/80">
+                  El veredicto de arriba es una hipótesis de coherencia sobre una operación concreta, no una
+                  confirmación de rentabilidad histórica — eso solo lo da el Quality Gate cuantitativo tras el
+                  backtest real que verás debajo. Si no lo supera, el panel de agentes reconsiderará la
+                  estrategia automáticamente antes de rendirse.
+                </p>
               </div>
             )}
           </div>
@@ -219,6 +236,7 @@ export const StrategyResultCard = ({
                 {mql5State.progress?.phase === 'compiling' && 'Verificando compilación con MetaEditor64...'}
                 {mql5State.progress?.phase === 'backtesting' && 'Lanzando simulación desatendida en MetaTrader 5 y analizando operaciones...'}
                 {mql5State.progress?.phase === 'optimizing' && 'Ajustando reglas de entrada, R:R y filtros técnicos con IA...'}
+                {mql5State.progress?.phase === 'restrategizing' && 'El backtest real no convence: el panel de agentes (Gestor de Riesgos → Razonador) está reconsiderando la tesis con esos datos...'}
               </p>
             </div>
           </div>

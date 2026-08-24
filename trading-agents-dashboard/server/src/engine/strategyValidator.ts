@@ -35,6 +35,13 @@ export function validateStrategyProposal(
     if (!proposal.resumen || !proposal.resumen.trim()) {
       return { valid: false, error: 'El campo "resumen" de la estrategia no puede estar vacío.' };
     }
+    if (!proposal.condicionEntrada || !String(proposal.condicionEntrada).trim()) {
+      return {
+        valid: false,
+        error:
+          'El campo "condicionEntrada" no puede estar vacío: describe la regla mecánica y repetible (relación entre indicadores/precio) que dispara la entrada, no un nivel de precio anecdótico.',
+      };
+    }
     if (!proposal.puntoEntrada || !String(proposal.puntoEntrada).trim()) {
       return { valid: false, error: 'El campo "puntoEntrada" no puede estar vacío.' };
     }

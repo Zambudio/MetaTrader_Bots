@@ -4,7 +4,7 @@ import type { Mql5GenerationResult } from '../types.js';
 export interface Mql5GenerationProgress {
   attempt: number;
   maxAttempts: number;
-  phase: 'generating' | 'compiling' | 'backtesting' | 'evaluating' | 'optimizing';
+  phase: 'generating' | 'compiling' | 'backtesting' | 'evaluating' | 'optimizing' | 'restrategizing';
   details?: string;
 }
 
