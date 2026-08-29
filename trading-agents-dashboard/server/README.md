@@ -6,9 +6,27 @@ Servidor Express que persiste en disco (JSON) la configuración de agentes y el 
 
 `src/engine/executor.ts` decide en cada ejecución: si `OMNIROUTE_BASE_URL` y `OMNIROUTE_API_KEY` están configurados (ver `.env.example`), usa `realExecutor.ts` para llamar a OmniRoute (gateway de IA self-hosted en el NAS, API compatible con OpenAI) con el modelo del agente (o `OMNIROUTE_DEFAULT_MODEL` si no se ha elegido uno). Si no están configurados, usa `mockExecutor.ts` (salidas de relleno etiquetadas `[SIMULADO]`) sin llamar a ningún LLM. No hay fallback silencioso de real a mock en caliente: si OmniRoute falla a mitad de una ejecución con la clave configurada, ese agente termina en estado `error` con el mensaje real, en vez de disfrazarse de resultado simulado.
 
+### Router de LLM y fuentes por CLI (`src/engine/llmRouter.ts`, `src/engine/cliClients/`)
+
+El campo `Agent.model` es un string `"<fuente>:<modelo>[:<esfuerzo>]"` (`src/utils/modelString.ts`). Todo valor **sin** un prefijo de fuente conocido (`"auto/best-reasoning"`, `"cerebras/gpt-oss-120b"`, `""`) se trata como `omniroute` — compatibilidad total hacia atrás.
+
+`realExecutor.ts` y `mql5Generator.ts` llaman a `routeChatCompletion` (misma firma que `omniClient.chatCompletion`), que despacha según la fuente:
+
+| Fuente | Cómo llama | Auth |
+|---|---|---|
+| `omniroute` (o sin prefijo) | `omniClient.chatCompletion` tal cual, con su cadena de fallback de modelo | `OMNIROUTE_API_KEY` |
+| `claude` | CLI `claude -p --output-format json --model <m> --system-prompt <sys>` (prompt por stdin) | **suscripción** del usuario (`~/.claude`) |
+| `openai` | CLI `codex exec -` (`node <codex.js>`, prompt por stdin, `-c model_reasoning_effort=<e>`) | **suscripción ChatGPT** (`~/.codex`) |
+
+Los adaptadores CLI aplanan `messages[]` a un prompt de texto, inyectan el esquema JSON de la tool si la hay (`buildJsonSchemaSystemMessage` — exige JSON puro; `extractBalancedJson` rescata el objeto si el modelo lo envuelve en prosa), y devuelven la forma `{ choices: [{ message: { content } }] }` que ya lee `parseToolArgs`. **Quitan `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` del entorno del proceso hijo** — si están, los CLIs facturan por API en vez de consumir la suscripción; **no ponerlas nunca en `server/.env`**.
+
+El router **no** hace fallback entre fuentes (a diferencia de OmniRoute): si el CLI falla, el agente queda `error`. Overrides opcionales: `CLAUDE_CLI_BIN`, `CODEX_CLI_JS`. Con una cuenta **ChatGPT Plus** codex solo admite `gpt-5.6-sol`; el `effort` (`minimal|low|medium|high`) es la única variable.
+
+El generador de MQL5 usa el `model` que le llegue en el body de `POST /api/mql5/generate` (la UI lo elige aparte, por defecto hereda el del agente de estrategia) — pasa por el mismo router.
+
 ## Orquestador de la cadena de agentes (`src/engine/orchestrator.ts`)
 
-Ejecuta los agentes por niveles topológicos (`buildLevels`) y valida cada estrategia numéricamente (`strategyValidator.ts`: geometría de la orden y R:R mínimo) antes de dejarla pasar a los siguientes agentes. Si el agente de estrategia (`outputType: 'strategy'`) falla esa validación — típicamente el LLM calculando mal su propio R:R —, se reintenta **in-situ** hasta 2 veces más, reenviándole el error exacto en el contexto, antes de detener el run; es un fallo de aritmética puntual, no una objeción de fondo, así que no tiene sentido tumbar todo el análisis por él (mismo patrón que ya usa `mql5Generator.ts` con los errores de compilación).
+Ejecuta los agentes por niveles topológicos (`buildLevels`), **en paralelo dentro de cada nivel** (los agentes de un mismo nivel son independientes entre sí; tope `AGENT_MAX_CONCURRENCY`, def. 5). Un nivel no arranca hasta que todos sus padres terminan; si un agente de un nivel falla, sus hermanos terminan (su trabajo se guarda) pero no se ejecutan los niveles dependientes. Valida cada estrategia numéricamente (`strategyValidator.ts`: geometría de la orden y R:R mínimo) antes de dejarla pasar a los siguientes agentes. Si el agente de estrategia (`outputType: 'strategy'`) falla esa validación — típicamente el LLM calculando mal su propio R:R —, se reintenta **in-situ** hasta 2 veces más, reenviándole el error exacto en el contexto, antes de detener el run; es un fallo de aritmética puntual, no una objeción de fondo, así que no tiene sentido tumbar todo el análisis por él (mismo patrón que ya usa `mql5Generator.ts` con los errores de compilación).
 
 Aparte de eso, el agente de veredicto (`outputType: 'verdict'`) puede pedir "ajustar": el orquestador reejecuta solo el subgrafo relevante (agente de estrategia + validadores + el propio veredicto, no los especialistas de nivel 0) hasta `maxRetries` veces (0-3, elegible en la UI), inyectando las objeciones del veredicto como contexto extra a los agentes que dependen de algo fuera del subgrafo.
 
@@ -41,7 +59,7 @@ Las peticiones sin clave válida recibirán un error `401 Unauthorized`.
 - `GET /api/pairs` (favoritos primero), `PATCH /api/pairs/:symbol/favorite` (marca/desmarca favorito; crea el par si no existía), `DELETE /api/pairs/:symbol`
 - `GET /api/symbols/search?q=` (proxy a Twelve Data `/symbol_search`, hasta 20 resultados)
 - `GET /api/candles?pair=&timeframe=` (velas OHLCV; ver "Datos de mercado" abajo)
-- `GET /api/models` (proxy a `GET {OMNIROUTE_BASE_URL}/v1/models`; si OmniRoute no está configurado, devuelve una lista estática de respaldo)
+- `GET /api/models` → `{ sources, modelsBySource }`: las fuentes de LLM (`omniroute` / `claude` / `openai`, con `supportsEffort` y `efforts`) y los modelos de cada una. `omniroute` sale de `GET {OMNIROUTE_BASE_URL}/v1/models` (lista estática de respaldo si no está configurado); `claude` y `openai` son listas estáticas en `routes/models.ts`. Lo consume el selector en cascada del modal de agente.
 - `POST /api/runs` (inicia una ejecución para un par/timeframe), `GET /api/runs/:id` (estado — el frontend hace polling)
 - `POST /api/mql5/generate` (arranca la generación de un EA a partir de una `StrategyProposalLite`; devuelve `{ jobId }` de inmediato, no bloquea), `GET /api/mql5/generate/:jobId` (estado del job — el frontend hace polling; ver sección siguiente)
 - `POST /api/backtest/analyze` (`{ logText }` → `{ sessions }`; parsea un log del Strategy Tester de MetaTrader y calcula win rate/R:R/resultado neto — ver sección "Validación de backtest" abajo)

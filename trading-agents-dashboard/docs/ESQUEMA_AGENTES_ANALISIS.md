@@ -35,8 +35,10 @@ padres), los dos últimos (validadores en paralelo + veredicto) son el mecanismo
 | 5 | `agente-refutador` | Refutador | 2 | `[agente-riesgo]` | `text` | `auto/pro-fast` |
 | 6 | `agente-razonador` | Razonador | 3 | `[agente-validador-tecnico, agente-refutador]` | `verdict` (nuevo, ver abajo) | `auto/pro-reasoning` |
 
-Niveles 0 y 2 se ejecutan en paralelo dentro de cada nivel (ya es como funciona `buildLevels` +
-`executeRun` hoy). El nivel 2 son dos agentes que atacan la propuesta desde ángulos distintos a
+Los agentes de un mismo nivel se ejecutan **en paralelo** (`orchestrator.ts` `runPass`, desde
+2026-08-29; tope `AGENT_MAX_CONCURRENCY`, def. 5). Un nivel no arranca hasta que todos sus
+padres terminan; si un agente de un nivel falla, sus hermanos terminan pero no se ejecutan los
+niveles dependientes. El nivel 2 son dos agentes que atacan la propuesta desde ángulos distintos a
 propósito — coherencia con los datos vs. "qué puede salir mal" son dos formas de pensar
 distintas y mezclarlas en un único validador pierde cobertura.
 
