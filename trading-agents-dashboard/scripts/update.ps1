@@ -28,7 +28,8 @@ Write-Host '== build frontend ==' -ForegroundColor Cyan
 npm run build
 
 Write-Host '== pm2 restart trading-dashboard ==' -ForegroundColor Cyan
-& $Pm2 restart trading-dashboard --update-env
+# Pasar el ecosystem re-lee la config (por si el pull cambió script/args/env).
+& $Pm2 restart (Join-Path $Proj 'ecosystem.config.cjs') --only trading-dashboard --update-env
 & $Pm2 save
 
 Start-Sleep 6

@@ -1,8 +1,10 @@
 /**
  * Configuración pm2 para el servicio siempre-activo del dashboard.
  *
- * Un solo proceso: el backend Express (vía tsx, sin `watch`) que además sirve el
- * frontend compilado de `dist/` en el mismo puerto (ver server/src/index.ts).
+ * Un solo proceso: el backend Express (arranca por server/start.mjs, que registra
+ * el loader de tsx en el propio proceso — sin CLI de tsx ni proceso hijo, para que
+ * no aparezca una ventana de consola en Windows) que además sirve el frontend
+ * compilado de `dist/` en el mismo puerto (ver server/src/index.ts).
  *
  * Arranque:   pm2 start ecosystem.config.cjs && pm2 save
  * Ver logs:   pm2 logs trading-dashboard
@@ -28,12 +30,13 @@ module.exports = {
   apps: [
     {
       name: 'trading-dashboard',
-      // tsx CLI directo (igual que `npm run dev`, pero sin `watch`): evita el wrapper
-      // cmd.exe de los npm scripts, que se rompe con rutas de red.
-      script: path.join(SERVER_DIR, 'node_modules', 'tsx', 'dist', 'cli.mjs'),
-      args: ['src/index.ts'],
+      // start.mjs registra el loader de tsx EN ESTE proceso y hace `import()` del
+      // servidor: un solo proceso node. (El CLI `tsx` re-lanza un node hijo; bajo
+      // pm2 —spawn detached, sin consola— ese hijo hacía que Windows 11 abriera una
+      // ventana visible de Windows Terminal. Ver server/start.mjs.)
+      script: path.join(SERVER_DIR, 'start.mjs'),
       cwd: SERVER_DIR,
-      // Node carga server/.env (OMNIROUTE_API_KEY, TWELVEDATA_API_KEY, …) antes de tsx.
+      // Node carga server/.env (OMNIROUTE_API_KEY, TWELVEDATA_API_KEY, …) al arrancar.
       node_args: ['--env-file-if-exists=.env'],
       env: {
         NODE_ENV: 'production',
