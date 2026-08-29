@@ -8,6 +8,7 @@
     "dev:client": "vite",
     "dev:server": "npm run dev --prefix server",
     "build": "tsc -b && vite build",
+    "start": "npm run start --prefix server",
     "lint": "oxlint",
     "preview": "vite preview",
     "postinstall": "npm install --prefix server"

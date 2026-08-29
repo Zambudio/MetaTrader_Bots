@@ -28,6 +28,14 @@ npm run dev:server   # backend
 npm run dev:client   # frontend
 ```
 
+## Siempre activa — `trading.buenchollotech.com`
+
+El dashboard corre 24/7 en el PC (arranque automático al iniciar sesión, vía pm2)
+y se publica en `https://trading.buenchollotech.com` con un Cloudflare Tunnel. En
+producción un único proceso Express (`npm run start`, puerto 5175) sirve la API y
+el frontend compilado (`dist/`). Montaje, operación (`pm2 logs`, `scripts/update.ps1`),
+rollback y troubleshooting: **`docs/DESPLIEGUE_WEB_SIEMPRE_ACTIVA.md`**.
+
 ## Estructura
 
 - `src/` — frontend React + TypeScript + Tailwind v4, estado con Zustand (`src/lib/store.ts`), llamadas al backend en `src/lib/api.ts`.

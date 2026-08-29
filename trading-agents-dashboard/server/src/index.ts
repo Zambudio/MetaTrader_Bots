@@ -1,3 +1,6 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
 import express from 'express';
 import cors from 'cors';
 import type { NextFunction, Request, Response } from 'express';
@@ -33,6 +36,25 @@ app.use('/api/candles', candlesRouter);
 app.use('/api/symbols/search', symbolSearchRouter);
 app.use('/api/mql5', mql5Router);
 app.use('/api/backtest', backtestRouter);
+
+// ── Frontend compilado (producción) ────────────────────────────────────────────
+// En `npm run dev` el frontend lo sirve Vite (localhost:5173) y proxya /api aquí.
+// En producción (servicio siempre-activo) este mismo proceso sirve el build de
+// `dist/` en el mismo origen, así que el cliente llama a `/api/...` sin CORS ni
+// segundo puerto. Si `dist/` no existe, el server sigue en modo API-only.
+// Ver docs/DESPLIEGUE_WEB_SIEMPRE_ACTIVA.md.
+const CLIENT_DIST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'dist');
+if (existsSync(path.join(CLIENT_DIST, 'index.html'))) {
+  app.use(express.static(CLIENT_DIST));
+  // SPA fallback: cualquier GET que no sea /api/* ni un fichero estático → index.html
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.method !== 'GET' || req.path.startsWith('/api/')) return next();
+    res.sendFile(path.join(CLIENT_DIST, 'index.html'));
+  });
+  console.log(`[trading-agents-server] frontend servido desde ${CLIENT_DIST}`);
+} else {
+  console.log('[trading-agents-server] dist/ no encontrado — modo API-only (frontend vía "npm run dev")');
+}
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   console.error('[server] unhandled error', err);
