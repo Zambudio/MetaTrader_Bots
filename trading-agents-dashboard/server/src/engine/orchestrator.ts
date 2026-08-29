@@ -185,96 +185,155 @@ interface RunPassOptions {
   extraContextByAgentId?: Map<string, string>;
 }
 
+/**
+ * Máximo de agentes que se ejecutan a la vez dentro de un mismo nivel topológico. Los agentes
+ * de un nivel son independientes entre sí (`buildLevels` los agrupa así), así que se lanzan en
+ * paralelo para no pagar la latencia en serie — importante ahora que un agente puede tardar
+ * 60-150 s si su fuente es un CLI de suscripción (`claude` / `codex`).
+ *
+ * El tope evita disparar una avalancha de procesos / llamadas simultáneas (rate limits de
+ * suscripción, carga de la máquina) si un roster tiene muchos agentes en el mismo nivel.
+ * Ajustable con `AGENT_MAX_CONCURRENCY`.
+ */
+const DEFAULT_AGENT_CONCURRENCY = 5;
+
+function agentConcurrencyLimit(): number {
+  const raw = Number(process.env.AGENT_MAX_CONCURRENCY);
+  return Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : DEFAULT_AGENT_CONCURRENCY;
+}
+
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const workerCount = Math.max(1, Math.min(limit, items.length));
+  const workers = Array.from({ length: workerCount }, async () => {
+    while (true) {
+      const index = cursor++;
+      if (index >= items.length) return;
+      results[index] = await fn(items[index]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+type AgentPassOutcome = 'done' | 'error' | 'skipped';
+
+/**
+ * Ejecuta UN agente dentro de una pasada. No lanza: cualquier fallo se refleja en
+ * `result.status = 'error'` y se devuelve `'error'` — para poder lanzar en paralelo a los
+ * hermanos del nivel sin que uno tumbe la `Promise.all` de los demás a media ejecución.
+ */
+async function executeAgentInPass(
+  run: Run,
+  agents: Agent[],
+  agent: Agent,
+  snapshot: string | null,
+  resultsById: Map<string, AgentRunResult>,
+  options: RunPassOptions
+): Promise<AgentPassOutcome> {
+  const result = resultsById.get(agent.id);
+  if (!result) return 'skipped';
+
+  // Si ya está completado con éxito y no se forzó su reintento explícito, no repetir
+  if (result.status === 'done' && !options.onlyAgentIds?.has(agent.id)) return 'skipped';
+
+  // Si alguno de sus ancestros directos falló o no está completado, no puede ejecutarse
+  const ancestorsIncomplete = agent.dependsOn.some((depId) => {
+    const depResult = resultsById.get(depId);
+    return !depResult || depResult.status !== 'done';
+  });
+
+  if (ancestorsIncomplete) {
+    result.status = 'waiting';
+    await saveRun(run).catch(() => {});
+    return 'skipped';
+  }
+
+  result.status = 'running';
+  result.startedAt = new Date().toISOString();
+  result.error = undefined;
+  await saveRun(run).catch(() => {});
+
+  try {
+    let context = ancestorChain(agents, agent.id)
+      .map((ancestor) => `${ancestor.name}: ${resultText(resultsById.get(ancestor.id))}`)
+      .join('\n\n');
+
+    const extra = options.extraContextByAgentId?.get(agent.id);
+    if (extra) context = context ? `${extra}\n\n${context}` : extra;
+
+    let output: string | undefined;
+    let strategy: typeof result.strategy;
+    let verdict: typeof result.verdict;
+    let lastValidationError: string | undefined;
+
+    for (let validationAttempt = 0; validationAttempt <= MAX_STRATEGY_VALIDATION_RETRIES; validationAttempt++) {
+      const attemptContext = lastValidationError
+        ? `${context}\n\nTu propuesta anterior fue rechazada por incoherencia numérica: ${lastValidationError}\nCorrige los precios de entrada/stop loss/take profit para que sean matemáticamente coherentes con la dirección y cumplan el R:R mínimo exigido.`
+        : context;
+
+      ({ output, strategy, verdict } = await runAgent(agent, attemptContext, run.pair, run.timeframe, snapshot));
+
+      // 1.1: Validación determinista de coherencia numérica tras generación de estrategia
+      if (!strategy) break;
+
+      const valResult = validateStrategyProposal(strategy);
+      if (valResult.valid) {
+        if (valResult.normalized) {
+          strategy.direction = valResult.normalized.direction;
+          strategy.entryPriceNum = valResult.normalized.entryPriceNum;
+          strategy.stopLossNum = valResult.normalized.stopLossNum;
+          strategy.takeProfitNum = valResult.normalized.takeProfitNum;
+        }
+        lastValidationError = undefined;
+        break;
+      }
+
+      lastValidationError = valResult.error;
+      if (validationAttempt === MAX_STRATEGY_VALIDATION_RETRIES) {
+        throw new Error(`Incoherencia numérica en estrategia tras ${MAX_STRATEGY_VALIDATION_RETRIES + 1} intentos: ${valResult.error}`);
+      }
+    }
+
+    result.output = output;
+    result.strategy = strategy;
+    result.verdict = verdict;
+    result.status = 'done';
+    result.finishedAt = new Date().toISOString();
+    await saveRun(run).catch(() => {});
+    return 'done';
+  } catch (err) {
+    result.status = 'error';
+    result.error = err instanceof Error ? err.message : 'error desconocido';
+    result.finishedAt = new Date().toISOString();
+    await saveRun(run).catch(() => {});
+    console.warn(`[orchestrator] Agente ${agent.name} (${agent.id}) falló: ${result.error}`);
+    return 'error';
+  }
+}
+
 export async function runPass(run: Run, agents: Agent[], snapshot: string | null, options: RunPassOptions = {}): Promise<boolean> {
   const levels = buildLevels(agents);
   const resultsById = new Map(run.results.map((r) => [r.agentId, r]));
+  const limit = agentConcurrencyLimit();
 
   for (const level of levels) {
     const toRun = options.onlyAgentIds ? level.filter((a) => options.onlyAgentIds!.has(a.id)) : level;
     if (toRun.length === 0) continue;
 
-    for (const agent of toRun) {
-      const result = resultsById.get(agent.id);
-      if (!result) continue;
+    // Los agentes de un nivel son independientes entre sí -> en paralelo (con tope).
+    const outcomes = await mapWithConcurrency(toRun, limit, (agent) =>
+      executeAgentInPass(run, agents, agent, snapshot, resultsById, options)
+    );
 
-      // Si ya está completado con éxito y no se forzó su reintento explícito, no repetir
-      if (result.status === 'done' && !options.onlyAgentIds?.has(agent.id)) continue;
-
-      // Si alguno de sus ancestros directos falló o no está completado, no puede ejecutarse
-      const ancestorsIncomplete = agent.dependsOn.some((depId) => {
-        const depResult = resultsById.get(depId);
-        return !depResult || depResult.status !== 'done';
-      });
-
-      if (ancestorsIncomplete) {
-        result.status = 'waiting';
-        await saveRun(run);
-        continue;
-      }
-
-      result.status = 'running';
-      result.startedAt = new Date().toISOString();
-      result.error = undefined;
+    // Se dejó terminar a todos los hermanos del nivel (su trabajo ya está guardado); si alguno
+    // falló, no se continúa a los niveles dependientes.
+    if (outcomes.includes('error')) {
+      run.status = 'error';
       await saveRun(run);
-
-      try {
-        let context = ancestorChain(agents, agent.id)
-          .map((ancestor) => `${ancestor.name}: ${resultText(resultsById.get(ancestor.id))}`)
-          .join('\n\n');
-
-        const extra = options.extraContextByAgentId?.get(agent.id);
-        if (extra) context = context ? `${extra}\n\n${context}` : extra;
-
-        let output: string | undefined;
-        let strategy: typeof result.strategy;
-        let verdict: typeof result.verdict;
-        let lastValidationError: string | undefined;
-
-        for (let validationAttempt = 0; validationAttempt <= MAX_STRATEGY_VALIDATION_RETRIES; validationAttempt++) {
-          const attemptContext = lastValidationError
-            ? `${context}\n\nTu propuesta anterior fue rechazada por incoherencia numérica: ${lastValidationError}\nCorrige los precios de entrada/stop loss/take profit para que sean matemáticamente coherentes con la dirección y cumplan el R:R mínimo exigido.`
-            : context;
-
-          ({ output, strategy, verdict } = await runAgent(agent, attemptContext, run.pair, run.timeframe, snapshot));
-
-          // 1.1: Validación determinista de coherencia numérica tras generación de estrategia
-          if (!strategy) break;
-
-          const valResult = validateStrategyProposal(strategy);
-          if (valResult.valid) {
-            if (valResult.normalized) {
-              strategy.direction = valResult.normalized.direction;
-              strategy.entryPriceNum = valResult.normalized.entryPriceNum;
-              strategy.stopLossNum = valResult.normalized.stopLossNum;
-              strategy.takeProfitNum = valResult.normalized.takeProfitNum;
-            }
-            lastValidationError = undefined;
-            break;
-          }
-
-          lastValidationError = valResult.error;
-          if (validationAttempt === MAX_STRATEGY_VALIDATION_RETRIES) {
-            throw new Error(`Incoherencia numérica en estrategia tras ${MAX_STRATEGY_VALIDATION_RETRIES + 1} intentos: ${valResult.error}`);
-          }
-        }
-
-        result.output = output;
-        result.strategy = strategy;
-        result.verdict = verdict;
-        result.status = 'done';
-        result.finishedAt = new Date().toISOString();
-        await saveRun(run);
-      } catch (err) {
-        result.status = 'error';
-        result.error = err instanceof Error ? err.message : 'error desconocido';
-        result.finishedAt = new Date().toISOString();
-        run.status = 'error';
-        await saveRun(run);
-
-        // DETENCIÓN INMEDIATA: no continuar con agentes dependientes ni niveles posteriores
-        console.warn(`[orchestrator] Agente ${agent.name} (${agent.id}) falló. Flujo detenido.`);
-        return false;
-      }
+      console.warn('[orchestrator] Un agente del nivel falló. Flujo detenido, no se ejecutan los niveles dependientes.');
+      return false;
     }
   }
 

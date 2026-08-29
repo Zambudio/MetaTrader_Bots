@@ -113,6 +113,20 @@ Un run de 6 agentes con **1** agente por CLI ≈ 3 min; con el agente de estrate
 | **Tests pre-existentes en rojo** | `server/test/strategyValidator.test.ts` — 5 tests fallan por orden de validación (`condicionEntrada` vacía se comprueba antes que R:R). **Ya fallaban en `main`** (verificado con `git stash`); fuera del alcance de esta tarea (seguimiento del bucle `/loop`). |
 | **`opencode` como fuente** | NO implementada, NO listada en `/api/models` (se añade cuando exista el adaptador — receta en el plan §6). El `llmRouter` tiene el `case 'opencode'` que hace throw explícito. |
 
+## Añadido: ejecución en paralelo de los agentes de un mismo nivel
+
+> A petición de Pedro tras probar el selector — la latencia por CLI (60–150 s/agente) hacía el run muy lento en serie.
+
+`orchestrator.ts` `runPass` ejecutaba los agentes **uno a uno**. Ahora los agentes de un mismo nivel topológico (`buildLevels` ya los agrupa como independientes entre sí) se lanzan **en paralelo**, con un tope configurable `AGENT_MAX_CONCURRENCY` (por defecto **5**).
+
+- El primer nivel = todos los agentes sin `dependsOn` → arrancan a la vez.
+- Un nivel dependiente no arranca hasta que **todos** los agentes de los que depende terminan.
+- Si un agente de un nivel falla, se deja terminar a sus hermanos (su trabajo se guarda) y **no** se ejecutan los niveles dependientes — igual semántica de "parar en error" que antes, pero a nivel de nivel en vez de agente.
+- Aplica también a las pasadas de reintento (`onlyAgentIds` / subgrafo): validador + refutador se reejecutan en paralelo.
+- `jsonStore.writeJson` ya serializa las escrituras por fichero (cola por path) → los `saveRun` concurrentes de los agentes en paralelo no corrompen el `.json` del run.
+
+**Verificado** (run `d_Y2OXK0Ps`, `agente-tecnico` y `agente-fundamental` en `openai::low`): ambos con `startedAt` **idéntico** (`14:08:52.732Z`), solapados; `agente-riesgo` arrancó solo al terminar el más lento de los dos. Tests nuevos en `server/test/orchestratorRunPass.test.ts` (3, pasan): paralelismo por nivel, `AGENT_MAX_CONCURRENCY=1` fuerza serie, y fallo de un hermano no arranca los dependientes.
+
 ## Cómo añadir una fuente nueva
 
 Ver el plan §"Añadir una fuente nueva". Resumen: (1) `cliClients/<nombre>Cli.ts` con la misma forma que los dos existentes; (2) `case '<nombre>':` en `llmRouter.ts`; (3) entrada en `SOURCES` + `modelsBySource` de `routes/models.ts`; (4) el front sale solo. Añadir también `'<nombre>'` a `LLM_SOURCES` en **los dos** `modelString.ts` (server + front).
