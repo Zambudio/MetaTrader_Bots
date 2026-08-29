@@ -5,7 +5,9 @@ updated: 2026-08-20
 
 # Diagnóstico: el veredicto "GO" del panel y el resultado del backtest real evaluaban cosas distintas (2026-08-20)
 
-> ⚠️ **Pendiente de verificación en vivo.** A diferencia de [`2026-08-20-prueba-e2e-agentes-mql5-backtest.md`](2026-08-20-prueba-e2e-agentes-mql5-backtest.md) (verificado contra infraestructura real), este documento recoge un diagnóstico por lectura de código + evidencia ya registrada (casos reales previos en `docs/MQL5_LECCIONES_LOGICA_Y_BACKTEST.md`) y su implementación, comprobada solo con `tsc --noEmit` en servidor y cliente — **no se relanzó el pipeline completo contra OmniRoute/MetaTrader tras el cambio**. Ver "Pendiente" al final.
+> ⚠️ **Verificado parcialmente en vivo el 2026-08-29** — ver [`2026-08-29-verificacion-fix-condicion-entrada-y-afinado-prompts.md`](2026-08-29-verificacion-fix-condicion-entrada-y-afinado-prompts.md): la `condicionEntrada` mecánica y su auditoría **funcionan**, el bucle de reintento por "ajustar" **funciona**, pero `retryStrategyForBacktestFailure` (fase "restrategizing") **sigue sin verificarse** porque ningún análisis llegó a "GO". Ese informe corrige además 3 problemas nuevos de prompts detectados en las ejecuciones reales.
+>
+> ⚠️ **(original) Pendiente de verificación en vivo.** A diferencia de [`2026-08-20-prueba-e2e-agentes-mql5-backtest.md`](2026-08-20-prueba-e2e-agentes-mql5-backtest.md) (verificado contra infraestructura real), este documento recoge un diagnóstico por lectura de código + evidencia ya registrada (casos reales previos en `docs/MQL5_LECCIONES_LOGICA_Y_BACKTEST.md`) y su implementación, comprobada solo con `tsc --noEmit` en servidor y cliente — **no se relanzó el pipeline completo contra OmniRoute/MetaTrader tras el cambio**. Ver "Pendiente" al final.
 
 ## Motivo
 
@@ -61,6 +63,7 @@ Nueva función `retryStrategyForBacktestFailure` en `server/src/engine/orchestra
 
 ## Ver también
 
+- [`2026-08-29-verificacion-fix-condicion-entrada-y-afinado-prompts.md`](2026-08-29-verificacion-fix-condicion-entrada-y-afinado-prompts.md) — verificación en vivo de estos 3 fixes (2026-08-29): confirma los dos primeros y el bucle de reintento; deja `retryStrategyForBacktestFailure` aún sin verificar; corrige 3 problemas nuevos de prompts del panel con evidencia de análisis reales.
 - [`2026-08-20-prueba-e2e-agentes-mql5-backtest.md`](2026-08-20-prueba-e2e-agentes-mql5-backtest.md) — la prueba E2E previa (verificada en vivo) cuyo pendiente final ("0 operaciones", Quality Gate nunca visto en verde) es el contexto inmediato de este diagnóstico.
 - [`docs/MQL5_LECCIONES_LOGICA_Y_BACKTEST.md`](../../../trading-agents-dashboard/docs/MQL5_LECCIONES_LOGICA_Y_BACKTEST.md) — caso real (`PruebaBots2`) usado como evidencia del problema.
 - [`../../proyecto-mt5-bots/20_Pipeline_Validacion_Backtest_Automatizado_e_Iteracion_Agentica.md`](../../proyecto-mt5-bots/20_Pipeline_Validacion_Backtest_Automatizado_e_Iteracion_Agentica.md) — pipeline de Quality Gate/optimización que este diagnóstico complementa (§5.1 ahora sí implementado).

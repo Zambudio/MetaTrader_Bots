@@ -18,8 +18,8 @@ export interface OmniClientOptions {
   retryDelayMs?: number;
 }
 
-const DEFAULT_TIMEOUT_MS = Number(process.env.OMNIROUTE_TIMEOUT_MS) || 120_000;
-const DEFAULT_MAX_RETRIES = 1;
+const DEFAULT_TIMEOUT_MS = Number(process.env.OMNIROUTE_TIMEOUT_MS) || 180_000;
+const DEFAULT_MAX_RETRIES = 2;
 const DEFAULT_RETRY_DELAY_MS = 2000;
 
 // 3.5 Circuit Breaker simple
