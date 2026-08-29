@@ -1,0 +1,16 @@
+{
+  "filename": "EA_EURUSD_H1.mq5",
+  "timestamp": "2026-08-29T10:19:15.497Z",
+  "model": "auto/pro-coding",
+  "pair": "EUR/USD",
+  "timeframe": "H1",
+  "attempts": 1,
+  "compileStatus": "ok",
+  "assumptions": [
+    "Verificar en las especificaciones del contrato (Symbol Specification) si el broker permite un nivel de Stop Loss y Take Profit (SYMBOL_TRADE_STOPS_LEVEL) compatible con la volatilidad del EUR/USD.",
+    "El cálculo del volumen se basa en el balance actual; verificar si el broker permite el volumen resultante (SYMBOL_VOLUME_MIN, SYMBOL_VOLUME_MAX, SYMBOL_VOLUME_STEP).",
+    "Verificar que la configuración de la hora del servidor sea consistente para la detección de la nueva barra (iTime).",
+    "La estrategia está diseñada para una cuenta DEMO, tal como se solicitó; no intentar usar en real sin auditoría externa exhaustiva."
+  ],
+  "qualityGatePassed": true
+}

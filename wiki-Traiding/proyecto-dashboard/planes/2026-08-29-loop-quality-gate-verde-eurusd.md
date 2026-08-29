@@ -1,9 +1,11 @@
 ---
-tags: [proyecto-dashboard, agentes, mql5, backtest, loop, autonomo]
+tags: [proyecto-dashboard, agentes, mql5, backtest, loop, autonomo, completado]
 updated: 2026-08-29
 ---
 
 # Plan: bucle autónomo hasta Quality Gate verde en EUR/USD H1
+
+> **✅ COMPLETADO 2026-08-29 (iteración 6).** El Quality Gate pasó 6/6 en EUR/USD H1. Estrategia y métricas en el informe vivo `../informes/2026-08-29-loop-quality-gate-verde-eurusd.md` §Cierre. Hizo falta corregir 5 bugs del pipeline (panel con dependencia circular, tesis de tipo estado, fiabilidad de modelo OmniRoute, contrato de APIs MQL5, y — el crítico — el parser de backtest medía sobre la sesión equivocada).
 
 > **Carta operativa de un bucle `/loop` auto-ritmo.** No es un plan de implementación tarea-a-tarea al uso: describe el **procedimiento que se repite en cada iteración** hasta que un ciclo completo agentes → MQL5 → backtest real pase el Quality Gate cuantitativo. Contexto: [`../informes/2026-08-29-verificacion-fix-condicion-entrada-y-afinado-prompts.md`](../informes/2026-08-29-verificacion-fix-condicion-entrada-y-afinado-prompts.md) dejó el panel funcionando bien pero **ningún análisis llegó a "GO"** y `retryStrategyForBacktestFailure` sigue sin verificarse en vivo; [`../informes/2026-08-20-diagnostico-veredicto-vs-backtest-real.md`](../informes/2026-08-20-diagnostico-veredicto-vs-backtest-real.md) identificó la causa estructural. El registro vivo de la ejecución de este plan está en [`../informes/2026-08-29-loop-quality-gate-verde-eurusd.md`](../informes/2026-08-29-loop-quality-gate-verde-eurusd.md).
 

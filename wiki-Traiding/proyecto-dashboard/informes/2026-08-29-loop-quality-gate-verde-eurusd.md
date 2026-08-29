@@ -1,26 +1,55 @@
 ---
-tags: [proyecto-dashboard, agentes, mql5, backtest, loop, autonomo, en-curso]
+tags: [proyecto-dashboard, agentes, mql5, backtest, loop, autonomo, terminado]
 updated: 2026-08-29
 ---
 
 # Registro vivo: bucle autónomo hasta Quality Gate verde en EUR/USD H1
 
-> Registro de la ejecución del plan [`../planes/2026-08-29-loop-quality-gate-verde-eurusd.md`](../planes/2026-08-29-loop-quality-gate-verde-eurusd.md). `## Estado actual` se reescribe entero en cada iteración; `## Log de iteraciones` es append-only. **En curso** — este informe no está cerrado hasta que el Quality Gate pase 6/6 o el bucle se detenga por otra condición de parada.
+> Registro de la ejecución del plan [`../planes/2026-08-29-loop-quality-gate-verde-eurusd.md`](../planes/2026-08-29-loop-quality-gate-verde-eurusd.md). **✅ CERRADO 2026-08-29 12:20** — el Quality Gate pasó 6/6 en EUR/USD H1 en la iteración 6 (run 10). Ver `## Cierre`.
 
-## Estado actual
+## Cierre
 
-- **Iteración:** 6 en curso — **fix del parser de backtest aplicado**, run 10 en marcha para el primer backtest FIABLE.
-- **Fase:** Paso 1/3. `tsc` limpio. Backend reiniciado con el fix.
-- **⚠️ HALLAZGO CLAVE (iter 5):** run 9 generó un EA que **compila limpio** (la Regla 1 endurecida de iter 5 funcionó) y el pipeline reportó **QG 6/6 en verde**. **ES FALSO.** El log crudo del tester (`Tester/logs/20260829.log`) acumula TODAS las sesiones del día; `mql5Backtester.ts` toma `sessions[last]` pero cogió la sesión de las 10:43 (`EA_EURUSD_H1_3_7xkFD9.ex5`), NO la de run 9 (`EA_EURUSD_H1_V7PbfK8Q.ex5`, 11:24). El resultado REAL de run 9: `final balance 9250.42` → **el EA PERDIÓ $749.58**, RR real ~1.67, win rate ~28% → esperanza negativa → QG real ~2/6. El falso 6/6 vino de: (i) `netProfit` con signo invertido (el parser no encontró `final balance` de esa sesión → fallback roto), (ii) `avgRR 6.0` inflado (en ~26/64 triggers `entryPrice` se parsea ≈ `sl` → risk ≈ 0 → RR 50-80).
-- **Implicación:** **posiblemente TODOS los backtests desde iter 3 se han medido mal** (iter 3 quizá menos, era el primer run del día y el log solo tenía su sesión). Hasta arreglar el parser NO se puede confiar en ningún QG.
-- **Cambios acumulados (todos con `tsc` limpio):**
-  - iter 2: roster → `cerebras/gpt-oss-120b`; `agente-riesgo` "RESTRICCIONES BLOQUEANTES DE SALIDA".
-  - iter 3: `agente-refutador`+`agente-razonador` "GATE DE ELEGIBILIDAD PARA BACKTEST" → primer GO.
-  - iter 4: `agente-riesgo` punto 1 → "GATE DE TIPO DE SEÑAL" (evento vs estado); `omniClient.ts` cadena de fallback de modelo (`cerebras/gpt-oss-120b` hace 404 intermitente). **El fallback FUNCIONA** (validado en runs 8-9).
-  - iter 5: `mql5Generator.ts` Regla 1 → contrato exacto de APIs MQL5 (firma `CTrade::Sell`, handler vacío `OnTradeTransaction`, `HistoryDealGetDouble(DEAL_PROFIT)`). **Efecto: run 9 compila limpio a la primera.** Codex-5 clasificó tipo II.
-- **Estado de la tesis:** runs 7/8/9 producen tesis de evento limpias (cruce EMA20 + filtro de régimen, R:R 1.6-2.0). La de run 9 pierde dinero en backtest real — pero primero hay que poder MEDIRLO bien.
-- **Notas de cuota:** Claude ~$14 de sesión (GateGuard interroga cada edición). Codex: 5 `exec` OK (siempre con copias locales en `scratchpad/src/` — el sandbox de Codex deniega el disco de red).
-- **Siguiente acción concreta:** iter 6 → aplicar el fix del parser de Codex-6 → reiniciar backend → run limpio → **backtest fiable**. Solo entonces se puede juzgar si la tesis de evento pasa o hay que iterarla.
+**✅ TERMINADO — 2026-08-29 12:20, iteración 6.** El Quality Gate pasó **6/6** sobre un backtest real de EUR/USD H1 (`2025.08.01`–`2026.08.18`, every tick), verificado contra el log crudo de MetaTrader.
+
+### Estrategia ganadora (run 10 `dJkL4hx_bk`, `strategyFeedbackCycles: 2`)
+
+- **Dirección:** SELL (venta), alineada con tendencia bajista dominante.
+- **`condicionEntrada`:** `Cierre anterior > EMA20 AND Cierre actual < EMA20 AND (EMA50 - EMA20) > 1.5 * ATR` — cruce a la baja de la EMA20 **solo cuando la tendencia es fuerte** (separación EMA50-EMA20 > 1.5×ATR).
+- **SL:** entrada + 1.5×ATR. **TP:** entrada − 2.4×ATR. **R:R ≈ 1.60.** Riesgo 1% por operación.
+- **EA entregado:** `trading-agents-dashboard/server/src/data/deliverables/EA_EURUSD_H1_2026-08-29T10-19-15-501Z.{mq5,ex5}` (copia estable en `wiki-Traiding/proyecto-dashboard/deliverables/EA_EURUSD_H1_ganador_2026-08-29.mq5`).
+
+### Métricas del backtest (verificadas contra `Tester/logs/20260829.log`, sesión `EA_EURUSD_H1_TX4hKhj9.ex5`)
+
+| Criterio | Valor | Umbral | |
+|---|---|---|---|
+| Operaciones cerradas | 27 | ≥ 15 | ✅ |
+| Órdenes rechazadas | 0 | 0 | ✅ |
+| Esperanza matemática | 0.155 R | > 0.10 | ✅ |
+| Profit Factor | 1.256 | ≥ 1.20 | ✅ |
+| Beneficio neto | +411.24 USD (final balance 10411.24) | > 0 | ✅ |
+| Drawdown máximo | 5.81 % | ≤ 15 % | ✅ |
+
+Win rate 44.4 % (12 TP / 15 SL), `avgRR` real 1.60.
+
+### Los 6 cambios que llevaron a verde (todos commiteados en `main`, `tsc --noEmit` limpio)
+
+1. **iter 1** — saltada (OmniRoute 503).
+2. **iter 2** (`a8acfed`) — roster de los 6 agentes → `cerebras/gpt-oss-120b`; `agente-riesgo` + bloque "RESTRICCIONES BLOQUEANTES DE SALIDA".
+3. **iter 3** (`5e7db6c`, `e8d685b`) — `agente-refutador` + `agente-razonador` + "GATE DE ELEGIBILIDAD PARA BACKTEST" (lista cerrada de bloqueantes; el panel confundía "apto para backtest" con "validado para real" → dependencia circular). **Primer GO + primer backtest.**
+4. **iter 4** (`82838cf`) — `agente-riesgo` punto 1 → "GATE DE TIPO DE SEÑAL" (exige un disparador de EVENTO, no de estado); `omniClient.ts` cadena de fallback de modelo (`OMNIROUTE_FALLBACK_MODELS`).
+5. **iter 5** (`920f99f`) — `mql5Generator.ts` Regla 1 → contrato exacto de APIs MQL5 (los EA compilan a la primera).
+6. **iter 6** (`16be83a`) — `mql5Backtester.ts` + `mt5LogParser.ts`: correlación job↔sesión por el `.ex5` único (el log del tester es acumulativo; el Quality Gate medía sobre la sesión equivocada → falso 6/6 en iter 5). `netProfit` falla cerrado si no hay balance autoritativo.
+
+### Seguimiento recomendado (NO bloqueante — el plan dice "no seguir por si mejora")
+
+- El EA solo refresca `lastBarTime` al abrir orden → evalúa la condición en cada tick en barras sin señal (usa `iClose(...,0)` en formación). Tiende a perjudicar, no a inflar; el backtest lo captura. Endurecer el `MQL5_STANDARD_SYSTEM_PROMPT` para exigir evaluación estricta a cierre de barra.
+- Codex-6 OTROS_CANDIDATOS: (i) codegen debe calcular SL/TP/sizing del mismo BID/ASK de referencia; (ii) `cols[0]` del parser es un código, no timestamp → `periodStart/End` mal; (iii) parsear el `Report_*.htm` per-run.
+- Muestra de 27 operaciones: modesta. Considerar validar en otro periodo / walk-forward antes de dar la estrategia por robusta más allá del Quality Gate.
+- 3 arreglos estructurales del plan: **(b) y (c) NO se necesitaron**; el arreglo (a)/fidelidad se cubrió con la Regla 1.
+
+### Cuota
+
+Claude ~$16 de sesión (mucho polling + GateGuard interroga cada edición). Codex: 6 `exec` (`model_reasoning_effort=high`), todos con copias locales en `scratchpad/src/` porque el sandbox de Codex deniega el disco de red de forma intermitente. Cuota Codex sana.
 
 ## Log de iteraciones
 
@@ -95,16 +124,19 @@ updated: 2026-08-29
 - **Cuota:** Claude ~$14 sesión. Codex 5 `exec` OK (siempre con copias locales).
 - **Siguiente (iter 6):** Codex-6 diagnostica el bug de aislamiento de sesión en `mql5Backtester.ts` / `mt5LogParser.ts` (brief en `scratchpad/diag-input-6.md`, log crudo y ficheros en `scratchpad/src/`). Aplicar fix → backend → run limpio → primer backtest FIABLE.
 
-### Iteración 6 (2026-08-29 12:00) — fix del parser de backtest (aislamiento de sesión)
+### Iteración 6 (2026-08-29 12:20) — fix del parser de backtest → QG 6/6 REAL · ✅ TERMINADO
 
 - **Contexto:** P0 — el Quality Gate medía sobre la sesión de backtest equivocada (falso 6/6 en iter 5).
 - **Paso 4 — Codex-6** (`codex-out-6.txt`): **P0, carrera temporal + falta de correlación job↔sesión.** El polling rompía en `if (/final balance/i.test(content))` — cierto por líneas `final balance` de sesiones ANTERIORES en el log acumulativo — antes de que apareciera el marcador `expert file added` de run 9 (llega ~6 s después). Luego `sessions[last]` cogía la sesión de las 10:43. Codex corrigió mi forense: `netProfit 583.25` = `10583.25 − 10000` de la sesión equivocada (NO fallback roto); `TRIGGER_RE` no tiene bug (los RR extremos de la sesión 10:43 son geometría real de ESE EA — calculaba SL/TP sobre `iClose(...,0)` pero enviaba orden a mercado con precio 0.0). **Resultado REAL de run 9: 21 trades, esperanza −0.365 R, PF 0.518, neto −749.58 USD, DD 8% → QG 3/6.**
 - **Cambio (Codex-6, un invariante lógico):** un backtest solo llega al Quality Gate cuando aparece una sesión completa cuyo `expertFile` == el `.ex5` único (nanoid) de ese job; si falta el balance autoritativo, falla cerrado.
   - `mql5Backtester.ts`: `findLatestAgentLog` → `findRecentAgentLogs` (todos los logs recientes); nuevo `findCompletedSessionForExpert(rawLog, ex5FileName)` (busca la sesión que casa el `.ex5` Y tiene `finalBalance`); el polling rompe solo con esa sesión.
   - `mt5LogParser.ts`: `FINAL_BALANCE_RE` más robusto (`-?`, `\b`, `/i`); `netProfit` fallback → `null` (nunca convierte la estimación de fills en beneficio neto autoritativo).
-- **Verificación:** `tsc --noEmit -p server` limpio. Backend reiniciado sin watch. Run 10 (`dJkL4hx_bk`) en marcha para el primer backtest fiable.
-- **Candidatos anotados (Codex OTROS_CANDIDATOS, no aplicar aún):** (i) endurecer codegen para que SL/TP/sizing se calculen del mismo BID/ASK de referencia de la orden (o precio 0.0, no `iClose(...,0)`) — run 9 ya lo hace bien; (ii) `cols[0]` en el parser es un código (`CE`/`RS`) no el timestamp → `periodStart/End` mal; (iii) parsear el `Report_*.htm` per-run en vez del log (evolución futura).
-- **Commit:** este mismo commit (`loop(iter 6): fix aislamiento de sesión en el parser de backtest (Codex-6, P0)`).
+- **Verificación:** `tsc --noEmit -p server` limpio. Backend reiniciado sin watch.
+- **Run 10 `dJkL4hx_bk` → GO** con `Cierre actual < EMA20 Y cierre vela anterior >= EMA20 (evento) Y (EMA50 - EMA20) > 1.5 * ATR (filtro)`, SELL, R:R 1.62.
+- **Paso 3 — job MQL5 `b-RbD3vRffqf`** (con `model: auto/pro-coding`): tardó ~27 min porque OmniRoute estaba saturado (`auto/pro-coding` → 502 "local rate-limit queue" → fallback a `auto/smart`, todos con reintentos). Completó con `compileStatus: ok`, `strategyFeedbackCycles: 2` — **el bucle `retryStrategyForBacktestFailure` FUNCIONÓ** (ajustó los multiplicadores de ATR y re-probó hasta verde). Sesión correlacionada: `EA_EURUSD_H1_TX4hKhj9.ex5`.
+- **✅ QG 6/6 REAL** (métricas en `## Cierre`; verificadas contra el log crudo: 27 triggers, `final balance 10411.24`, RR de cada trade ~1.60). El fix del parser cogió la sesión correcta (8ª de 8 en el log, correlacionada por nanoid).
+- **Candidatos anotados (Codex OTROS_CANDIDATOS, no aplicar — el plan dice no seguir):** (i) codegen: SL/TP/sizing del mismo BID/ASK de referencia; (ii) `cols[0]` del parser es un código no el timestamp → `periodStart/End` mal; (iii) parsear el `Report_*.htm` per-run.
+- **Commit:** `16be83a` (fix del parser) + commit final (`loop(iter 6): QG 6/6 REAL en EUR/USD H1 — TERMINADO`).
 - **Cuota:** Claude ~$16 sesión. Codex 6 `exec` OK.
 
 ## Ver también
