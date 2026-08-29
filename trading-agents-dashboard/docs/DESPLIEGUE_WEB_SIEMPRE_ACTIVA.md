@@ -53,7 +53,8 @@ Express (server/, vía start.mjs — 1 proceso node)  ← proceso pm2 "trading-d
         ▲
         │  pm2 resurrect
    Tarea programada "TradingDashboard-Autostart"  (Al iniciar sesión de fadwe, +30 s)
-        → C:\ProgramData\TradingDashboard\pm2-boot.ps1
+        → wscript.exe pm2-boot-hidden.vbs  (sin ventana)
+        → powershell -WindowStyle Hidden pm2-boot.ps1  →  node <pm2-cli> resurrect
 ```
 
 **Puerto único: 5175.** El mismo proceso Express sirve la API *y* el `dist/`. En
@@ -72,9 +73,9 @@ Express (server/, vía start.mjs — 1 proceso node)  ← proceso pm2 "trading-d
 | `server/package.json` | Script `start` = `node --env-file-if-exists=.env start.mjs` (producción, sin `watch`). |
 | `package.json` (raíz) | Script `start` = `npm run start --prefix server`. |
 | `ecosystem.config.cjs` | **Nuevo.** Define las 2 apps pm2 (`trading-dashboard` → `start.mjs`, `trading-tunnel` → `cloudflared`). |
-| `scripts/pm2-boot.ps1` | **Nuevo.** Arranque en el login: espera a `Z:`, `pm2 resurrect`, red de seguridad. |
-| `scripts/install-autostart.ps1` | **Nuevo.** Registra/actualiza la tarea programada. Idempotente. |
-| `scripts/update.ps1` | **Nuevo.** `git pull` + build + `pm2 restart` + verificación. |
+| `scripts/pm2-boot.ps1` | **Nuevo.** Arranque en el login: espera a `Z:`, `pm2 resurrect`, red de seguridad. Llama `node <pm2-cli>` directo (no `pm2.cmd`) para no abrir `cmd.exe`. |
+| `scripts/install-autostart.ps1` | **Nuevo.** Registra/actualiza la tarea. Idempotente. Genera `pm2-boot-hidden.vbs` y apunta la tarea a `wscript.exe` (arranque sin ninguna ventana). |
+| `scripts/update.ps1` | **Nuevo.** `git pull` + build + `pm2 restart <ecosystem>` + verificación. |
 | `docs/DESPLIEGUE_WEB_SIEMPRE_ACTIVA.md` | **Nuevo.** Este documento. |
 
 > ⚠️ **Rutas de red y `cmd.exe`.** `npm`/`cmd.exe` **rechazan un `cwd` UNC**
@@ -82,11 +83,14 @@ Express (server/, vía start.mjs — 1 proceso node)  ← proceso pm2 "trading-d
 > por el disco **mapeado `Z:`** (`\\Zambu-nas\nas-drive-pedro`). `node`/`tsx` sí
 > aceptan UNC; por eso pm2 lanza `node start.mjs` directamente, no `npm run`.
 >
-> ⚠️ **Ventana de consola en Windows.** El CLI `tsx` re-lanza un proceso `node`
-> hijo; bajo pm2 (spawn `detached`, sin consola heredada) Windows 11 le abre una
-> **ventana visible de Windows Terminal**. Por eso el arranque va por
-> `server/start.mjs` (registra el loader de tsx en el proceso y no crea hijos):
-> un solo proceso y el `windowsHide: true` de pm2 basta.
+> ⚠️ **Nada de ventanas en Windows.** Tres capas:
+> 1. **App:** el CLI `tsx` re-lanza un `node` hijo → Windows 11 le abre una ventana
+>    de Windows Terminal. Por eso el arranque va por `server/start.mjs` (registra el
+>    loader de tsx en el proceso, sin hijos); 1 proceso y `windowsHide: true` basta.
+> 2. **Boot script:** `pm2-boot.ps1` invoca `node <pm2-cli>` directamente, no
+>    `pm2.cmd` (el `.cmd` abre un `cmd.exe` que parpadea en el login).
+> 3. **Tarea:** la lanza `wscript.exe pm2-boot-hidden.vbs` (subsistema GUI, sin
+>    consola) → PowerShell arranca 100 % oculto, sin parpadeo ni barra de tareas.
 
 ### 3.2 Instalado en el PC (fuera del repo)
 
@@ -96,8 +100,8 @@ Express (server/, vía start.mjs — 1 proceso node)  ← proceso pm2 "trading-d
 | `cloudflared.exe` 2026.8.2 | `C:\Users\fadwe\cloudflared\cloudflared.exe` | no |
 | Credenciales del túnel | `C:\Users\fadwe\.cloudflared\cert.pem` + `662ac3cf-…json` | no |
 | Config del túnel | `C:\Users\fadwe\.cloudflared\config.yml` | no |
-| Copia local del boot script | `C:\ProgramData\TradingDashboard\pm2-boot.ps1` | no |
-| Tarea programada | `TradingDashboard-Autostart` (usuario `fadwe`, RunLevel Limited) | no |
+| Copia local del boot script | `C:\ProgramData\TradingDashboard\pm2-boot.ps1` (+ `pm2-boot-hidden.vbs`) | no |
+| Tarea programada | `TradingDashboard-Autostart` → `wscript.exe pm2-boot-hidden.vbs` (usuario `fadwe`, RunLevel Limited) | no |
 | pm2 dump | `C:\Users\fadwe\.pm2\dump.pm2` (`pm2 save`) | no |
 
 ### 3.3 En Cloudflare (cuenta `pjzambudio@gmail.com`, zona `buenchollotech.com`)
@@ -164,6 +168,8 @@ curl -I http://trading.buenchollotech.com/           # 301 → https            
 - [x] **Reinicio real del PC (2026-08-30)** — arrancó solo. Corregido: salía una
       ventana de consola visible (el CLI `tsx` re-lanzaba un `node` hijo). Ahora
       el arranque va por `server/start.mjs` → **1 proceso, sin ventana**.
+- [x] Simulacro de arranque post-fix (tarea → `wscript` → vbs → PS oculto):
+      **0 ventanas visibles** durante todo el arranque, health OK desde t+3 s.
 
 **Pendiente de probar por el usuario:** una ejecución completa de análisis +
 generación MQL5 desde la URL pública.
@@ -284,3 +290,9 @@ crédito de OmniRoute, y ver las estrategias. Si algún día se quiere cerrar:
   `import()`ea `src/index.ts` — **cero procesos hijo**. `ecosystem.config.cjs`
   ahora apunta a `start.mjs`. Verificado: `trading-dashboard` = 1 proceso node,
   `MainWindowHandle = 0`, health local + externa `{"ok":true}`. `pm2 save`.
+  - De paso, dos parpadeos menores del login eliminados: `pm2-boot.ps1` llama
+    `node <pm2-cli>` en vez de `pm2.cmd` (el `.cmd` abre `cmd.exe`), y la tarea
+    pasó a `wscript.exe pm2-boot-hidden.vbs` (GUI, sin consola) en vez de
+    `powershell.exe -WindowStyle Hidden`. Simulacro de arranque completo por la
+    tarea real: **0 ventanas** en todo el proceso. `scripts/update.ps1` ahora
+    reinicia pasando el `ecosystem.config.cjs` (re-lee la config).
