@@ -9,8 +9,8 @@ updated: 2026-08-29
 
 ## Estado actual
 
-- **Iteración:** 5 completada. **Iteración 6 en curso** — Codex diagnostica un **BUG CRÍTICO del pipeline de backtest**.
-- **Fase:** Paso 4 (Codex-6). El criterio de éxito del bucle (`evaluateQualityGate(session.stats).passed`) **no es fiable**: mide sobre la sesión de backtest equivocada.
+- **Iteración:** 6 en curso — **fix del parser de backtest aplicado**, run 10 en marcha para el primer backtest FIABLE.
+- **Fase:** Paso 1/3. `tsc` limpio. Backend reiniciado con el fix.
 - **⚠️ HALLAZGO CLAVE (iter 5):** run 9 generó un EA que **compila limpio** (la Regla 1 endurecida de iter 5 funcionó) y el pipeline reportó **QG 6/6 en verde**. **ES FALSO.** El log crudo del tester (`Tester/logs/20260829.log`) acumula TODAS las sesiones del día; `mql5Backtester.ts` toma `sessions[last]` pero cogió la sesión de las 10:43 (`EA_EURUSD_H1_3_7xkFD9.ex5`), NO la de run 9 (`EA_EURUSD_H1_V7PbfK8Q.ex5`, 11:24). El resultado REAL de run 9: `final balance 9250.42` → **el EA PERDIÓ $749.58**, RR real ~1.67, win rate ~28% → esperanza negativa → QG real ~2/6. El falso 6/6 vino de: (i) `netProfit` con signo invertido (el parser no encontró `final balance` de esa sesión → fallback roto), (ii) `avgRR 6.0` inflado (en ~26/64 triggers `entryPrice` se parsea ≈ `sl` → risk ≈ 0 → RR 50-80).
 - **Implicación:** **posiblemente TODOS los backtests desde iter 3 se han medido mal** (iter 3 quizá menos, era el primer run del día y el log solo tenía su sesión). Hasta arreglar el parser NO se puede confiar en ningún QG.
 - **Cambios acumulados (todos con `tsc` limpio):**
@@ -94,6 +94,18 @@ updated: 2026-08-29
 - **Commit:** este mismo commit (`loop(iter 5): Regla 1 del prompt MQL5 -> contrato de APIs (compila); documentado el bug del parser de backtest`).
 - **Cuota:** Claude ~$14 sesión. Codex 5 `exec` OK (siempre con copias locales).
 - **Siguiente (iter 6):** Codex-6 diagnostica el bug de aislamiento de sesión en `mql5Backtester.ts` / `mt5LogParser.ts` (brief en `scratchpad/diag-input-6.md`, log crudo y ficheros en `scratchpad/src/`). Aplicar fix → backend → run limpio → primer backtest FIABLE.
+
+### Iteración 6 (2026-08-29 12:00) — fix del parser de backtest (aislamiento de sesión)
+
+- **Contexto:** P0 — el Quality Gate medía sobre la sesión de backtest equivocada (falso 6/6 en iter 5).
+- **Paso 4 — Codex-6** (`codex-out-6.txt`): **P0, carrera temporal + falta de correlación job↔sesión.** El polling rompía en `if (/final balance/i.test(content))` — cierto por líneas `final balance` de sesiones ANTERIORES en el log acumulativo — antes de que apareciera el marcador `expert file added` de run 9 (llega ~6 s después). Luego `sessions[last]` cogía la sesión de las 10:43. Codex corrigió mi forense: `netProfit 583.25` = `10583.25 − 10000` de la sesión equivocada (NO fallback roto); `TRIGGER_RE` no tiene bug (los RR extremos de la sesión 10:43 son geometría real de ESE EA — calculaba SL/TP sobre `iClose(...,0)` pero enviaba orden a mercado con precio 0.0). **Resultado REAL de run 9: 21 trades, esperanza −0.365 R, PF 0.518, neto −749.58 USD, DD 8% → QG 3/6.**
+- **Cambio (Codex-6, un invariante lógico):** un backtest solo llega al Quality Gate cuando aparece una sesión completa cuyo `expertFile` == el `.ex5` único (nanoid) de ese job; si falta el balance autoritativo, falla cerrado.
+  - `mql5Backtester.ts`: `findLatestAgentLog` → `findRecentAgentLogs` (todos los logs recientes); nuevo `findCompletedSessionForExpert(rawLog, ex5FileName)` (busca la sesión que casa el `.ex5` Y tiene `finalBalance`); el polling rompe solo con esa sesión.
+  - `mt5LogParser.ts`: `FINAL_BALANCE_RE` más robusto (`-?`, `\b`, `/i`); `netProfit` fallback → `null` (nunca convierte la estimación de fills en beneficio neto autoritativo).
+- **Verificación:** `tsc --noEmit -p server` limpio. Backend reiniciado sin watch. Run 10 (`dJkL4hx_bk`) en marcha para el primer backtest fiable.
+- **Candidatos anotados (Codex OTROS_CANDIDATOS, no aplicar aún):** (i) endurecer codegen para que SL/TP/sizing se calculen del mismo BID/ASK de referencia de la orden (o precio 0.0, no `iClose(...,0)`) — run 9 ya lo hace bien; (ii) `cols[0]` en el parser es un código (`CE`/`RS`) no el timestamp → `periodStart/End` mal; (iii) parsear el `Report_*.htm` per-run en vez del log (evolución futura).
+- **Commit:** este mismo commit (`loop(iter 6): fix aislamiento de sesión en el parser de backtest (Codex-6, P0)`).
+- **Cuota:** Claude ~$16 sesión. Codex 6 `exec` OK.
 
 ## Ver también
 

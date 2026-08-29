@@ -59,7 +59,7 @@ export interface Mt5LogSession {
 
 const EXPERT_ADDED_RE = /expert file added:\s*(.+?)\.\s*\d+ bytes loaded/;
 const INITIAL_DEPOSIT_RE = /initial deposit ([\d.]+) (\w+), leverage (1:\d+)/;
-const FINAL_BALANCE_RE = /final balance ([\d.]+) (\w+)/;
+const FINAL_BALANCE_RE = /\bfinal balance\s+(-?\d+(?:\.\d+)?)\s+(\w+)\b/i;
 const TEST_FINISHED_RE = /test\s+\S+\s+on\s+([A-Za-z0-9._]+),([A-Za-z0-9]+)\s+thread finished/;
 const DEAL_RE =
   /^(\d{4}\.\d{2}\.\d{2} \d{2}:\d{2}:\d{2})\s+deal #(\d+) (buy|sell) ([\d.]+) (\S+) at ([\d.]+) done \(based on order #(\d+)\)/;
@@ -155,10 +155,13 @@ function computeStats(session: Mt5LogSession, rejectedOrdersCount = 0): Mt5LogSt
 
   const profitFactorApprox = session.triggers.length > 0 ? (grossLossApprox > 0 ? grossProfitApprox / grossLossApprox : (grossProfitApprox > 0 ? 99.99 : null)) : null;
 
+  // Solo `final balance` (autoritativo del tester) cuenta como beneficio neto. Un log incompleto
+  // o un cambio de formato NUNCA debe convertir la estimación de fills en "beneficio neto" y
+  // colar un falso PASA en el Quality Gate — si falta el balance, netProfit = null (fail closed).
   const netProfit =
     session.finalBalance !== null && session.initialDeposit !== null
       ? session.finalBalance - session.initialDeposit
-      : (session.triggers.length > 0 ? grossProfitApprox - grossLossApprox : null);
+      : null;
 
   const netProfitPct = netProfit !== null && session.initialDeposit ? (netProfit / session.initialDeposit) * 100 : null;
 

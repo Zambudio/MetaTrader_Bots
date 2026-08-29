@@ -52,7 +52,7 @@ async function resolveTerminalPath(): Promise<string | null> {
   }
 }
 
-async function findLatestAgentLog(baseDir: string, sinceDate: Date): Promise<string | null> {
+async function findRecentAgentLogs(baseDir: string, sinceDate: Date): Promise<string[]> {
   try {
     const agentDirs = await fs.readdir(baseDir, { withFileTypes: true });
     const logFiles: { path: string; mtime: Date }[] = [];
@@ -77,11 +77,11 @@ async function findLatestAgentLog(baseDir: string, sinceDate: Date): Promise<str
       }
     }
 
-    if (logFiles.length === 0) return null;
+    if (logFiles.length === 0) return [];
     logFiles.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
-    return logFiles[0].path;
+    return logFiles.map((log) => log.path);
   } catch {
-    return null;
+    return [];
   }
 }
 
@@ -110,7 +110,7 @@ async function readRecentMainTerminalLines(dataDir: string, sinceDate: Date): Pr
 /**
  * Cuando el terminal no llega a lanzar el test (símbolo inexistente en la cuenta conectada,
  * .ex5 no encontrado, etc.) no se genera ningún log de agente nuevo — solo queda "tester didn't
- * start" en el log PRINCIPAL del terminal, que `findLatestAgentLog` nunca mira porque solo revisa
+ * start" en el log PRINCIPAL del terminal, que `findRecentAgentLogs` nunca mira porque solo revisa
  * las carpetas `Agent-N/logs`. Sin esto, ese fallo determinista (2-3s) se reportaba como "no se
  * pudo confirmar la finalización dentro del tiempo límite" — un mensaje que sugiere "puede seguir
  * corriendo, prueba más tarde" para algo que ya falló y no va a completarse nunca por mucho que se
@@ -181,6 +181,36 @@ async function readLogFileAnyEncoding(filePath: string): Promise<string> {
   } catch {
     return '';
   }
+}
+
+/**
+ * El log del tester es acumulativo (todas las sesiones del día en el mismo fichero) y MT5 puede
+ * reusar una instancia ya abierta por IPC. Sin correlacionar el job con su sesión, el polling
+ * rompía en cuanto veía CUALQUIER línea `final balance` (incluidas las de sesiones anteriores) y
+ * el Quality Gate se evaluaba sobre el backtest equivocado. La clave de correlación es el nombre
+ * único del `.ex5` (lleva un nanoid por job). Si no hay balance autoritativo → null (fail closed).
+ */
+function findCompletedSessionForExpert(
+  rawLog: string,
+  expectedExpertFile: string
+): Mt5LogSession | null {
+  const expectedName = expectedExpertFile.toLowerCase();
+  const sessions = parseMt5Log(rawLog);
+
+  for (let i = sessions.length - 1; i >= 0; i--) {
+    const candidate = sessions[i];
+    const loggedName = candidate.expertFile
+      ?.replace(/\\/g, '/')
+      .split('/')
+      .pop()
+      ?.toLowerCase();
+
+    if (loggedName === expectedName && candidate.finalBalance !== null) {
+      return candidate;
+    }
+  }
+
+  return null;
 }
 
 export async function runHeadlessBacktest(
@@ -276,28 +306,27 @@ Visual=0
   const pollDeadline = Date.now() + BACKTEST_TIMEOUT_MS;
   const pollIntervalMs = 3000;
   let rawLog = '';
+  let session: Mt5LogSession | null = null;
   let startupError: string | null = null;
   let runtimeCrashError: string | null = null;
   while (Date.now() < pollDeadline) {
-    const latestLogPath = await findLatestAgentLog(testerDir, startTime);
-    if (latestLogPath) {
-      const content = await readLogFileAnyEncoding(latestLogPath);
-      if (/final balance/i.test(content)) {
+    const recentLogPaths = await findRecentAgentLogs(testerDir, startTime);
+    for (const logPath of recentLogPaths) {
+      const content = await readLogFileAnyEncoding(logPath);
+      const completedSession = findCompletedSessionForExpert(content, ex5FileName);
+      if (completedSession) {
         rawLog = content;
+        session = completedSession;
         break;
       }
     }
+    if (session) break;
+
     startupError = await findTesterStartupError(dataDir, startTime);
     if (startupError) break;
     runtimeCrashError = await findRuntimeCrashError(dataDir, startTime);
     if (runtimeCrashError) break;
     await delay(pollIntervalMs);
-  }
-
-  let session: Mt5LogSession | null = null;
-  if (rawLog) {
-    const sessions = parseMt5Log(rawLog);
-    session = sessions.length > 0 ? sessions[sessions.length - 1] : null;
   }
 
   // 5. Evaluar Quality Gate cuantitativo (Doc 20 §4)
