@@ -4,7 +4,9 @@ import type { Veredicto } from '../types/verdict';
 import { MarkdownText } from './MarkdownText';
 import { Mql5CodeBlock } from './Mql5CodeBlock';
 import { BacktestLogAnalyzer } from './BacktestLogAnalyzer';
+import { ModelSelector } from './ModelSelector';
 import { api } from '../lib/api';
+import { useAgentStore } from '../lib/store';
 
 interface Props {
   agentName: string;
@@ -33,6 +35,13 @@ export const StrategyResultCard = ({
   >(initialResult ? { status: 'done', result: initialResult } : { status: 'idle' });
   const [acknowledgeAdjust, setAcknowledgeAdjust] = useState(false);
 
+  const mql5Model = useAgentStore((s) => s.mql5Model);
+  const setMql5Model = useAgentStore((s) => s.setMql5Model);
+  // El generador de MQL5 usa el modelo elegido explícitamente para codegen; si no hay ninguno,
+  // hereda el del agente de estrategia (comportamiento histórico).
+  const effectiveMql5Model = mql5Model ?? agentModel ?? '';
+  const usingStrategyAgentModel = mql5Model === null;
+
   useEffect(() => {
     if (initialResult) {
       setMql5State({ status: 'done', result: initialResult });
@@ -44,7 +53,7 @@ export const StrategyResultCard = ({
   const handleGenerate = async () => {
     setMql5State({ status: 'loading' });
     try {
-      const result = await api.generateMql5(strategy, agentModel, runId, (progress) =>
+      const result = await api.generateMql5(strategy, effectiveMql5Model || undefined, runId, (progress) =>
         setMql5State({ status: 'loading', progress })
       );
       setMql5State({ status: 'done', result });
@@ -69,7 +78,7 @@ export const StrategyResultCard = ({
         currentResult.code,
         currentResult.backtestSession ?? null,
         nextIteration,
-        agentModel,
+        effectiveMql5Model || undefined,
         runId,
         (progress) => setMql5State({ status: 'loading', progress }),
         currentResult.optimizationNotes
@@ -194,6 +203,33 @@ export const StrategyResultCard = ({
               </div>
             ) : (
               <div className="flex flex-col gap-3">
+                <details className="bg-void/40 border border-line/60 rounded-xl px-4 py-3 text-sm">
+                  <summary className="cursor-pointer text-paper/90 font-medium select-none">
+                    Motor de generación del EA:{' '}
+                    <span className="text-cyan font-mono">{effectiveMql5Model || 'por defecto del servidor'}</span>
+                    {usingStrategyAgentModel && <span className="text-muted font-normal"> · hereda del agente de estrategia</span>}
+                  </summary>
+                  <div className="mt-4 space-y-3">
+                    <p className="text-xs text-muted">
+                      Qué modelo escribe el código MQL5 y aplica las optimizaciones tras cada backtest. Independiente de
+                      los modelos del panel de agentes.
+                    </p>
+                    <ModelSelector
+                      value={effectiveMql5Model}
+                      onChange={(v) => setMql5Model(v)}
+                      idPrefix="mql5-model"
+                    />
+                    {!usingStrategyAgentModel && (
+                      <button
+                        type="button"
+                        onClick={() => setMql5Model(null)}
+                        className="text-xs text-cyan hover:text-paper transition-colors"
+                      >
+                        ↺ Volver a heredar el del agente de estrategia
+                      </button>
+                    )}
+                  </div>
+                </details>
                 <div className="flex items-center gap-4 flex-wrap">
                   <button
                     onClick={handleGenerate}

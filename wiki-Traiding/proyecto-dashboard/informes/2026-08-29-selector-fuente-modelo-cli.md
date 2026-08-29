@@ -113,6 +113,15 @@ Un run de 6 agentes con **1** agente por CLI ≈ 3 min; con el agente de estrate
 | **Tests pre-existentes en rojo** | `server/test/strategyValidator.test.ts` — 5 tests fallan por orden de validación (`condicionEntrada` vacía se comprueba antes que R:R). **Ya fallaban en `main`** (verificado con `git stash`); fuera del alcance de esta tarea (seguimiento del bucle `/loop`). |
 | **`opencode` como fuente** | NO implementada, NO listada en `/api/models` (se añade cuando exista el adaptador — receta en el plan §6). El `llmRouter` tiene el `case 'opencode'` que hace throw explícito. |
 
+## Añadido: selector de motor para la generación de MQL5
+
+> A petición de Pedro — el generador de MQL5 usaba (sin decirlo) el modelo del agente de estrategia; ahora se elige aparte.
+
+- Componente reutilizable `src/components/ModelSelector.tsx` (el mismo cascada fuente→modelo→esfuerzo) extraído de `AgentConfigModal.tsx`, que ahora lo consume.
+- `StrategyResultCard.tsx`: bloque desplegable "Motor de generación del EA" junto al botón de generar, con el `ModelSelector`. La elección se guarda en `localStorage` (`tad:mql5Model`) — es una preferencia de máquina, no del run. `null` = heredar el modelo del agente de estrategia (comportamiento histórico); botón "↺ volver a heredar".
+- El valor elegido se pasa como `model` a `POST /api/mql5/generate` y `/optimize` (ya lo aceptaban). **Sin cambios de servidor.**
+- Verificado: `POST /api/mql5/generate` con `model: "claude:sonnet"` (distinto del agente de estrategia, que estaba en `openai:gpt-5.6-sol:medium`) → `[llmRouter] fuente=claude modelo=sonnet tool=deliver_ea`.
+
 ## Añadido: ejecución en paralelo de los agentes de un mismo nivel
 
 > A petición de Pedro tras probar el selector — la latencia por CLI (60–150 s/agente) hacía el run muy lento en serie.

@@ -9,6 +9,26 @@ export const TIMEFRAME_OPTIONS = ['M15', 'H1', 'H4', 'D1'];
 export const MAX_RETRIES_OPTIONS = [0, 1, 2, 3];
 const MAX_POLL_ATTEMPTS = 600; // 10 minutos máximo de polling para permitir razonamiento profundo de múltiples agentes
 
+// Motor de generación de MQL5 elegido por el usuario (string "<fuente>:<modelo>[:<esfuerzo>]").
+// `null` = usar el modelo del agente de estrategia (comportamiento por defecto). Persistido en
+// localStorage porque es una preferencia estable de la máquina, no del run.
+const MQL5_MODEL_KEY = 'tad:mql5Model';
+function readStoredMql5Model(): string | null {
+  try {
+    return localStorage.getItem(MQL5_MODEL_KEY);
+  } catch {
+    return null;
+  }
+}
+function persistMql5Model(value: string | null): void {
+  try {
+    if (value === null) localStorage.removeItem(MQL5_MODEL_KEY);
+    else localStorage.setItem(MQL5_MODEL_KEY, value);
+  } catch {
+    /* localStorage no disponible — la preferencia solo vivirá en memoria */
+  }
+}
+
 export type ErrorDomain = 'initial' | 'run' | 'agent' | 'pair' | 'preset' | null;
 
 interface AgentStore {
@@ -23,6 +43,9 @@ interface AgentStore {
   selectedPair: string;
   timeframe: string;
   maxRetries: number;
+  /** Motor de generación de MQL5. `null` = usar el modelo del agente de estrategia. */
+  mql5Model: string | null;
+  setMql5Model: (value: string | null) => void;
   currentRun: Run | null;
   isLoading: boolean;
   isAnalysing: boolean;
@@ -56,6 +79,7 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
   selectedPair: 'EUR/USD',
   timeframe: 'H1',
   maxRetries: 2,
+  mql5Model: readStoredMql5Model(),
   currentRun: null,
   isLoading: true,
   isAnalysing: false,
@@ -209,6 +233,10 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
   setSelectedPair: (pair) => set({ selectedPair: pair }),
   setTimeframe: (timeframe) => set({ timeframe }),
   setMaxRetries: (maxRetries) => set({ maxRetries: Math.min(3, Math.max(0, maxRetries)) }),
+  setMql5Model: (value) => {
+    persistMql5Model(value);
+    set({ mql5Model: value });
+  },
 
   toggleFavorite: async (symbol, favorite) => {
     try {
