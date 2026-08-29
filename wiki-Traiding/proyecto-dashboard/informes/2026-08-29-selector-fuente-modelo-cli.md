@@ -53,13 +53,13 @@ C:\Users\fadwe\.local\bin\claude.exe -p --output-format json \
 node C:\Users\fadwe\AppData\Roaming\npm\node_modules\@openai\codex\bin\codex.js exec - \
   -o <ficheroTemporalLocal> \
   --skip-git-repo-check --sandbox read-only --color never \
-  -c model_reasoning_effort=<minimal|low|medium|high> \
-  [-m gpt-5.6-sol]
+  -c model_reasoning_effort=<none|low|medium|high|xhigh|max> \
+  [-m gpt-5.6-sol|gpt-5.6-terra|gpt-5.6-luna|gpt-5.5|gpt-5.4|gpt-5.4-mini]
 ```
 - Prompt aplanado (con system incluido) **por stdin** (`exec -`). El `<ficheroTemporal>` recibe EXACTAMENTE el mensaje final del modelo, sin ruido de hooks.
 - Se lanza con `node <codex.js>` (no el wrapper `codex.cmd`) porque Node ≥18.20 exige `shell: true` para spawnear `.cmd`. `codex.js` se resuelve desde `%APPDATA%\npm\...` o `CODEX_CLI_JS`.
 - **`cwd` = un directorio temporal LOCAL nuevo** (`os.tmpdir()`), no el disco de red: el sandbox `read-only` de codex deniega `\\Zambu-nas\` de forma intermitente ([[agent-delegation-options]]).
-- `codex exec` **sí acepta `-m/--model`**. PERO con una cuenta **ChatGPT Plus** solo funciona **`gpt-5.6-sol`** (el modelo por defecto de `~/.codex/config.toml`). `gpt-5`, `gpt-5-codex`, `gpt-5.1-codex-mini`, `gpt-5.6`, `gpt-5.6-codex` → todos `400 "The '<m>' model is not supported when using Codex with a ChatGPT account."`. La fuente OpenAI lista solo `gpt-5.6-sol`; **el `effort` es la palanca real**.
+- `codex exec` **sí acepta `-m/--model`**. Con la cuenta ChatGPT de Pedro hay **6 modelos** (los que muestra `codex` → `/model`), todos verificados con `codex exec -m`: **`gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`**. Los nombres genéricos (`gpt-5`, `gpt-5-codex`, `gpt-5.1-codex-mini`, `gpt-5.6`, `gpt-5.6-codex`) SÍ dan `400 "not supported when using Codex with a ChatGPT account"` — hay que usar los nombres de plan. Esfuerzos válidos: **`none | low | medium | high | xhigh | max`** (NO `minimal` — ese era un error del plan). Si el plan cambia, refrescar la lista de `routes/models.ts` con `codex` → `/model`.
 - codex a veces escribe `ERROR: {json}` en stdout ante errores de API con exit 0 → el adaptador falla si el fichero de salida está vacío **O** el exit ≠ 0, y extrae ese `ERROR:` para el mensaje.
 
 **Común a los dos adaptadores:**
@@ -95,7 +95,7 @@ El generador de MQL5 (`mql5Generator.ts`) usaba, sin decirlo, `agent.model` del 
 
 ## Test de aceptación (todo verde)
 
-Backend sin watch (`node ./node_modules/tsx/dist/cli.mjs --env-file-if-exists=.env src/index.ts`), `/api/health` `/api/agents` → 200, `/api/models` → shape nuevo (`sources: [omniroute, claude, openai]`, `modelsBySource.claude=[sonnet,opus,haiku]`, `modelsBySource.openai=[gpt-5.6-sol]`, `omniroute`=152).
+Backend sin watch (`node ./node_modules/tsx/dist/cli.mjs --env-file-if-exists=.env src/index.ts`), `/api/health` `/api/agents` → 200, `/api/models` → shape nuevo (`sources: [omniroute, claude, openai]`, `modelsBySource.claude=[sonnet,opus,haiku]`, `modelsBySource.openai=[gpt-5.6-sol, gpt-5.6-terra, gpt-5.6-luna, gpt-5.5, gpt-5.4, gpt-5.4-mini]`, `omniroute`=152). `openai.efforts=[none,low,medium,high,xhigh,max]`.
 
 | Prueba | Config | Resultado |
 |---|---|---|
@@ -136,7 +136,7 @@ Con paralelismo, un nivel tarda lo que su agente más lento (no la suma). Un run
 |---|---|
 | **Latencia por CLI** | 60–150 s/llamada (arranque del CLI + razonamiento). El paralelismo por nivel lo mitiga pero no lo elimina; niveles con un solo agente (riesgo, razonador) siguen en serie. `store.ts` tiene `MAX_POLL_ATTEMPTS=600` (10 min) — un run con varios agentes lentos en niveles distintos puede rozarlo. |
 | **`codex/gpt-5.6-sol` y tool-calling** | No siempre respeta el esquema JSON de la tool → estrategia/veredicto con campos vacíos. Preferir Claude por CLI para agentes de salida estructurada. `extractBalancedJson` + prompt endurecido cubren el caso "JSON envuelto en prosa", no el "JSON incompleto". |
-| **ChatGPT Plus solo da `gpt-5.6-sol`** | `codex` rechaza cualquier otro modelo. El `effort` es la única variable de esa fuente. |
+| **Modelos de `codex` atados al plan ChatGPT** | Son 6 nombres de plan (`gpt-5.6-sol/terra/luna`, `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`), no los genéricos. Si OpenAI los renombra o el plan cambia, hay que actualizar `OPENAI_MODELS` en `routes/models.ts` (`codex` → `/model` da la lista real). |
 | **Límites de suscripción** | Si `claude` / `codex` devuelven "usage/rate limit", el adaptador hace throw → agente `error`, sin reintento en bucle. |
 | **`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` en el entorno** | Harían que los CLIs facturasen por API. El adaptador las quita del `env` del hijo; **no ponerlas en `server/.env`**. |
 | **Windows: UNC vs cmd.exe** | `npm` / `npx tsc` NO pueden usar `\\Zambu-nas\...` como cwd. Trabajar desde la unidad mapeada (`N:` o `Z:`) → `N:\IA\02_Proyectos\MetaTrader_Bots`. Los adaptadores CLI no sufren esto (usan `spawn` directo). |

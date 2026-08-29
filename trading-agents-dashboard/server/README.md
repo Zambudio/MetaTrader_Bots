@@ -20,7 +20,7 @@ El campo `Agent.model` es un string `"<fuente>:<modelo>[:<esfuerzo>]"` (`src/uti
 
 Los adaptadores CLI aplanan `messages[]` a un prompt de texto, inyectan el esquema JSON de la tool si la hay (`buildJsonSchemaSystemMessage` — exige JSON puro; `extractBalancedJson` rescata el objeto si el modelo lo envuelve en prosa), y devuelven la forma `{ choices: [{ message: { content } }] }` que ya lee `parseToolArgs`. **Quitan `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` del entorno del proceso hijo** — si están, los CLIs facturan por API en vez de consumir la suscripción; **no ponerlas nunca en `server/.env`**.
 
-El router **no** hace fallback entre fuentes (a diferencia de OmniRoute): si el CLI falla, el agente queda `error`. Overrides opcionales: `CLAUDE_CLI_BIN`, `CODEX_CLI_JS`. Con una cuenta **ChatGPT Plus** codex solo admite `gpt-5.6-sol`; el `effort` (`minimal|low|medium|high`) es la única variable.
+El router **no** hace fallback entre fuentes (a diferencia de OmniRoute): si el CLI falla, el agente queda `error`. Overrides opcionales: `CLAUDE_CLI_BIN`, `CODEX_CLI_JS`. Los modelos de la fuente `openai` son los nombres de plan que ofrece `codex` (comando `/model`), no los genéricos — lista en `routes/models.ts`, refrescar si el plan cambia. Esfuerzos válidos: `none|low|medium|high|xhigh|max`.
 
 El generador de MQL5 usa el `model` que le llegue en el body de `POST /api/mql5/generate` (la UI lo elige aparte, por defecto hereda el del agente de estrategia) — pasa por el mismo router.
 

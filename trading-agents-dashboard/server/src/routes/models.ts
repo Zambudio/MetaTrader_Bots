@@ -37,19 +37,21 @@ const SOURCES: LlmSourceInfo[] = [
     id: 'openai',
     label: 'OpenAI / codex (mi ChatGPT)',
     supportsEffort: true,
-    efforts: ['minimal', 'low', 'medium', 'high'],
+    efforts: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
     note: 'Usa tu ChatGPT vía CLI `codex`. Más lento que OmniRoute (~5-30 s por llamada).',
   },
 ];
 
 // Listas estáticas. De dónde salen:
 //   claude: aliases que acepta `claude --model` (`claude --help`).
-//   openai: con una cuenta ChatGPT Plus, `codex` SOLO admite su modelo por defecto
-//           `gpt-5.6-sol` (verificado 2026-08-29; `gpt-5`, `gpt-5-codex`, etc. dan 400
-//           "not supported when using Codex with a ChatGPT account"). El esfuerzo sí se
-//           aplica vía `-c model_reasoning_effort=`.
+//   openai: los modelos que ofrece `codex` (comando `/model` en modo interactivo) para esta
+//           cuenta ChatGPT. Verificado 2026-08-29 con `codex exec -m <m>`. OJO: los nombres
+//           genéricos (`gpt-5`, `gpt-5-codex`, `gpt-5.1-codex-mini`) SÍ dan 400 "not supported
+//           when using Codex with a ChatGPT account" — hay que usar estos nombres de plan.
+//           Esfuerzos válidos para estos modelos: none|low|medium|high|xhigh|max (NO `minimal`).
+//           Si el plan cambia, refrescar la lista con `codex` -> `/model`.
 const CLAUDE_MODELS = ['sonnet', 'opus', 'haiku'];
-const OPENAI_MODELS = ['gpt-5.6-sol'];
+const OPENAI_MODELS = ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini'];
 
 const OMNIROUTE_FALLBACK_MODELS = [
   'auto/best-reasoning',

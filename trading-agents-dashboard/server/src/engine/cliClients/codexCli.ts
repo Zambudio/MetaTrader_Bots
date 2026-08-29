@@ -29,11 +29,13 @@ import {
  * El cwd es un directorio temporal LOCAL (no el disco de red del proyecto) porque el sandbox
  * `read-only` de codex deniega `\\Zambu-nas\` de forma intermitente.
  *
- * ⚠️ Con una cuenta ChatGPT Plus, codex SOLO admite `gpt-5.6-sol` (su modelo por defecto).
- * `gpt-5`, `gpt-5-codex`, etc. dan 400 "not supported when using Codex with a ChatGPT account".
+ * ⚠️ codex con cuenta ChatGPT usa nombres de modelo de plan (`gpt-5.6-sol`, `gpt-5.6-terra`,
+ * `gpt-5.5`, `gpt-5.4-mini`…, ver `codex` -> `/model`). Los nombres genéricos (`gpt-5`,
+ * `gpt-5-codex`) dan 400 "not supported when using Codex with a ChatGPT account".
+ * Esfuerzos válidos: none|low|medium|high|xhigh|max (NO `minimal`).
  */
 
-const VALID_EFFORTS = new Set(['minimal', 'low', 'medium', 'high']);
+const VALID_EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh', 'max']);
 
 // Resolución perezosa y memoizada: si codex no está instalado, solo debe fallar cuando alguien
 // elige de verdad la fuente "openai", no al arrancar el servidor.
