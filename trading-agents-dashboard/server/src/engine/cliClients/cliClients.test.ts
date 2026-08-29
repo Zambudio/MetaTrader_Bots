@@ -1,0 +1,104 @@
+import { describe, expect, it } from 'vitest';
+import { extractBalancedJson, flattenMessages, stripPaidApiKeys, toChoicesResponse } from './shared.js';
+import { buildJsonSchemaSystemMessage, type ToolDefinition } from '../omniClient.js';
+import { buildModelString, parseModelString } from '../../utils/modelString.js';
+
+describe('modelString', () => {
+  it('trata strings sin prefijo de fuente como omniroute (compat hacia atrás)', () => {
+    expect(parseModelString('')).toEqual({ source: 'omniroute', model: '' });
+    expect(parseModelString('auto/best-reasoning')).toEqual({ source: 'omniroute', model: 'auto/best-reasoning' });
+    expect(parseModelString('cerebras/gpt-oss-120b')).toEqual({ source: 'omniroute', model: 'cerebras/gpt-oss-120b' });
+  });
+
+  it('parsea fuente:modelo:esfuerzo', () => {
+    expect(parseModelString('omniroute:cerebras/gpt-oss-120b')).toEqual({ source: 'omniroute', model: 'cerebras/gpt-oss-120b' });
+    expect(parseModelString('claude:sonnet')).toEqual({ source: 'claude', model: 'sonnet' });
+    expect(parseModelString('openai:gpt-5.6-sol:high')).toEqual({ source: 'openai', model: 'gpt-5.6-sol', effort: 'high' });
+  });
+
+  it('prefijo desconocido -> omniroute con el string entero', () => {
+    expect(parseModelString('groq:llama')).toEqual({ source: 'omniroute', model: 'groq:llama' });
+  });
+
+  it('buildModelString es la inversa y omniroute no lleva prefijo', () => {
+    expect(buildModelString('omniroute', 'auto/best-reasoning')).toBe('auto/best-reasoning');
+    expect(buildModelString('omniroute', '')).toBe('');
+    expect(buildModelString('claude', 'sonnet')).toBe('claude:sonnet');
+    expect(buildModelString('openai', 'gpt-5.6-sol', 'low')).toBe('openai:gpt-5.6-sol:low');
+    const round = 'openai:gpt-5.6-sol:medium';
+    const p = parseModelString(round);
+    expect(buildModelString(p.source, p.model, p.effort)).toBe(round);
+  });
+});
+
+describe('flattenMessages', () => {
+  const messages = [
+    { role: 'system' as const, content: 'Eres un analista.' },
+    { role: 'user' as const, content: 'Par: EUR/USD' },
+    { role: 'assistant' as const, content: 'Entendido.' },
+  ];
+
+  it('incluye el system por defecto', () => {
+    const out = flattenMessages(messages);
+    expect(out).toContain('INSTRUCCIONES DEL SISTEMA:\nEres un analista.');
+    expect(out).toContain('USUARIO:\nPar: EUR/USD');
+    expect(out).toContain('ASISTENTE:\nEntendido.');
+  });
+
+  it('puede excluir el system (para --system-prompt nativo)', () => {
+    const out = flattenMessages(messages, { includeSystem: false });
+    expect(out).not.toContain('INSTRUCCIONES DEL SISTEMA');
+    expect(out).toContain('USUARIO:\nPar: EUR/USD');
+  });
+});
+
+describe('extractBalancedJson', () => {
+  it('extrae el objeto aunque venga envuelto en prosa/markdown', () => {
+    expect(JSON.parse(extractBalancedJson('Aquí tienes: {"ok": true, "n": 42} — listo'))).toEqual({ ok: true, n: 42 });
+    expect(JSON.parse(extractBalancedJson('{"a": {"b": 1}, "c": "}"}'))).toEqual({ a: { b: 1 }, c: '}' });
+  });
+
+  it('lanza si no hay objeto JSON', () => {
+    expect(() => extractBalancedJson('sin json aquí')).toThrow();
+    expect(() => extractBalancedJson('{"roto": ')).toThrow();
+  });
+});
+
+describe('stripPaidApiKeys', () => {
+  it('quita ANTHROPIC_API_KEY / OPENAI_API_KEY / ANTHROPIC_AUTH_TOKEN', () => {
+    const clean = stripPaidApiKeys({
+      ANTHROPIC_API_KEY: 'sk-ant-xxx',
+      OPENAI_API_KEY: 'sk-xxx',
+      ANTHROPIC_AUTH_TOKEN: 'tok',
+      PATH: '/usr/bin',
+    });
+    expect(clean.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(clean.OPENAI_API_KEY).toBeUndefined();
+    expect(clean.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
+    expect(clean.PATH).toBe('/usr/bin');
+  });
+});
+
+describe('toChoicesResponse', () => {
+  it('produce la forma que espera parseToolArgs', () => {
+    const r = toChoicesResponse('{"x":1}');
+    expect(r.choices[0].message.content).toBe('{"x":1}');
+  });
+});
+
+describe('buildJsonSchemaSystemMessage', () => {
+  it('exige JSON puro y refleja el esquema de la tool', () => {
+    const tool: ToolDefinition = {
+      type: 'function',
+      function: {
+        name: 'propose_strategy',
+        description: 'x',
+        parameters: { type: 'object', properties: { resumen: { type: 'string' } } },
+      },
+    };
+    const msg = buildJsonSchemaSystemMessage(tool);
+    expect(msg).toContain('primer carácter');
+    expect(msg).toContain('propose_strategy');
+    expect(msg).toContain('resumen');
+  });
+});

@@ -4,6 +4,7 @@ import type { Candle } from '../types/candle';
 import type { SavedPair, SymbolSearchResult } from '../types/pair';
 import type { Mql5GenerationProgress, Mql5GenerationResult, Mql5Job, StrategyProposalLite } from '../types/strategy';
 import type { Mt5LogSession } from '../types/backtest';
+import type { ModelsResponse } from '../types/model';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`/api${path}`, {
@@ -36,7 +37,7 @@ export const api = {
   deleteAgentConfig: (id: string) =>
     request<{ ok: boolean }>(`/agent-configs/${id}`, { method: 'DELETE' }),
   listPairs: () => request<SavedPair[]>('/pairs'),
-  listModels: () => request<string[]>('/models'),
+  listModels: () => request<ModelsResponse>('/models'),
   startRun: (pair: string, timeframe: string, maxRetries?: number) =>
     request<Run>('/runs', { method: 'POST', body: JSON.stringify({ pair, timeframe, maxRetries }) }),
   resumeRun: (id: string, agentId?: string) =>

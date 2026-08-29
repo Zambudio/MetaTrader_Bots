@@ -72,6 +72,25 @@ export function sanitizeJsonResponse(raw: string): string {
   return cleaned;
 }
 
+/**
+ * Bloque de instrucciones que fuerza a un modelo SIN soporte nativo de function-calling a
+ * devolver exclusivamente el JSON que cumple el esquema de la tool. Se inyecta como mensaje
+ * `system` (fallback de OmniRoute ante 400) o al final del prompt aplanado (adaptadores CLI).
+ * Endurecido (lección del plan del selector CLI): exigir que el primer carácter sea `{` y el
+ * último `}`, sin prosa ni markdown, para que `sanitizeJsonResponse` + `JSON.parse` no fallen.
+ */
+export function buildJsonSchemaSystemMessage(tool: ToolDefinition): string {
+  const schemaStr = JSON.stringify(tool.function.parameters?.properties || tool.function.parameters, null, 2);
+  return [
+    'IMPORTANTE: Devuelve tu respuesta EXCLUSIVAMENTE como un único objeto JSON válido que cumpla este esquema.',
+    'SIN texto explicativo antes ni después. SIN bloques markdown (nada de ```). El primer carácter de tu',
+    'respuesta debe ser `{` y el último `}`.',
+    '',
+    `Esquema (propiedades del objeto "${tool.function.name}"):`,
+    schemaStr,
+  ].join('\n');
+}
+
 export async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -207,12 +226,11 @@ async function chatCompletionJsonFallback(
   tool: ToolDefinition,
   timeoutMs: number
 ): Promise<any> {
-  const schemaStr = JSON.stringify(tool.function.parameters?.properties || tool.function.parameters, null, 2);
   const fallbackMessages: ChatMessage[] = [
     ...messages,
     {
       role: 'system',
-      content: `IMPORTANTE: Devuelve tu respuesta EXCLUSIVAMENTE como un objeto JSON válido (sin texto antes ni después) cumpliendo este esquema:\n${schemaStr}`,
+      content: buildJsonSchemaSystemMessage(tool),
     },
   ];
 

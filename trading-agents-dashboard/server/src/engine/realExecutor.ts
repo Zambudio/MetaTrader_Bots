@@ -1,6 +1,7 @@
 import type { Agent, StrategyProposalLite, VerdictResult } from '../types.js';
 import { getWikiContextBlock } from '../store/wikiStore.js';
-import { chatCompletion, sanitizeJsonResponse, type ChatMessage } from './omniClient.js';
+import { sanitizeJsonResponse, type ChatMessage } from './omniClient.js';
+import { routeChatCompletion as chatCompletion } from './llmRouter.js';
 import { parsePriceFromText } from './strategyValidator.js';
 
 export interface RealExecutionResult {

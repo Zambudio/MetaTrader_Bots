@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Agent, AgentConfigPreset } from '../types/agent';
 import type { Run } from '../types/run';
 import type { SavedPair } from '../types/pair';
+import type { LlmSourceInfo } from '../types/model';
 import { api } from './api';
 
 export const TIMEFRAME_OPTIONS = ['M15', 'H1', 'H4', 'D1'];
@@ -13,7 +14,10 @@ export type ErrorDomain = 'initial' | 'run' | 'agent' | 'pair' | 'preset' | null
 interface AgentStore {
   agents: Agent[];
   pairs: SavedPair[];
-  models: string[];
+  /** Fuentes de LLM disponibles (OmniRoute / Claude CLI / OpenAI codex CLI). */
+  sources: LlmSourceInfo[];
+  /** Modelos disponibles por fuente, indexados por `LlmSourceInfo.id`. */
+  modelsBySource: Record<string, string[]>;
   presets: AgentConfigPreset[];
   activePresetId: string | null;
   selectedPair: string;
@@ -45,7 +49,8 @@ interface AgentStore {
 export const useAgentStore = create<AgentStore>((set, get) => ({
   agents: [],
   pairs: [],
-  models: [],
+  sources: [],
+  modelsBySource: {},
   presets: [],
   activePresetId: null,
   selectedPair: 'EUR/USD',
@@ -62,7 +67,7 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
   loadInitialData: async () => {
     set({ isLoading: true, error: null, errorDomain: null });
     try {
-      const [agents, pairs, models, configState] = await Promise.all([
+      const [agents, pairs, modelsData, configState] = await Promise.all([
         api.listAgents(),
         api.listPairs(),
         api.listModels(),
@@ -71,7 +76,8 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
       set((state) => ({
         agents,
         pairs,
-        models,
+        sources: modelsData.sources,
+        modelsBySource: modelsData.modelsBySource,
         presets: configState.presets,
         activePresetId: configState.activePresetId,
         selectedPair: pairs.some((p) => p.symbol === state.selectedPair)

@@ -7,7 +7,8 @@ import {
 } from '../store/mql5KnowledgeStore.js';
 import { getWikiContextBlock } from '../store/wikiStore.js';
 import type { Mql5GenerationResult, StrategyProposalLite } from '../types.js';
-import { chatCompletion, sanitizeJsonResponse, type ChatMessage } from './omniClient.js';
+import { sanitizeJsonResponse, type ChatMessage } from './omniClient.js';
+import { routeChatCompletion as chatCompletion } from './llmRouter.js';
 import { reviewMql5Code, type CodeReviewResult } from './codeReviewer.js';
 import { runHeadlessBacktest } from './mql5Backtester.js';
 import { evaluateQualityGate } from './qualityGate.js';

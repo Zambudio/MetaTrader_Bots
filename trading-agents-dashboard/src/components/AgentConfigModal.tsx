@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import type { Agent, OutputType } from '../types/agent';
+import type { LlmSourceId } from '../types/model';
 import { useAgentStore } from '../lib/store';
 import { wouldCreateCycle } from '../lib/agentGraph';
+import { buildModelString, parseModelString } from '../lib/modelString';
 
 interface Props {
   agent: Agent | null;
@@ -16,7 +18,8 @@ const fieldInput =
   'w-full bg-void/50 border border-line/70 rounded-xl px-3.5 py-2.5 text-paper text-base outline-none focus:border-cyan/60 transition-colors';
 
 export const AgentConfigModal = ({ agent, otherAgents, onClose, onSave, onDelete }: Props) => {
-  const models = useAgentStore((state) => state.models);
+  const sources = useAgentStore((state) => state.sources);
+  const modelsBySource = useAgentStore((state) => state.modelsBySource);
   const allAgents = useAgentStore((state) => state.agents);
   const [name, setName] = useState(agent?.name ?? '');
   const [role, setRole] = useState(agent?.role ?? '');
@@ -29,7 +32,29 @@ export const AgentConfigModal = ({ agent, otherAgents, onClose, onSave, onDelete
   const [outputType, setOutputType] = useState<OutputType>(agent?.outputType ?? 'text');
   const [photo, setPhoto] = useState(agent?.photo ?? '');
   const [photoFailed, setPhotoFailed] = useState(false);
-  const [model, setModel] = useState(agent?.model ?? '');
+
+  // Selector en cascada: fuente -> modelo -> esfuerzo. `agent.model` es el string
+  // "<fuente>:<modelo>[:<esfuerzo>]" (ver src/lib/modelString.ts).
+  const [source, setSource] = useState<LlmSourceId>(() => parseModelString(agent?.model).source);
+  const [modelName, setModelName] = useState(() => parseModelString(agent?.model).model);
+  const [effort, setEffort] = useState(() => parseModelString(agent?.model).effort ?? '');
+
+  const currentSource = sources.find((s) => s.id === source);
+  const modelsForSource = modelsBySource[source] ?? [];
+
+  const handleSourceChange = (nextSource: LlmSourceId) => {
+    setSource(nextSource);
+    const nextModels = modelsBySource[nextSource] ?? [];
+    // omniroute admite "" (modelo por defecto del servidor); las demás obligan a un modelo concreto.
+    setModelName(nextSource === 'omniroute' ? '' : nextModels[0] ?? '');
+    const nextInfo = sources.find((s) => s.id === nextSource);
+    if (nextInfo?.supportsEffort) {
+      setEffort(nextInfo.efforts?.includes('medium') ? 'medium' : nextInfo.efforts?.[0] ?? '');
+    } else {
+      setEffort('');
+    }
+  };
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,7 +73,7 @@ export const AgentConfigModal = ({ agent, otherAgents, onClose, onSave, onDelete
         dependsOn,
         outputType,
         photo: photo || undefined,
-        model: model || undefined,
+        model: buildModelString(source, modelName, effort) || undefined,
       });
       onClose();
     } catch (err) {
@@ -168,18 +193,61 @@ export const AgentConfigModal = ({ agent, otherAgents, onClose, onSave, onDelete
           </div>
         </div>
 
-        <div>
-          <label className={fieldLabel}>Modelo</label>
-          <select value={model} onChange={(e) => setModel(e.target.value)} className={fieldInput}>
-            <option value="" className="bg-panel">
-              Modelo por defecto del servidor
-            </option>
-            {models.map((m) => (
-              <option key={m} value={m} className="bg-panel">
-                {m}
-              </option>
-            ))}
-          </select>
+        <div className="space-y-4">
+          <div>
+            <label className={fieldLabel}>Fuente del modelo</label>
+            <select
+              value={source}
+              onChange={(e) => handleSourceChange(e.target.value as LlmSourceId)}
+              className={fieldInput}
+            >
+              {sources.length === 0 && (
+                <option value={source} className="bg-panel">
+                  {source}
+                </option>
+              )}
+              {sources.map((s) => (
+                <option key={s.id} value={s.id} className="bg-panel">
+                  {s.label}
+                </option>
+              ))}
+            </select>
+            {currentSource?.note && <p className="mt-1.5 text-sm text-muted">{currentSource.note}</p>}
+          </div>
+
+          <div>
+            <label className={fieldLabel}>Modelo</label>
+            <select value={modelName} onChange={(e) => setModelName(e.target.value)} className={fieldInput}>
+              {source === 'omniroute' && (
+                <option value="" className="bg-panel">
+                  Modelo por defecto del servidor
+                </option>
+              )}
+              {modelsForSource.map((m) => (
+                <option key={m} value={m} className="bg-panel">
+                  {m}
+                </option>
+              ))}
+              {modelName && !modelsForSource.includes(modelName) && (
+                <option value={modelName} className="bg-panel">
+                  {modelName} (actual)
+                </option>
+              )}
+            </select>
+          </div>
+
+          {currentSource?.supportsEffort && (
+            <div>
+              <label className={fieldLabel}>Esfuerzo de razonamiento</label>
+              <select value={effort} onChange={(e) => setEffort(e.target.value)} className={fieldInput}>
+                {(currentSource.efforts ?? []).map((ef) => (
+                  <option key={ef} value={ef} className="bg-panel">
+                    {ef}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {error && (
