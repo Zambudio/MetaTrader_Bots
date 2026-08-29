@@ -7,6 +7,7 @@ import { BacktestLogAnalyzer } from './BacktestLogAnalyzer';
 import { ModelSelector } from './ModelSelector';
 import { api } from '../lib/api';
 import { useAgentStore } from '../lib/store';
+import { parseModelString } from '../lib/modelString';
 
 interface Props {
   agentName: string;
@@ -41,6 +42,9 @@ export const StrategyResultCard = ({
   // hereda el del agente de estrategia (comportamiento histórico).
   const effectiveMql5Model = mql5Model ?? agentModel ?? '';
   const usingStrategyAgentModel = mql5Model === null;
+  // Un modelo por CLI de suscripción (claude/codex) es mucho más lento escribiendo el .mq5 y
+  // clava timeouts; para codegen conviene sugerir el modelo de código de OmniRoute.
+  const isSlowCliModel = parseModelString(effectiveMql5Model).source !== 'omniroute';
 
   useEffect(() => {
     if (initialResult) {
@@ -50,6 +54,21 @@ export const StrategyResultCard = ({
     }
   }, [initialResult, runId]);
 
+  /** Consulta el run y, si ya tiene un mql5Result guardado, recupera ese resultado. */
+  const tryRecoverFromRun = async (): Promise<boolean> => {
+    if (!runId) return false;
+    try {
+      const run = await api.getRun(runId);
+      if (run.mql5Result) {
+        setMql5State({ status: 'done', result: run.mql5Result });
+        return true;
+      }
+    } catch {
+      /* sin conexión — el estado de error normal sigue su curso */
+    }
+    return false;
+  };
+
   const handleGenerate = async () => {
     setMql5State({ status: 'loading' });
     try {
@@ -58,8 +77,24 @@ export const StrategyResultCard = ({
       );
       setMql5State({ status: 'done', result });
     } catch (err) {
-      setMql5State({ status: 'error', message: err instanceof Error ? err.message : 'Error desconocido' });
+      const message = err instanceof Error ? err.message : 'Error desconocido';
+      // El backend puede haber terminado y guardado el resultado en el run justo antes de que
+      // el sondeo fallara (reinicio del servidor, corte del túnel). Antes de dar error, míralo.
+      if (runId && (await tryRecoverFromRun())) return;
+      setMql5State({ status: 'error', message });
     }
+  };
+
+  const handleCheckExisting = async () => {
+    setMql5State({
+      status: 'loading',
+      progress: { attempt: 1, maxAttempts: 1, phase: 'evaluating', details: 'Buscando un resultado ya generado…' },
+    });
+    if (await tryRecoverFromRun()) return;
+    setMql5State({
+      status: 'error',
+      message: 'Todavía no hay ningún EA guardado para este análisis. Vuelve a generar (puedes cambiar de modelo).',
+    });
   };
 
   const handleOptimize = async () => {
@@ -91,6 +126,50 @@ export const StrategyResultCard = ({
 
   const isAdjustPending = verdictDecision === 'ajustar' && !acknowledgeAdjust;
   const canGenerate = isRunComplete && verdictDecision !== 'no_operar' && !isAdjustPending;
+
+  // Selector de motor de generación del EA — se muestra tanto antes de generar como en el
+  // estado de error, para poder cambiar de modelo antes de reintentar.
+  const engineSelector = (
+    <details className="bg-void/40 border border-line/60 rounded-xl px-4 py-3 text-sm">
+      <summary className="cursor-pointer text-paper/90 font-medium select-none">
+        Motor de generación del EA:{' '}
+        <span className="text-cyan font-mono">{effectiveMql5Model || 'por defecto del servidor'}</span>
+        {usingStrategyAgentModel && <span className="text-muted font-normal"> · hereda del agente de estrategia</span>}
+      </summary>
+      <div className="mt-4 space-y-3">
+        <p className="text-xs text-muted">
+          Qué modelo escribe el código MQL5 y aplica las optimizaciones tras cada backtest. Independiente de
+          los modelos del panel de agentes.
+        </p>
+        {isSlowCliModel && (
+          <div className="flex items-start gap-2 rounded-lg bg-cyan/10 border border-cyan/25 px-3 py-2 text-xs text-cyan">
+            <span aria-hidden="true">⚡</span>
+            <span>
+              Para MQL5, <span className="font-mono">auto/best-coding</span> (OmniRoute) suele ser más rápido y
+              estable que un modelo por CLI, que puede tardar varios minutos por llamada.{' '}
+              <button
+                type="button"
+                onClick={() => setMql5Model('auto/best-coding')}
+                className="underline font-medium hover:text-paper transition-colors"
+              >
+                Usar auto/best-coding
+              </button>
+            </span>
+          </div>
+        )}
+        <ModelSelector value={effectiveMql5Model} onChange={(v) => setMql5Model(v)} idPrefix="mql5-model" />
+        {!usingStrategyAgentModel && (
+          <button
+            type="button"
+            onClick={() => setMql5Model(null)}
+            className="text-xs text-cyan hover:text-paper transition-colors"
+          >
+            ↺ Volver a heredar el del agente de estrategia
+          </button>
+        )}
+      </div>
+    </details>
+  );
 
   return (
     <div className="bg-panel border border-cyan/30 rounded-2xl overflow-hidden glow-cyan">
@@ -203,33 +282,7 @@ export const StrategyResultCard = ({
               </div>
             ) : (
               <div className="flex flex-col gap-3">
-                <details className="bg-void/40 border border-line/60 rounded-xl px-4 py-3 text-sm">
-                  <summary className="cursor-pointer text-paper/90 font-medium select-none">
-                    Motor de generación del EA:{' '}
-                    <span className="text-cyan font-mono">{effectiveMql5Model || 'por defecto del servidor'}</span>
-                    {usingStrategyAgentModel && <span className="text-muted font-normal"> · hereda del agente de estrategia</span>}
-                  </summary>
-                  <div className="mt-4 space-y-3">
-                    <p className="text-xs text-muted">
-                      Qué modelo escribe el código MQL5 y aplica las optimizaciones tras cada backtest. Independiente de
-                      los modelos del panel de agentes.
-                    </p>
-                    <ModelSelector
-                      value={effectiveMql5Model}
-                      onChange={(v) => setMql5Model(v)}
-                      idPrefix="mql5-model"
-                    />
-                    {!usingStrategyAgentModel && (
-                      <button
-                        type="button"
-                        onClick={() => setMql5Model(null)}
-                        className="text-xs text-cyan hover:text-paper transition-colors"
-                      >
-                        ↺ Volver a heredar el del agente de estrategia
-                      </button>
-                    )}
-                  </div>
-                </details>
+                {engineSelector}
                 <div className="flex items-center gap-4 flex-wrap">
                   <button
                     onClick={handleGenerate}
@@ -279,16 +332,31 @@ export const StrategyResultCard = ({
         )}
 
         {mql5State.status === 'error' && (
-          <div className="mt-6 pt-6 border-t border-line/60">
+          <div className="mt-6 pt-6 border-t border-line/60 space-y-3">
             <div className="p-4 bg-bear/10 border border-bear/30 rounded-xl space-y-3">
               <p className="text-sm text-bear font-medium">Error en el pipeline MQL5: {mql5State.message}</p>
-              <button
-                onClick={handleGenerate}
-                className="px-4 py-2 rounded-lg bg-cyan/10 text-cyan hover:bg-cyan/20 transition-colors border border-cyan/30 text-sm font-semibold"
-              >
-                Reintentar generación
-              </button>
+              <p className="text-xs text-muted">
+                Puedes cambiar el motor de generación abajo antes de reintentar. Si el servidor se reinició
+                a mitad, quizá el EA ya se generó — compruébalo primero.
+              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={handleGenerate}
+                  className="px-4 py-2 rounded-lg bg-cyan/10 text-cyan hover:bg-cyan/20 transition-colors border border-cyan/30 text-sm font-semibold"
+                >
+                  Reintentar generación
+                </button>
+                {runId && (
+                  <button
+                    onClick={handleCheckExisting}
+                    className="px-4 py-2 rounded-lg bg-paper/5 text-paper/80 hover:bg-paper/10 transition-colors border border-line text-sm font-semibold"
+                  >
+                    ↻ Comprobar si ya se generó
+                  </button>
+                )}
+              </div>
             </div>
+            {engineSelector}
           </div>
         )}
 

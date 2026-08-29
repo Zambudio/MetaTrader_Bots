@@ -6,6 +6,17 @@ import type { Mql5GenerationProgress, Mql5GenerationResult, Mql5Job, StrategyPro
 import type { Mt5LogSession } from '../types/backtest';
 import type { ModelsResponse } from '../types/model';
 
+/** Error de una respuesta HTTP no-OK. Lleva el `status` para que quien llama pueda distinguir
+ *  un fallo transitorio de gateway (502/503/504 del túnel de Cloudflare) de un error real. */
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`/api${path}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -13,7 +24,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body.error ?? `Request failed: ${response.status}`);
+    throw new ApiError(body.error ?? `Request failed: ${response.status}`, response.status);
   }
   return response.json() as Promise<T>;
 }
@@ -92,26 +103,53 @@ export const api = {
 };
 
 const MQL5_POLL_INTERVAL_MS = 2000;
-const MQL5_MAX_CONSECUTIVE_NETWORK_FAILURES = 5;
+// El pipeline MQL5 dura hasta ~25 min y se sondea sobre el túnel de Cloudflare. Un reinicio del
+// servidor, un redeploy o un simple parpadeo del túnel devuelven 502/503/504 en algún sondeo
+// suelto; antes CUALQUIER fallo que no fuera un `TypeError` de red abortaba toda la generación
+// aunque el job del backend siguiera vivo. Ahora se toleran fallos transitorios durante una
+// ventana amplia y solo se abandona si son sostenidos.
+const MQL5_TRANSIENT_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+const MQL5_MAX_CONSECUTIVE_POLL_FAILURES = 30; // ~90 s de fallos seguidos antes de rendirse
+// Tope duro por si el job del backend se quedara colgado en 'running' para siempre. Generoso:
+// el peor caso real (bucle de re-estrategia × ciclos de optimización) puede pasar de una hora.
+const MQL5_ABSOLUTE_POLL_TIMEOUT_MS = 90 * 60 * 1000;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function isTransientPollError(err: unknown): boolean {
+  // `TypeError` = fetch rechazado a nivel de red (DNS, conexión, CORS); ApiError con status de
+  // gateway = el túnel llegó pero el origen no respondió a tiempo (reinicio, redeploy).
+  if (err instanceof TypeError) return true;
+  if (err instanceof ApiError) return MQL5_TRANSIENT_HTTP_STATUSES.has(err.status);
+  return false;
+}
 
 async function pollJob(
   jobId: string,
   onProgress?: (progress: Mql5GenerationProgress) => void
 ): Promise<Mql5GenerationResult> {
-  let consecutiveNetworkFailures = 0;
+  let consecutiveFailures = 0;
+  const startedAt = Date.now();
 
   while (true) {
-    await sleep(MQL5_POLL_INTERVAL_MS);
+    await sleep(MQL5_POLL_INTERVAL_MS + consecutiveFailures * 500);
+
+    if (Date.now() - startedAt > MQL5_ABSOLUTE_POLL_TIMEOUT_MS) {
+      throw new Error(
+        'La generación lleva demasiado tiempo sin terminar. Puede seguir en curso en el servidor — recarga la página en unos minutos para ver si el resultado ya está.'
+      );
+    }
+
     let job: Mql5Job;
     try {
       job = await api.getMql5Job(jobId);
-      consecutiveNetworkFailures = 0;
+      consecutiveFailures = 0;
     } catch (err) {
-      if (err instanceof TypeError) {
-        consecutiveNetworkFailures += 1;
-        if (consecutiveNetworkFailures >= MQL5_MAX_CONSECUTIVE_NETWORK_FAILURES) {
-          throw new Error('No se pudo contactar con el servidor tras varios intentos');
+      if (isTransientPollError(err)) {
+        consecutiveFailures += 1;
+        if (consecutiveFailures >= MQL5_MAX_CONSECUTIVE_POLL_FAILURES) {
+          throw new Error(
+            'No se pudo contactar con el servidor tras varios intentos seguidos. La generación puede seguir en curso — recarga la página en un minuto.'
+          );
         }
         continue;
       }

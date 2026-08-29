@@ -21,6 +21,13 @@ export type Mql5ProgressCallback = (progress: Mql5GenerationProgress) => void;
 const MAX_COMPILE_ATTEMPTS = 3;
 const MAX_BACKTEST_OPTIMIZATION_CYCLES = 3;
 
+// Tiempo máximo para UNA llamada al LLM que escribe/corrige el .mq5. Escribir el archivo
+// completo es la petición más pesada del pipeline: los modelos por CLI de suscripción
+// (`claude`, `codex`) tardan 2-5 min y con el antiguo tope de 180 s se les mataba a mitad
+// (`código null` en los logs) forzando reintentos que alargaban todo. Configurable por si
+// hace falta acotarlo.
+const MQL5_GEN_TIMEOUT_MS = Number(process.env.MQL5_GEN_TIMEOUT_MS) || 300_000;
+
 // Prompt estándar riguroso acorde al contrato wiki-Traiding/proyecto-mt5-bots/17_Estandar_Desarrollo_EAs_con_IA.md
 const MQL5_STANDARD_SYSTEM_PROMPT = `Eres un desarrollador senior de MQL5 siguiendo estrictamente el estándar del proyecto
 (wiki-Traiding/proyecto-mt5-bots/17_Estandar_Desarrollo_EAs_con_IA.md y wiki-Traiding/proyecto-mt5-bots/05_Gestion_Riesgo_EAs.md).
@@ -435,7 +442,7 @@ async function requestEa(model: string, systemPrompt: string, userPrompt: string
     { role: 'user', content: userPrompt },
   ];
 
-  const data = await chatCompletion(model, messages, DELIVER_EA_TOOL, { timeoutMs: 180_000 });
+  const data = await chatCompletion(model, messages, DELIVER_EA_TOOL, { timeoutMs: MQL5_GEN_TIMEOUT_MS });
   const message = data?.choices?.[0]?.message;
   const toolCall = message?.tool_calls?.[0];
 

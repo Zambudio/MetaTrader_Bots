@@ -14,6 +14,7 @@ import { symbolSearchRouter } from './routes/symbolSearch.js';
 import { mql5Router } from './routes/mql5.js';
 import { backtestRouter } from './routes/backtest.js';
 import { reconcileOrphanedRuns } from './store/runsStore.js';
+import { reconcileOrphanedMql5Jobs } from './engine/mql5Jobs.js';
 
 import { apiKeyAuth } from './middleware/auth.js';
 
@@ -61,13 +62,19 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   res.status(500).json({ error: err instanceof Error ? err.message : 'internal error' });
 });
 
-reconcileOrphanedRuns()
-  .then((count) => {
-    if (count > 0) console.warn(`[trading-agents-server] ${count} run(s) huérfano(s) de un arranque anterior marcado(s) como error.`);
-  })
-  .catch((err) => console.error('[trading-agents-server] error reconciliando runs huérfanos', err))
-  .finally(() => {
-    app.listen(PORT, () => {
-      console.log(`[trading-agents-server] listening on http://localhost:${PORT}`);
-    });
+Promise.allSettled([
+  reconcileOrphanedRuns()
+    .then((count) => {
+      if (count > 0) console.warn(`[trading-agents-server] ${count} run(s) huérfano(s) de un arranque anterior marcado(s) como error.`);
+    })
+    .catch((err) => console.error('[trading-agents-server] error reconciliando runs huérfanos', err)),
+  reconcileOrphanedMql5Jobs()
+    .then((count) => {
+      if (count > 0) console.warn(`[trading-agents-server] ${count} job(s) de generación MQL5 huérfano(s) reconciliado(s).`);
+    })
+    .catch((err) => console.error('[trading-agents-server] error reconciliando jobs MQL5 huérfanos', err)),
+]).finally(() => {
+  app.listen(PORT, () => {
+    console.log(`[trading-agents-server] listening on http://localhost:${PORT}`);
   });
+});

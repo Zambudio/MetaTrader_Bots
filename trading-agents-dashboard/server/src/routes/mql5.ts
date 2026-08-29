@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { generateMql5, optimizeMql5 } from '../engine/mql5Generator.js';
-import { createMql5Job, updateMql5JobProgress, completeMql5Job, failMql5Job, getMql5Job } from '../engine/mql5Jobs.js';
+import { createMql5Job, updateMql5JobProgress, completeMql5Job, failMql5Job, getMql5JobPersisted } from '../engine/mql5Jobs.js';
 import { loadRun, saveRun } from '../store/runsStore.js';
 import { listAgents } from '../store/agentsStore.js';
 import { retryStrategyForBacktestFailure, MAX_BACKTEST_STRATEGY_RETRIES } from '../engine/orchestrator.js';
@@ -127,7 +127,7 @@ mql5Router.post(
       return;
     }
 
-    const jobId = createMql5Job();
+    const jobId = createMql5Job(typeof runId === 'string' ? runId : undefined);
     res.status(202).json({ jobId });
 
     void generateWithStrategyFeedbackLoop(strategy, typeof model === 'string' ? model : undefined, typeof runId === 'string' ? runId : undefined, jobId)
@@ -154,7 +154,7 @@ mql5Router.post(
       return;
     }
 
-    const jobId = createMql5Job();
+    const jobId = createMql5Job(typeof runId === 'string' ? runId : undefined);
     res.status(202).json({ jobId });
 
     const iterNumber = typeof iteration === 'number' ? iteration : 2;
@@ -186,7 +186,7 @@ mql5Router.post(
 mql5Router.get(
   '/generate/:jobId',
   asyncHandler(async (req, res) => {
-    const job = getMql5Job(req.params.jobId);
+    const job = await getMql5JobPersisted(req.params.jobId);
     if (!job) {
       res.status(404).json({ error: 'Job no encontrado — probablemente el servidor se reinició durante la generación. Vuelve a intentarlo.' });
       return;
