@@ -9,19 +9,18 @@ updated: 2026-08-29
 
 ## Estado actual
 
-- **Iteración:** 4 en curso. Cambio de tesis aplicado (evento vs estado) + fix de infra (fallback de modelo). Run 7 → GO con tesis de evento, pero el 2º backtest se perdió por el 404 de `cerebras/gpt-oss-120b`. Pendiente: run limpio + backtest.
-- **Fase:** Paso 3 (regenerar). Backend reiniciado ~11:03 con el fallback de omniClient.
-- **Hipótesis viva:** (a) las tesis de tipo "estado" (run 6: `close<EMA20 Y EMA20<EMA50`, 300 ops, esperanza 0.092) diluyen la ventaja → hay que exigir un disparador de **evento**. (b) `cerebras/gpt-oss-120b` hace **404 intermitente** ("Model zai-glm-4.7 is archived, reset after ~2min") — aguanta runs de agentes (~30s) pero tumba los jobs largos de generación MQL5. (c) Bug real: cuando `retryStrategyForBacktestFailure` erroró (por el 404), la ruta consumió el ciclo, corrompió el estado del run (borró la tesis buena, dejó una regresada) y no propagó el error.
-- **Cambios ya probados y su efecto:**
-  - **Roster 6 agentes → `cerebras/gpt-oss-120b`** (iter 2, instrucción de Pedro). Infra resuelta; pipeline completa sin errores. Sincronizado en `agents.json` / `agentsStore.ts` / preset `agentConfigs.json`.
-  - **`agente-riesgo` + "RESTRICCIONES BLOQUEANTES DE SALIDA"** (iter 2): máx 2 predicados, no sobreventa→SELL, R:R ≥ 1.60, SL 1.25–2.5 ATR. Efecto: tesis mecánicamente sanas (R:R correcto, sin RSI<30). Efecto pendular: reglas de tipo "estado" poco discriminantes (`cierre<EMA20 Y EMA20<EMA50`).
-  - **`agente-refutador` + `agente-razonador` + "GATE DE ELEGIBILIDAD PARA BACKTEST"** (iter 3, Codex): lista cerrada de 5–6 bloqueantes (geometría invertida, dirección contra-tendencia clara, condición no mecánica / >2 predicados, R:R<1.50, SL fuera de 1–2.5 ATR sin justificación, niveles ausentes/invertidos) + lista de lo que NO bloquea (3er filtro, momentum del snapshot, R:R>mínimo, datos ausentes, KPIs de backtest, sobreoperación teórica). Efecto: **run 6 → `go` a la primera** con la tesis `price_close < EMA20 AND EMA20 < EMA50` (SELL, R:R 1.60).
-- **Progreso hacia verde (último backtest válido, iter 3):** **3/6 criterios** (ops 300 ✅, rechazos 0 ✅, neto +2470.88 USD ✅; esperanza 0.092 R ❌, PF 1.14 ❌, DD 15.18% ❌). Los 3 fallos marginales.
-- **Cambios de iter 4 (aplicados, `tsc` limpio, sin backtest todavía):**
-  - **`agente-riesgo` punto 1 → "GATE DE TIPO DE SEÑAL"** (Codex opción a): la `condicionEntrada` debe tener exactamente UN disparador de EVENTO (transición vela anterior→actual: cruce, ruptura) + opcionalmente UN filtro de régimen con indicadores del snapshot (pendiente EMA, separación EMA20-EMA50 en ATR, ancho Bollinger; NO ADX). Estado puro prohibido como disparador único. Efecto (run 7): GO con `Evento: cierre anterior > EMA20 y cierre actual < EMA20` + filtro de fuerza.
-  - **`omniClient.ts` cadena de fallback de modelo** (infra, pre-autorizado por Pedro): si el modelo pedido agota reintentos (404/503/timeout), reintenta con `OMNIROUTE_FALLBACK_MODELS` (por defecto `auto/pro-coding,auto/smart`). `chatCompletion` conserva firma; cuerpo per-modelo renombrado a `chatCompletionOnce`. Requiere reinicio del backend (hecho).
-- **Notas de cuota:** Claude ~$12 de sesión (GateGuard interroga cada edición). Codex: 3 `exec` OK (el de iter 4 necesitó copias locales — sandbox de Codex deniega el disco de red de forma intermitente). Cuota Codex sana.
-- **Siguiente acción concreta:** run limpio (run 8) con backend nuevo → esperar GO con tesis de evento → Paso 3 (generación + backtest, ahora con fallback de modelo). Si QG 6/6 → TERMINADO. Si no → Paso 4 (Codex).
+- **Iteración:** 5 completada. **Iteración 6 en curso** — Codex diagnostica un **BUG CRÍTICO del pipeline de backtest**.
+- **Fase:** Paso 4 (Codex-6). El criterio de éxito del bucle (`evaluateQualityGate(session.stats).passed`) **no es fiable**: mide sobre la sesión de backtest equivocada.
+- **⚠️ HALLAZGO CLAVE (iter 5):** run 9 generó un EA que **compila limpio** (la Regla 1 endurecida de iter 5 funcionó) y el pipeline reportó **QG 6/6 en verde**. **ES FALSO.** El log crudo del tester (`Tester/logs/20260829.log`) acumula TODAS las sesiones del día; `mql5Backtester.ts` toma `sessions[last]` pero cogió la sesión de las 10:43 (`EA_EURUSD_H1_3_7xkFD9.ex5`), NO la de run 9 (`EA_EURUSD_H1_V7PbfK8Q.ex5`, 11:24). El resultado REAL de run 9: `final balance 9250.42` → **el EA PERDIÓ $749.58**, RR real ~1.67, win rate ~28% → esperanza negativa → QG real ~2/6. El falso 6/6 vino de: (i) `netProfit` con signo invertido (el parser no encontró `final balance` de esa sesión → fallback roto), (ii) `avgRR 6.0` inflado (en ~26/64 triggers `entryPrice` se parsea ≈ `sl` → risk ≈ 0 → RR 50-80).
+- **Implicación:** **posiblemente TODOS los backtests desde iter 3 se han medido mal** (iter 3 quizá menos, era el primer run del día y el log solo tenía su sesión). Hasta arreglar el parser NO se puede confiar en ningún QG.
+- **Cambios acumulados (todos con `tsc` limpio):**
+  - iter 2: roster → `cerebras/gpt-oss-120b`; `agente-riesgo` "RESTRICCIONES BLOQUEANTES DE SALIDA".
+  - iter 3: `agente-refutador`+`agente-razonador` "GATE DE ELEGIBILIDAD PARA BACKTEST" → primer GO.
+  - iter 4: `agente-riesgo` punto 1 → "GATE DE TIPO DE SEÑAL" (evento vs estado); `omniClient.ts` cadena de fallback de modelo (`cerebras/gpt-oss-120b` hace 404 intermitente). **El fallback FUNCIONA** (validado en runs 8-9).
+  - iter 5: `mql5Generator.ts` Regla 1 → contrato exacto de APIs MQL5 (firma `CTrade::Sell`, handler vacío `OnTradeTransaction`, `HistoryDealGetDouble(DEAL_PROFIT)`). **Efecto: run 9 compila limpio a la primera.** Codex-5 clasificó tipo II.
+- **Estado de la tesis:** runs 7/8/9 producen tesis de evento limpias (cruce EMA20 + filtro de régimen, R:R 1.6-2.0). La de run 9 pierde dinero en backtest real — pero primero hay que poder MEDIRLO bien.
+- **Notas de cuota:** Claude ~$14 de sesión (GateGuard interroga cada edición). Codex: 5 `exec` OK (siempre con copias locales en `scratchpad/src/` — el sandbox de Codex deniega el disco de red).
+- **Siguiente acción concreta:** iter 6 → aplicar el fix del parser de Codex-6 → reiniciar backend → run limpio → **backtest fiable**. Solo entonces se puede juzgar si la tesis de evento pasa o hay que iterarla.
 
 ## Log de iteraciones
 
@@ -82,6 +81,19 @@ updated: 2026-08-29
 - **Commit:** este mismo commit (`loop(iter 4): gate evento/estado en agente-riesgo + fallback de modelo en omniClient`).
 - **Cuota:** Claude ~$12 sesión. Codex 3 `exec` OK.
 - **Siguiente:** run 8 limpio con backend nuevo → GO evento → generación (con fallback) → backtest. Si el fallback funciona, el ciclo debería completar por fin con la tesis de evento.
+
+### Iteración 5 (2026-08-29 11:24) — Regla 1 endurecida (compila) · descubierto BUG del parser de backtest
+
+- **Contexto:** COMPILE — run 8 (`_bIh0cLSHE`, GO con tesis de evento R:R 2.0) generó un `.mq5` que NO compiló: 3 errores en `OnTradeTransaction` (`CTrade::Sell` 7 args, `TRADE_TRANSACTION_POSITION_DELETE`, `trans.profit`). El **fallback de omniClient FUNCIONÓ** (log lo confirma) — el job completó en vez de errar; el problema fue calidad de codegen del modelo de fallback.
+- **Paso 4 — Codex-5** (`codex-out-5.txt`): tipo II (codegen inválido; Regla 17/fidelidad OK). Causa raíz combinada: el `MQL5_STANDARD_SYSTEM_PROMPT` fuerza la sección 8 (`OnTradeTransaction`) sin dar firma exacta ni handler mínimo seguro. Recomendó **opción b**: reemplazar la Regla 1 por un contrato exacto de APIs.
+- **Cambio (Codex-5 opción b):** `mql5Generator.ts` Regla 1 → contrato exacto: `CTrade::Buy/Sell` máx 6 args + patrón correcto (`trade.Sell(vol,_Symbol,0.0,sl,tp,"EA")` + `ResultRetcode/ResultOrder/ResultDeal`); `OnTradeTransaction` handler VACÍO con firma exacta; para logging de cierres `TRADE_TRANSACTION_DEAL_ADD` + `HistoryDealGetDouble(trans.deal, DEAL_PROFIT)`; prohibidos `TRADE_TRANSACTION_POSITION_DELETE`, `trans.profit`. Solo `mql5Generator.ts` (no hay 3-way sync — el prompt es constante de código). Backend reiniciado. `tsc` limpio.
+- **Paso 1 — run 9 `i1LOx9ok0n`:** GO (rc=1) con `condicionEntrada = "CierreAnterior > EMA20 && CierreActual < EMA20 && EMA50 - EMA20 > 0.0015"` (SELL, R:R 1.67).
+- **Paso 3 — job MQL5 `Ram3vPUksX75`** (con `model: auto/pro-coding` directo): **`compileStatus: ok`** — la Regla 1 nueva funcionó, el `OnTradeTransaction` sale como handler vacío correcto.
+- **⚠️ El pipeline reportó QG 6/6 — FALSO.** Ver `## Estado actual`. Verificación forense (Claude): el log del tester (`Tester/logs/20260829.log`) acumula las 3 sesiones del día; `mql5Backtester.ts` cogió la sesión de las 10:43 (`EA_EURUSD_H1_3_7xkFD9.ex5`), no la de run 9. Resultado REAL de run 9: `final balance 9250.42` → **pierde $749.58**, RR ~1.67, esperanza negativa → QG real ~2/6. Falso 6/6 por (i) `netProfit` fallback roto (signo invertido), (ii) `avgRR 6.0` inflado (`entryPrice` de triggers ≈ `sl` en ~26/64 → risk ≈ 0).
+- **Métricas backtest:** el "6/6" reportado es basura. El real es una pérdida.
+- **Commit:** este mismo commit (`loop(iter 5): Regla 1 del prompt MQL5 -> contrato de APIs (compila); documentado el bug del parser de backtest`).
+- **Cuota:** Claude ~$14 sesión. Codex 5 `exec` OK (siempre con copias locales).
+- **Siguiente (iter 6):** Codex-6 diagnostica el bug de aislamiento de sesión en `mql5Backtester.ts` / `mt5LogParser.ts` (brief en `scratchpad/diag-input-6.md`, log crudo y ficheros en `scratchpad/src/`). Aplicar fix → backend → run limpio → primer backtest FIABLE.
 
 ## Ver también
 
