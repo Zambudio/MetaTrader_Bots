@@ -82,7 +82,41 @@ export async function fetchWithTimeout(url: string, options: RequestInit, timeou
   }
 }
 
+/**
+ * Cadena de modelos de reserva. Si el modelo pedido agota sus reintentos (OmniRoute 404 por
+ * enrutar a un modelo archivado, 503 de endpoint free, timeout), se reintenta con el siguiente.
+ * Lección del bucle /loop 2026-08-29: `cerebras/gpt-oss-120b` hace 404 intermitente
+ * ("Model zai-glm-4.7 is archived") y tumbaba los jobs largos de generación MQL5.
+ */
+const FALLBACK_MODELS = (process.env.OMNIROUTE_FALLBACK_MODELS ?? 'auto/pro-coding,auto/smart')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
 export async function chatCompletion(
+  model: string,
+  messages: ChatMessage[],
+  tool?: ToolDefinition | null,
+  options: OmniClientOptions = {}
+): Promise<any> {
+  const chain = [model, ...FALLBACK_MODELS.filter((m) => m !== model)];
+  let lastError: unknown;
+  for (let i = 0; i < chain.length; i++) {
+    try {
+      return await chatCompletionOnce(chain[i], messages, tool, options);
+    } catch (err: any) {
+      lastError = err;
+      if (i < chain.length - 1) {
+        console.warn(
+          `[omniClient] modelo ${chain[i]} agotó reintentos (${String(err?.message ?? err).slice(0, 140)}); probando fallback ${chain[i + 1]}...`
+        );
+      }
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
+async function chatCompletionOnce(
   model: string,
   messages: ChatMessage[],
   tool?: ToolDefinition | null,

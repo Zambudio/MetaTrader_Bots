@@ -9,17 +9,19 @@ updated: 2026-08-29
 
 ## Estado actual
 
-- **Iteración:** 3 completada. **PRIMER `go`** + **PRIMER backtest real** del proyecto. Resultado: **QG 3/6** (marginal). → iteración 4 = Paso 4 (Codex diagnostica el QG_FAIL).
-- **Fase:** cerrando iteración 3. Backend reinició ~10:22 (causa sin confirmar; el `job.result` ya se había persistido en el run — sin pérdida).
-- **Hipótesis viva (confirmada por Codex, iter 3):** el panel confundía "apto para backtest" con "validado para operar en vivo" → **dependencia circular**: exigía KPIs de backtest *antes* de permitir el backtest que los produce. Runs 4 y 5 fueron **falsos negativos** (tesis limpias bloqueadas). Solución aplicada: redefinir refutador + razonador como **gate de elegibilidad estructural** con lista cerrada de bloqueantes.
+- **Iteración:** 4 en curso. Cambio de tesis aplicado (evento vs estado) + fix de infra (fallback de modelo). Run 7 → GO con tesis de evento, pero el 2º backtest se perdió por el 404 de `cerebras/gpt-oss-120b`. Pendiente: run limpio + backtest.
+- **Fase:** Paso 3 (regenerar). Backend reiniciado ~11:03 con el fallback de omniClient.
+- **Hipótesis viva:** (a) las tesis de tipo "estado" (run 6: `close<EMA20 Y EMA20<EMA50`, 300 ops, esperanza 0.092) diluyen la ventaja → hay que exigir un disparador de **evento**. (b) `cerebras/gpt-oss-120b` hace **404 intermitente** ("Model zai-glm-4.7 is archived, reset after ~2min") — aguanta runs de agentes (~30s) pero tumba los jobs largos de generación MQL5. (c) Bug real: cuando `retryStrategyForBacktestFailure` erroró (por el 404), la ruta consumió el ciclo, corrompió el estado del run (borró la tesis buena, dejó una regresada) y no propagó el error.
 - **Cambios ya probados y su efecto:**
   - **Roster 6 agentes → `cerebras/gpt-oss-120b`** (iter 2, instrucción de Pedro). Infra resuelta; pipeline completa sin errores. Sincronizado en `agents.json` / `agentsStore.ts` / preset `agentConfigs.json`.
   - **`agente-riesgo` + "RESTRICCIONES BLOQUEANTES DE SALIDA"** (iter 2): máx 2 predicados, no sobreventa→SELL, R:R ≥ 1.60, SL 1.25–2.5 ATR. Efecto: tesis mecánicamente sanas (R:R correcto, sin RSI<30). Efecto pendular: reglas de tipo "estado" poco discriminantes (`cierre<EMA20 Y EMA20<EMA50`).
   - **`agente-refutador` + `agente-razonador` + "GATE DE ELEGIBILIDAD PARA BACKTEST"** (iter 3, Codex): lista cerrada de 5–6 bloqueantes (geometría invertida, dirección contra-tendencia clara, condición no mecánica / >2 predicados, R:R<1.50, SL fuera de 1–2.5 ATR sin justificación, niveles ausentes/invertidos) + lista de lo que NO bloquea (3er filtro, momentum del snapshot, R:R>mínimo, datos ausentes, KPIs de backtest, sobreoperación teórica). Efecto: **run 6 → `go` a la primera** con la tesis `price_close < EMA20 AND EMA20 < EMA50` (SELL, R:R 1.60).
-- **Progreso hacia verde:** **3/6 criterios** (ops 300 ✅, rechazos 0 ✅, neto +2470.88 USD ✅; esperanza 0.092 R ❌ <0.10, PF 1.14 ❌ <1.20, DD 15.18% ❌ >15.0%). Los 3 fallos son marginales. Salto grande desde 0/6.
-- **Hipótesis para iter 4:** la regla `close < EMA20 AND EMA20 < EMA50` es de tipo "estado" → dispara en ~cada vela bajista (300 ops/año) con ventaja mínima y mucho ruido → esperanza y PF justos, DD alto. Fix probable: empujar a `agente-riesgo` hacia disparadores tipo **evento** (cruce, no estado) y/o un filtro de fuerza de tendencia con indicadores del snapshot (ancho de Bollinger, pendiente de EMA, ATR relativo — NO ADX, que no está). También: el bucle `retryStrategyForBacktestFailure` corrió 1 ciclo pero NO produjo estrategia revisada (`finalStrategy` undefined, `strategyFeedbackCycles: 1`) — Codex debe mirar por qué.
-- **Notas de cuota:** Claude ~$11 de sesión (GateGuard interroga cada edición — coste no despreciable). Codex: 2 `exec` OK. Cuota Codex sana.
-- **Siguiente acción concreta:** iteración 4 → Paso 4: Codex diagnostica el QG_FAIL (`.mq5` entregado: `deliverables/EA_EURUSD_H1_2026-08-29T08-06-58-679Z.mq5`; métricas arriba; `optimizationNotes` con `add_adx_filter` sugerido pero ADX no disponible). Aplicar 1 cambio → nuevo ciclo completo.
+- **Progreso hacia verde (último backtest válido, iter 3):** **3/6 criterios** (ops 300 ✅, rechazos 0 ✅, neto +2470.88 USD ✅; esperanza 0.092 R ❌, PF 1.14 ❌, DD 15.18% ❌). Los 3 fallos marginales.
+- **Cambios de iter 4 (aplicados, `tsc` limpio, sin backtest todavía):**
+  - **`agente-riesgo` punto 1 → "GATE DE TIPO DE SEÑAL"** (Codex opción a): la `condicionEntrada` debe tener exactamente UN disparador de EVENTO (transición vela anterior→actual: cruce, ruptura) + opcionalmente UN filtro de régimen con indicadores del snapshot (pendiente EMA, separación EMA20-EMA50 en ATR, ancho Bollinger; NO ADX). Estado puro prohibido como disparador único. Efecto (run 7): GO con `Evento: cierre anterior > EMA20 y cierre actual < EMA20` + filtro de fuerza.
+  - **`omniClient.ts` cadena de fallback de modelo** (infra, pre-autorizado por Pedro): si el modelo pedido agota reintentos (404/503/timeout), reintenta con `OMNIROUTE_FALLBACK_MODELS` (por defecto `auto/pro-coding,auto/smart`). `chatCompletion` conserva firma; cuerpo per-modelo renombrado a `chatCompletionOnce`. Requiere reinicio del backend (hecho).
+- **Notas de cuota:** Claude ~$12 de sesión (GateGuard interroga cada edición). Codex: 3 `exec` OK (el de iter 4 necesitó copias locales — sandbox de Codex deniega el disco de red de forma intermitente). Cuota Codex sana.
+- **Siguiente acción concreta:** run limpio (run 8) con backend nuevo → esperar GO con tesis de evento → Paso 3 (generación + backtest, ahora con fallback de modelo). Si QG 6/6 → TERMINADO. Si no → Paso 4 (Codex).
 
 ## Log de iteraciones
 
@@ -66,6 +68,20 @@ updated: 2026-08-29
 - **Commit:** `5e7db6c` (gate de elegibilidad → primer GO) + este commit (`loop(iter 3): resultado del primer backtest — QG 3/6`).
 - **Cuota:** Claude ~$10.7 sesión. Codex 2 llamadas OK.
 - **Verificación de que no se relajó demasiado (Codex COMO_VERIFICAR, pendiente si hay dudas):** batería de casos — control positivo (run 5 → GO), geometría invertida → AJUSTAR, contra-tendencia → AJUSTAR, no mecánica → AJUSTAR, R:R 1.49 → AJUSTAR, SL 0.3/6 ATR → AJUSTAR, objeciones espurias del refutador → sigue GO.
+
+### Iteración 4 (2026-08-29 11:05) — gate evento/estado + fallback de modelo · backtest perdido por 404
+
+- **Contexto:** QG_FAIL del iter 3 (3/6, marginal).
+- **Paso 4 — Codex** (necesitó copias locales de 7 ficheros; sandbox de Codex denegó `N:\` y `\\Zambu-nas\` esta vez). Clasificó **tipo I**: la regla `close<EMA20 Y EMA20<EMA50` es de tipo ESTADO → 300 ops, ventaja diluida. Aritmética: `0.42×1.60 − 0.58 = 0.092 R` = la esperanza observada (el `.mq5` es fiel, no hay bug de código). **Por qué el bucle de reintento no reconsideró la tesis:** SÍ se activó, pero `agente-riesgo` erroró con `[cerebras/gpt-oss-120b] [404]: Model zai-glm-4.7 is archived (reset after 1m 38s)`; la ruta consumió el ciclo igual, borró la tesis previa y no propagó el error (bug real). Salida en `scratchpad/codex-out-4.txt`.
+- **Cambio 1 (Codex opción a):** reemplazado el punto 1 del bloque de `agente-riesgo` por "GATE DE TIPO DE SEÑAL" (evento obligatorio + filtro opcional de régimen con indicadores del snapshot). Sincronizado en 3 sitios. `tsc` limpio.
+- **Paso 1 — run 7 `LAsuU2A2qQ`:** **GO a la primera** con `condicionEntrada = "Evento: Cierre anterior > EMA20 y Cierre actual < EMA20. Filtro: EMA20 pendiente negativa Y (EMA20-EMA50) > 0.5*ATR"` (SELL, entry 1.15935 / SL 1.16097 / TP 1.15675, R:R 1.60). Tesis de evento como se pedía.
+- **Paso 3 — job MQL5 `8YNrYoxTGQeH`:** **ERRÓ** durante la corrección de compilación con `[cerebras/gpt-oss-120b] [404]: Model zai-glm-4.7 is archived (reset after 1m 50s)`. Segundo backtest perdido por infra. El job dejó el estado de run 7 corrompido (`retryCount 1`, `backtestFeedbackCount 1`, tesis regresada a tipo estado) — el bug que Codex señaló.
+- **Cambio 2 (infra, pre-autorizado por Pedro):** `omniClient.ts` — cadena de fallback de modelo. `chatCompletion` prueba el modelo pedido y, si agota reintentos, cae a `OMNIROUTE_FALLBACK_MODELS` (`auto/pro-coding` → `auto/smart`). Cuerpo per-modelo renombrado a `chatCompletionOnce`. `tsc` limpio. Backend reiniciado SIN watch (plan §Paso 0): mató `tsx src/index.ts` PID 3484, relanzado; `/api/agents` → 200; `backend.log` en `scratchpad/`.
+- **Re-sondeo de modelos:** `cerebras/gpt-oss-120b` → 404 (aún caído). `auto/pro-coding` y `auto/coding:pro` → 200 vía `gemini-3.5-flash` (~3 s). `auto/best-coding` → `gemini-3.1-flash-lite` (débil). El fallback usa `auto/pro-coding` (gemini-3.5-flash, aceptable).
+- **Métricas backtest:** n/a — el job de iter 4 erró antes del backtest.
+- **Commit:** este mismo commit (`loop(iter 4): gate evento/estado en agente-riesgo + fallback de modelo en omniClient`).
+- **Cuota:** Claude ~$12 sesión. Codex 3 `exec` OK.
+- **Siguiente:** run 8 limpio con backend nuevo → GO evento → generación (con fallback) → backtest. Si el fallback funciona, el ciclo debería completar por fin con la tesis de evento.
 
 ## Ver también
 
