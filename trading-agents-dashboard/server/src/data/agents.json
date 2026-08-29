@@ -7,7 +7,7 @@
     "dependsOn": [],
     "outputType": "text",
     "photo": "https://cdn-icons-png.flaticon.com/512/8637/8637114.png",
-    "model": "cerebras/gpt-oss-120b",
+    "model": "openai:gpt-5.6-sol:medium",
     "enabled": true
   },
   {
@@ -18,7 +18,7 @@
     "dependsOn": [],
     "outputType": "text",
     "photo": "https://cdn-icons-png.flaticon.com/512/4736/4736348.png",
-    "model": "cerebras/gpt-oss-120b"
+    "model": "openai:gpt-5.6-sol:medium"
   },
   {
     "id": "agente-riesgo",
@@ -31,7 +31,7 @@
     ],
     "outputType": "strategy",
     "photo": "https://cdn-icons-png.flaticon.com/512/11126/11126203.png",
-    "model": "cerebras/gpt-oss-120b"
+    "model": "openai:gpt-5.6-sol:medium"
   },
   {
     "id": "agente-validador-tecnico",
@@ -42,7 +42,7 @@
       "agente-riesgo"
     ],
     "outputType": "text",
-    "model": "cerebras/gpt-oss-120b",
+    "model": "openai:gpt-5.6-sol:medium",
     "photo": "https://www.shutterstock.com/image-vector/check-icon-lineal-color-style-260nw-2752163849.jpg"
   },
   {
@@ -54,7 +54,7 @@
       "agente-riesgo"
     ],
     "outputType": "text",
-    "model": "cerebras/gpt-oss-120b",
+    "model": "openai:gpt-5.6-sol:medium",
     "photo": "https://cdn-icons-png.flaticon.com/512/3300/3300148.png"
   },
   {
@@ -68,6 +68,6 @@
     ],
     "outputType": "verdict",
     "photo": "https://static.vecteezy.com/system/resources/previews/012/777/951/non_2x/artificial-intelligence-brain-colorful-icon-ai-sign-vector.jpg",
-    "model": "cerebras/gpt-oss-120b"
+    "model": "claude:sonnet"
   }
 ]

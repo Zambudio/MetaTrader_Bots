@@ -56,5 +56,9 @@
   {
     "symbol": "GBP/CAD",
     "favorite": true
+  },
+  {
+    "symbol": "TSLA",
+    "favorite": true
   }
 ]
