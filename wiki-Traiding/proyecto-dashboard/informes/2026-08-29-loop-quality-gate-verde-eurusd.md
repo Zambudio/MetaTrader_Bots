@@ -40,16 +40,34 @@ Win rate 44.4 % (12 TP / 15 SL), `avgRR` real 1.60.
 5. **iter 5** (`920f99f`) — `mql5Generator.ts` Regla 1 → contrato exacto de APIs MQL5 (los EA compilan a la primera).
 6. **iter 6** (`16be83a`) — `mql5Backtester.ts` + `mt5LogParser.ts`: correlación job↔sesión por el `.ex5` único (el log del tester es acumulativo; el Quality Gate medía sobre la sesión equivocada → falso 6/6 en iter 5). `netProfit` falla cerrado si no hay balance autoritativo.
 
-### Seguimiento recomendado (NO bloqueante — el plan dice "no seguir por si mejora")
+### ⚠️ Robustez / reproducibilidad — LEER
+
+El QG 6/6 de run 10 es **real y verificado**, pero **NO significa que la estrategia sea robusta**:
+
+- La familia de estrategias que el panel converge (cruce a la baja de EMA20 + filtro de fuerza de tendencia, R:R ~1.6) tiene una **ventaja marginal**: esperanza 0.155 R, PF 1.256, sobre solo **27 operaciones** en 12 meses. Está justo por encima del umbral, no holgadamente.
+- **El pipeline NO es determinista** (los agentes son LLMs). En un test posterior de Pedro (2026-08-29, tras el cierre) el panel produjo una tesis parecida pero distinta (`(EMA20 − EMA50) ≤ −0.5*ATR` como filtro, en vez de `(EMA50 − EMA20) > 1.5*ATR`) que **NO pasó el Quality Gate** — backtest perdedor, el bucle `retryStrategyForBacktestFailure` corrió 2 ciclos y aun así no llegó a verde.
+- Conclusión honesta: el bucle demostró que el **pipeline funciona de extremo a extremo** (agentes → GO → MQL5 → backtest real → Quality Gate fiable) y que **puede** producir un EA que pase el gate; NO demostró que produzca uno bueno de forma fiable. Para eso hace falta: (a) una tesis con más ventaja (más filtros de calidad, otro par/timeframe, u otro tipo de setup), y/o (b) los arreglos estructurales (b)/(c) del plan (gate determinista de frecuencia, señal histórica al veredicto), que se dejaron sin hacer porque no se *necesitaron* para el criterio literal del plan.
+
+### Seguimiento recomendado
 
 - El EA solo refresca `lastBarTime` al abrir orden → evalúa la condición en cada tick en barras sin señal (usa `iClose(...,0)` en formación). Tiende a perjudicar, no a inflar; el backtest lo captura. Endurecer el `MQL5_STANDARD_SYSTEM_PROMPT` para exigir evaluación estricta a cierre de barra.
 - Codex-6 OTROS_CANDIDATOS: (i) codegen debe calcular SL/TP/sizing del mismo BID/ASK de referencia; (ii) `cols[0]` del parser es un código, no timestamp → `periodStart/End` mal; (iii) parsear el `Report_*.htm` per-run.
-- Muestra de 27 operaciones: modesta. Considerar validar en otro periodo / walk-forward antes de dar la estrategia por robusta más allá del Quality Gate.
-- 3 arreglos estructurales del plan: **(b) y (c) NO se necesitaron**; el arreglo (a)/fidelidad se cubrió con la Regla 1.
+- Arreglos estructurales del plan: **(a)** se cubrió con la Regla 1 de iter 5; **(b)** (gate determinista de frecuencia de `condicionEntrada`) y **(c)** (señal histórica barata al veredicto, `entrySignalProbe.ts`) siguen sin hacer — son la palanca para que el panel deje de aprobar tesis marginales.
+- Diagnósticos completos de Codex por iteración preservados en `deliverables/diagnosticos-codex/codex-diag-iterN.md`.
 
 ### Cuota
 
 Claude ~$16 de sesión (mucho polling + GateGuard interroga cada edición). Codex: 6 `exec` (`model_reasoning_effort=high`), todos con copias locales en `scratchpad/src/` porque el sandbox de Codex deniega el disco de red de forma intermitente. Cuota Codex sana.
+
+### Estado de la configuración de modelos al cerrar (para la revisión de motores de IA en la próxima conversación)
+
+- **Router:** OmniRoute self-hosted en `http://192.168.1.3:20128` (LAN de Pedro). API key en `trading-agents-dashboard/server/.env`.
+- **Los 6 agentes** (`agents.json`, `agentsStore.ts` `DEFAULT_AGENTS`, y preset `agentConfigs.json` "La primera completa"): todos `cerebras/gpt-oss-120b`. Antes del bucle eran pools `auto/*` (`auto/pro-fast`, `auto/best-chat`, `auto/pro-reasoning`…) que colapsaban a `gemini-3.1-flash-lite` y a endpoints free caídos.
+- **`.env`:** `OMNIROUTE_DEFAULT_MODEL=auto/best-reasoning`. `OMNIROUTE_FALLBACK_MODELS` **no está fijado** → usa el default de `omniClient.ts`: `auto/pro-coding,auto/smart`.
+- **Generación MQL5** (`mql5Generator.ts`): `model || OMNIROUTE_DEFAULT_MODEL || 'auto/best-coding'`. Durante el bucle pasé `auto/pro-coding` a mano en el body de `/api/mql5/generate`; el frontend por defecto usa el modelo de `agente-riesgo` o `auto/best-coding`.
+- **Fiabilidad observada:** `cerebras/gpt-oss-120b` funciona para runs cortos de agentes pero hace **404 intermitente** ("Model zai-glm-4.7 is archived, reset ~2 min") en jobs largos; `auto/pro-coding` (gemini-3.5-flash) hace **502 "local rate-limit queue"** bajo carga. La cadena de fallback de `omniClient.ts` (iter 4) los cubre pero ralentiza mucho.
+- **Modelos NO disponibles en este OmniRoute:** `aug/*` (gpt5.x, sonnet5, opus — falta CLI `auggie`), `tllm/*` (403), `groq/*` (404 mal enrutado), `mistral/*` (402), `gemini/*` directo (429).
+- **Lo que Pedro quiere en la próxima conversación:** que los agentes puedan usar sus **suscripciones de Claude y de OpenAI** directamente (no solo lo que expone este OmniRoute). Requiere decidir: ¿claves de API propias de Anthropic/OpenAI en el `.env` + un cliente nuevo, o configurar OmniRoute para exponer esos proveedores, o un `codex exec`-style para los agentes?
 
 ## Log de iteraciones
 
@@ -118,7 +136,7 @@ Claude ~$16 de sesión (mucho polling + GateGuard interroga cada edición). Code
 - **Cambio (Codex-5 opción b):** `mql5Generator.ts` Regla 1 → contrato exacto: `CTrade::Buy/Sell` máx 6 args + patrón correcto (`trade.Sell(vol,_Symbol,0.0,sl,tp,"EA")` + `ResultRetcode/ResultOrder/ResultDeal`); `OnTradeTransaction` handler VACÍO con firma exacta; para logging de cierres `TRADE_TRANSACTION_DEAL_ADD` + `HistoryDealGetDouble(trans.deal, DEAL_PROFIT)`; prohibidos `TRADE_TRANSACTION_POSITION_DELETE`, `trans.profit`. Solo `mql5Generator.ts` (no hay 3-way sync — el prompt es constante de código). Backend reiniciado. `tsc` limpio.
 - **Paso 1 — run 9 `i1LOx9ok0n`:** GO (rc=1) con `condicionEntrada = "CierreAnterior > EMA20 && CierreActual < EMA20 && EMA50 - EMA20 > 0.0015"` (SELL, R:R 1.67).
 - **Paso 3 — job MQL5 `Ram3vPUksX75`** (con `model: auto/pro-coding` directo): **`compileStatus: ok`** — la Regla 1 nueva funcionó, el `OnTradeTransaction` sale como handler vacío correcto.
-- **⚠️ El pipeline reportó QG 6/6 — FALSO.** Ver `## Estado actual`. Verificación forense (Claude): el log del tester (`Tester/logs/20260829.log`) acumula las 3 sesiones del día; `mql5Backtester.ts` cogió la sesión de las 10:43 (`EA_EURUSD_H1_3_7xkFD9.ex5`), no la de run 9. Resultado REAL de run 9: `final balance 9250.42` → **pierde $749.58**, RR ~1.67, esperanza negativa → QG real ~2/6. Falso 6/6 por (i) `netProfit` fallback roto (signo invertido), (ii) `avgRR 6.0` inflado (`entryPrice` de triggers ≈ `sl` en ~26/64 → risk ≈ 0).
+- **⚠️ El pipeline reportó QG 6/6 — FALSO.** Verificación forense (Claude): el log del tester (`Tester/logs/20260829.log`) acumula las sesiones del día; `mql5Backtester.ts` cogió una sesión anterior (`EA_EURUSD_H1_3_7xkFD9.ex5`, ~10:43), no la de run 9. Resultado REAL de run 9 (según Codex-6): 21 trades, esperanza −0.365 R, PF 0.518, neto −749.58 USD → QG 3/6. El diagnóstico completo y la corrección están en la Iteración 6.
 - **Métricas backtest:** el "6/6" reportado es basura. El real es una pérdida.
 - **Commit:** este mismo commit (`loop(iter 5): Regla 1 del prompt MQL5 -> contrato de APIs (compila); documentado el bug del parser de backtest`).
 - **Cuota:** Claude ~$14 sesión. Codex 5 `exec` OK (siempre con copias locales).
@@ -143,3 +161,5 @@ Claude ~$16 de sesión (mucho polling + GateGuard interroga cada edición). Code
 
 - [`../planes/2026-08-29-loop-quality-gate-verde-eurusd.md`](../planes/2026-08-29-loop-quality-gate-verde-eurusd.md) — el plan / carta operativa que este informe registra.
 - [`2026-08-29-verificacion-fix-condicion-entrada-y-afinado-prompts.md`](2026-08-29-verificacion-fix-condicion-entrada-y-afinado-prompts.md) — estado del sistema justo antes de este bucle.
+- [`../deliverables/EA_EURUSD_H1_ganador_2026-08-29.mq5`](../deliverables/EA_EURUSD_H1_ganador_2026-08-29.mq5) — el EA que pasó el Quality Gate 6/6 (+ `.ex5`, `.meta.json`).
+- [`../deliverables/diagnosticos-codex/`](../deliverables/diagnosticos-codex/) — los 6 diagnósticos de `codex exec` por iteración (extraídos, con el TEXTO EXACTO de cada cambio propuesto).
