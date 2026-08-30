@@ -29,10 +29,11 @@ const EDGE_COLOR: Record<AgentRunStatus, string> = {
   waiting: 'var(--color-line)',
   running: 'var(--color-cyan)',
   done: 'var(--color-bull)',
+  skipped: 'var(--color-muted)',
   error: 'var(--color-bear)',
 };
 
-const MARKER_STATES: AgentRunStatus[] = ['idle', 'waiting', 'running', 'done', 'error'];
+const MARKER_STATES: AgentRunStatus[] = ['idle', 'waiting', 'running', 'done', 'skipped', 'error'];
 const ANCHOR_GAP = 6;
 
 /**
@@ -65,7 +66,7 @@ export function AgentConnections({ agents, resultsByAgentId, containerRef, cardR
 
     const childrenByParent = new Map<string, Agent[]>();
     for (const agent of agents) {
-      for (const parentId of agent.dependsOn) {
+      for (const parentId of [...agent.dependsOn, ...(agent.optionalDependsOn ?? [])]) {
         if (!agents.some((candidate) => candidate.id === parentId)) continue;
         if (!childrenByParent.has(parentId)) childrenByParent.set(parentId, []);
         childrenByParent.get(parentId)!.push(agent);

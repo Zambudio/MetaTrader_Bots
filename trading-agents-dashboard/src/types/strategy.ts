@@ -1,4 +1,5 @@
 export interface StrategyProposalLite {
+  status?: 'valid' | 'abstain' | 'data_not_available';
   pair: string;
   timeframe: string;
   resumen: string;
@@ -15,6 +16,11 @@ export interface StrategyProposalLite {
   riskPercent?: number;
   entradasEscalonadas?: string;
   confianza?: string;
+  confidence?: number;
+  evidence?: Array<{ claim: string; source: string }>;
+  risks?: string[];
+  invalidations?: string[];
+  dataQuality?: 'good' | 'stale' | 'insufficient' | 'unavailable';
 }
 
 import type { Mt5LogSession } from './backtest';

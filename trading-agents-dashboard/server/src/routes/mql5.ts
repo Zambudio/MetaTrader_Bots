@@ -2,11 +2,12 @@ import { Router } from 'express';
 import { generateMql5, optimizeMql5 } from '../engine/mql5Generator.js';
 import { createMql5Job, updateMql5JobProgress, completeMql5Job, failMql5Job, getMql5JobPersisted } from '../engine/mql5Jobs.js';
 import { loadRun, saveRun } from '../store/runsStore.js';
-import { listAgents } from '../store/agentsStore.js';
 import { retryStrategyForBacktestFailure, MAX_BACKTEST_STRATEGY_RETRIES } from '../engine/orchestrator.js';
 import { evaluateQualityGate } from '../engine/qualityGate.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import type { Mql5GenerationResult, StrategyProposalLite } from '../types.js';
+import { hashConfiguration } from '../config/configValidation.js';
+import { validateMql5SourceRun } from '../engine/mql5Eligibility.js';
+import type { Mql5GenerationResult, Run, StrategyProposalLite } from '../types.js';
 
 export const mql5Router = Router();
 
@@ -65,7 +66,8 @@ async function generateWithStrategyFeedbackLoop(
     ) {
       const run = await loadRun(runId);
       if (!run) break;
-      const agents = await listAgents();
+      if (!run.configuration) break;
+      const agents = structuredClone(run.configuration.agents);
 
       updateMql5JobProgress(jobId, {
         attempt: 1,
@@ -118,6 +120,23 @@ function isValidStrategy(value: unknown): value is StrategyProposalLite {
   return val.valid;
 }
 
+async function validatedSourceRun(
+  runId: unknown,
+  strategy: StrategyProposalLite
+): Promise<{ run?: Run; status?: number; error?: string }> {
+  if (typeof runId !== 'string' || !runId) {
+    return { status: 400, error: 'runId es obligatorio: MQL5 solo opera sobre un run validado.' };
+  }
+  const run = await loadRun(runId);
+  if (!run) return { status: 404, error: 'run not found' };
+  if (!run.configuration || run.configurationHash !== hashConfiguration(run.configuration)) {
+    return { status: 409, error: 'La configuración fijada en el run no supera la verificación de integridad.' };
+  }
+  const eligibilityError = validateMql5SourceRun(run, strategy);
+  if (eligibilityError) return { status: 409, error: eligibilityError };
+  return { run };
+}
+
 mql5Router.post(
   '/generate',
   asyncHandler(async (req, res) => {
@@ -126,20 +145,22 @@ mql5Router.post(
       res.status(400).json({ error: 'strategy inválida o incompleta' });
       return;
     }
+    const source = await validatedSourceRun(runId, strategy);
+    if (!source.run) {
+      res.status(source.status ?? 409).json({ error: source.error });
+      return;
+    }
 
-    const jobId = createMql5Job(typeof runId === 'string' ? runId : undefined);
+    const jobId = createMql5Job(runId);
     res.status(202).json({ jobId });
 
-    void generateWithStrategyFeedbackLoop(strategy, typeof model === 'string' ? model : undefined, typeof runId === 'string' ? runId : undefined, jobId)
+    void generateWithStrategyFeedbackLoop(strategy, typeof model === 'string' ? model : undefined, runId, jobId)
       .then(async (result) => {
+        const run = await loadRun(runId);
+        if (!run) throw new Error('El run fuente desapareció antes de persistir el resultado MQL5.');
+        run.mql5Result = result;
+        await saveRun(run);
         completeMql5Job(jobId, result);
-        if (typeof runId === 'string' && runId) {
-          const run = await loadRun(runId);
-          if (run) {
-            run.mql5Result = result;
-            await saveRun(run).catch(() => {});
-          }
-        }
       })
       .catch((err) => failMql5Job(jobId, err instanceof Error ? err.message : 'Error desconocido'));
   })
@@ -154,7 +175,13 @@ mql5Router.post(
       return;
     }
 
-    const jobId = createMql5Job(typeof runId === 'string' ? runId : undefined);
+    const source = await validatedSourceRun(runId, strategy);
+    if (!source.run) {
+      res.status(source.status ?? 409).json({ error: source.error });
+      return;
+    }
+
+    const jobId = createMql5Job(runId);
     res.status(202).json({ jobId });
 
     const iterNumber = typeof iteration === 'number' ? iteration : 2;
@@ -170,14 +197,11 @@ mql5Router.post(
       notes
     )
       .then(async (result) => {
+        const run = await loadRun(runId);
+        if (!run) throw new Error('El run fuente desapareció antes de persistir la optimización MQL5.');
+        run.mql5Result = result;
+        await saveRun(run);
         completeMql5Job(jobId, result);
-        if (typeof runId === 'string' && runId) {
-          const run = await loadRun(runId);
-          if (run) {
-            run.mql5Result = result;
-            await saveRun(run).catch(() => {});
-          }
-        }
       })
       .catch((err) => failMql5Job(jobId, err instanceof Error ? err.message : 'Error desconocido'));
   })

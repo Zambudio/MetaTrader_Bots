@@ -49,8 +49,8 @@ export const api = {
     request<{ ok: boolean }>(`/agent-configs/${id}`, { method: 'DELETE' }),
   listPairs: () => request<SavedPair[]>('/pairs'),
   listModels: () => request<ModelsResponse>('/models'),
-  startRun: (pair: string, timeframe: string, maxRetries?: number) =>
-    request<Run>('/runs', { method: 'POST', body: JSON.stringify({ pair, timeframe, maxRetries }) }),
+  startRun: (pair: string, timeframe: string, maxRetries?: number, configurationId?: string, executionMode?: 'real' | 'simulation') =>
+    request<Run>('/runs', { method: 'POST', body: JSON.stringify({ pair, timeframe, maxRetries, configurationId, executionMode }) }),
   resumeRun: (id: string, agentId?: string) =>
     request<Run>(`/runs/${id}/resume`, { method: 'POST', body: JSON.stringify({ agentId }) }),
   getRun: (id: string) => request<Run>(`/runs/${id}`),

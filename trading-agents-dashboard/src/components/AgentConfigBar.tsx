@@ -60,7 +60,7 @@ export const AgentConfigBar = () => {
         </option>
         {presets.map((p) => (
           <option key={p.id} value={p.id} className="bg-panel">
-            {p.name}
+            {p.name} · {p.version} · {p.referenceAsset}
           </option>
         ))}
       </select>
@@ -76,7 +76,7 @@ export const AgentConfigBar = () => {
         </button>
       )}
 
-      {activePresetId && (
+      {activePresetId && !activePresetId.startsWith('baseline-') && (
         <button
           onClick={() => overwriteActivePreset()}
           disabled={isAnalysing}
@@ -94,7 +94,7 @@ export const AgentConfigBar = () => {
         Guardar como…
       </button>
 
-      {activePresetId && (
+      {activePresetId && !activePresetId.startsWith('baseline-') && (
         <button
           onClick={handleDelete}
           disabled={isAnalysing}

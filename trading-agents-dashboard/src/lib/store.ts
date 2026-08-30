@@ -91,12 +91,14 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
   loadInitialData: async () => {
     set({ isLoading: true, error: null, errorDomain: null });
     try {
-      const [agents, pairs, modelsData, configState] = await Promise.all([
+      const [loadedAgents, pairs, modelsData, configState] = await Promise.all([
         api.listAgents(),
         api.listPairs(),
         api.listModels(),
         api.listAgentConfigs(),
       ]);
+      const activeConfig = configState.presets.find((preset) => preset.id === configState.activePresetId);
+      const agents = activeConfig ? (await api.loadAgentConfig(activeConfig.id)).agents : loadedAgents;
       set((state) => ({
         agents,
         pairs,
@@ -202,7 +204,17 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
   loadPreset: async (id) => {
     try {
       const { agents, activePresetId } = await api.loadAgentConfig(id);
-      set({ agents, activePresetId, error: null, errorDomain: null });
+      const preset = get().presets.find((item) => item.id === id);
+      set({
+        agents,
+        activePresetId,
+        selectedPair: preset?.referenceAsset ?? get().selectedPair,
+        timeframe: preset?.defaultTimeframe ?? get().timeframe,
+        maxRetries: preset?.consensus.maxRevisionRounds ?? get().maxRetries,
+        mql5Model: preset?.mql5Model ?? get().mql5Model,
+        error: null,
+        errorDomain: null,
+      });
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Error al cargar la configuración',
@@ -251,10 +263,10 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
   },
 
   runWorkflow: async () => {
-    const { selectedPair, timeframe, maxRetries } = get();
+    const { selectedPair, timeframe, maxRetries, activePresetId } = get();
     set({ isAnalysing: true, error: null, errorDomain: null });
     try {
-      const run = await api.startRun(selectedPair, timeframe, maxRetries);
+      const run = await api.startRun(selectedPair, timeframe, maxRetries, activePresetId ?? undefined, 'real');
       set({ currentRun: run });
 
       let attempts = 0;

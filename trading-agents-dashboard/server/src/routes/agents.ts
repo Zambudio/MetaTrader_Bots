@@ -25,7 +25,7 @@ agentsRouter.post(
       return;
     }
 
-    const resolvedOutputType = outputType === 'strategy' || outputType === 'verdict' ? outputType : 'text';
+    const resolvedOutputType = outputType === 'analysis' || outputType === 'strategy' || outputType === 'verdict' ? outputType : 'text';
 
     // 4.3 Protección de unicidad para 'verdict' y 'strategy'
     if (resolvedOutputType === 'verdict' && agents.some((a) => a.outputType === 'verdict')) {
@@ -54,6 +54,13 @@ agentsRouter.post(
       outputType: resolvedOutputType,
       photo: typeof photo === 'string' && photo ? photo : undefined,
       model: typeof model === 'string' && model ? model : undefined,
+      activation: { mode: 'always', description: 'Configuración manual: ejecutar siempre.' },
+      abstentionConditions: ['Datos obligatorios ausentes'],
+      tools: [],
+      inputs: [],
+      outputs: [resolvedOutputType],
+      weight: resolvedOutputType === 'verdict' ? 1 : 0.1,
+      interventionType: resolvedOutputType === 'verdict' ? 'judge' : resolvedOutputType === 'strategy' ? 'synthesizer' : 'specialist',
     };
 
     await saveAgents([...agents, newAgent]);
@@ -96,8 +103,8 @@ agentsRouter.put(
 
     if ('outputType' in updates) {
       const newOutputType = updates.outputType;
-      if (newOutputType !== 'text' && newOutputType !== 'strategy' && newOutputType !== 'verdict') {
-        res.status(400).json({ error: "outputType must be one of 'text', 'strategy', 'verdict'" });
+      if (newOutputType !== 'text' && newOutputType !== 'analysis' && newOutputType !== 'strategy' && newOutputType !== 'verdict') {
+        res.status(400).json({ error: "outputType must be one of 'text', 'analysis', 'strategy', 'verdict'" });
         return;
       }
       // 4.3 Protección de unicidad para 'verdict' y 'strategy'

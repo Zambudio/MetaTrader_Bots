@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { nanoid } from 'nanoid';
-import { listAgents } from '../store/agentsStore.js';
 import { saveRun, loadRun, listRuns, deleteRun } from '../store/runsStore.js';
-import { executeRun, filterEnabledAgents, DEFAULT_MAX_RETRIES } from '../engine/orchestrator.js';
+import { executeRun, DEFAULT_MAX_RETRIES } from '../engine/orchestrator.js';
+import { getActivePreset, getPreset } from '../store/agentConfigsStore.js';
+import { hashConfiguration, validatePreset } from '../config/configValidation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import type { Run } from '../types.js';
 
@@ -19,13 +20,27 @@ runsRouter.get(
 runsRouter.post(
   '/',
   asyncHandler(async (req, res) => {
-    const { pair, timeframe, maxRetries } = req.body ?? {};
+    const { pair, timeframe, maxRetries, configurationId, executionMode } = req.body ?? {};
     if (!pair || typeof pair !== 'string') {
       res.status(400).json({ error: 'pair is required' });
       return;
     }
 
-    const agents = filterEnabledAgents(await listAgents());
+    const preset = typeof configurationId === 'string' ? await getPreset(configurationId) : await getActivePreset();
+    if (!preset) {
+      res.status(400).json({ error: 'no hay configuración activa' });
+      return;
+    }
+    const presetValidation = validatePreset(preset);
+    if (!presetValidation.valid) {
+      res.status(400).json({ error: `configuración inválida: ${presetValidation.errors.join('; ')}` });
+      return;
+    }
+    if (preset.id.startsWith('baseline-') && pair !== preset.referenceAsset) {
+      res.status(400).json({ error: `La baseline ${preset.name} requiere el activo de referencia ${preset.referenceAsset}; recibido ${pair}.` });
+      return;
+    }
+    const agents = structuredClone(preset.agents);
     if (agents.length === 0) {
       res.status(400).json({ error: 'no hay agentes configurados' });
       return;
@@ -38,8 +53,15 @@ runsRouter.post(
       status: 'running',
       createdAt: new Date().toISOString(),
       results: agents.map((a) => ({ agentId: a.id, status: 'waiting' })),
+      configuration: structuredClone(preset),
+      configurationHash: hashConfiguration(preset),
+      executionMode: executionMode === 'simulation' ? 'simulation' : 'real',
+      expectedAgentIds: agents.map((agent) => agent.id),
+      issues: [],
       retryCount: 0,
-      maxRetries: typeof maxRetries === 'number' && Number.isFinite(maxRetries) ? maxRetries : DEFAULT_MAX_RETRIES,
+      maxRetries: typeof maxRetries === 'number' && Number.isFinite(maxRetries)
+        ? maxRetries
+        : preset.consensus.maxRevisionRounds ?? DEFAULT_MAX_RETRIES,
     };
     await saveRun(run);
 
@@ -62,7 +84,15 @@ runsRouter.post(
       return;
     }
 
-    const agents = filterEnabledAgents(await listAgents());
+    if (!run.configuration) {
+      res.status(409).json({ error: 'El run histórico no contiene una configuración inmutable y no puede reanudarse de forma segura.' });
+      return;
+    }
+    if (run.configurationHash !== hashConfiguration(run.configuration)) {
+      res.status(409).json({ error: 'El snapshot de configuración del run no supera la verificación de integridad.' });
+      return;
+    }
+    const agents = structuredClone(run.configuration.agents);
     const { agentId } = req.body ?? {};
 
     const { resumeRun } = await import('../engine/orchestrator.js');

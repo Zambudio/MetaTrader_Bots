@@ -34,7 +34,6 @@ export const StrategyResultCard = ({
     | { status: 'error'; message: string }
     | { status: 'done'; result: Mql5GenerationResult }
   >(initialResult ? { status: 'done', result: initialResult } : { status: 'idle' });
-  const [acknowledgeAdjust, setAcknowledgeAdjust] = useState(false);
 
   const mql5Model = useAgentStore((s) => s.mql5Model);
   const setMql5Model = useAgentStore((s) => s.setMql5Model);
@@ -124,8 +123,7 @@ export const StrategyResultCard = ({
     }
   };
 
-  const isAdjustPending = verdictDecision === 'ajustar' && !acknowledgeAdjust;
-  const canGenerate = isRunComplete && verdictDecision !== 'no_operar' && !isAdjustPending;
+  const canGenerate = Boolean(runId) && isRunComplete && verdictDecision === 'go';
 
   // Selector de motor de generación del EA — se muestra tanto antes de generar como en el
   // estado de error, para poder cambiar de modelo antes de reintentar.
@@ -260,7 +258,7 @@ export const StrategyResultCard = ({
                   El Razonador ha emitido un veredicto de <strong>NO OPERAR</strong> para este par y condiciones de mercado.
                 </span>
               </div>
-            ) : isAdjustPending ? (
+            ) : verdictDecision === 'ajustar' ? (
               <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2.5">
                 <div className="flex items-start gap-3 text-sm text-amber-300">
                   <span className="text-lg">⚠️</span>
@@ -270,15 +268,9 @@ export const StrategyResultCard = ({
                     lo que el Refutador señaló como débil.
                   </span>
                 </div>
-                <label className="flex items-center gap-2 pt-1.5 border-t border-amber-500/20 cursor-pointer text-xs text-paper/80">
-                  <input
-                    type="checkbox"
-                    checked={acknowledgeAdjust}
-                    onChange={(e) => setAcknowledgeAdjust(e.target.checked)}
-                    className="rounded bg-panel border-line text-amber-400 focus:ring-amber-400/40"
-                  />
-                  <span>Entiendo las objeciones pendientes y quiero generar el código de todas formas bajo mi responsabilidad.</span>
-                </label>
+                <p className="pt-1.5 border-t border-amber-500/20 text-xs text-paper/80">
+                  La generación queda bloqueada hasta que un nuevo run resuelva las objeciones y termine con GO.
+                </p>
               </div>
             ) : (
               <div className="flex flex-col gap-3">

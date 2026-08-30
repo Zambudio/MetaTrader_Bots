@@ -7,7 +7,8 @@
     "dev": "tsx watch --env-file-if-exists=.env src/index.ts",
     "start": "node --env-file-if-exists=.env start.mjs",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.scripts.json",
+    "validate:baselines": "tsx --env-file-if-exists=.env scripts/validateBaselines.ts"
   },
   "dependencies": {
     "cors": "^2.8.5",

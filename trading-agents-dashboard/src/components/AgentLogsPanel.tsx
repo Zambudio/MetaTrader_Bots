@@ -21,7 +21,8 @@ export const AgentLogsPanel = ({ agents, currentRun, isAnalysing, onResume }: Ag
     return null;
   }
 
-  const agentsById = new Map(agents.map((a) => [a.id, a]));
+  const historicalAgents = currentRun.configuration?.agents ?? agents;
+  const agentsById = new Map(historicalAgents.map((a) => [a.id, a]));
   const resultsWithAgents = currentRun.results
     .map((result) => ({
       result,
@@ -56,6 +57,9 @@ export const AgentLogsPanel = ({ agents, currentRun, isAnalysing, onResume }: Ag
       }
       if (result.output) {
         textLines.push(`\nRESPUESTA:\n${result.output}\n`);
+      }
+      if (result.analysis) {
+        textLines.push(`\nANÁLISIS ESTRUCTURADO:\n${JSON.stringify(result.analysis, null, 2)}\n`);
       }
       if (result.strategy) {
         textLines.push(`\nESTRATEGIA:\n${JSON.stringify(result.strategy, null, 2)}\n`);
@@ -98,7 +102,7 @@ export const AgentLogsPanel = ({ agents, currentRun, isAnalysing, onResume }: Ag
     if (filter === 'errors') return result.status === 'error';
     if (filter === 'strategy') return agent.outputType === 'strategy' && result.strategy;
     if (filter === 'verdict') return agent.outputType === 'verdict' && result.verdict;
-    if (filter === 'text') return agent.outputType === 'text' && result.output;
+    if (filter === 'text') return (agent.outputType === 'text' && result.output) || (agent.outputType === 'analysis' && result.analysis);
     return true;
   });
 
@@ -308,6 +312,7 @@ export const AgentLogsPanel = ({ agents, currentRun, isAnalysing, onResume }: Ag
                     {result.status === 'error' && '⚠️ Error'}
                     {result.status === 'running' && '⏳ Procesando…'}
                     {result.status === 'waiting' && '⏱️ En espera'}
+                    {result.status === 'skipped' && 'Omitido'}
                   </span>
 
                   {result.status === 'error' && (
@@ -340,6 +345,31 @@ export const AgentLogsPanel = ({ agents, currentRun, isAnalysing, onResume }: Ag
                     <p className="text-xs text-muted pt-2 border-t border-bear/20">
                       El flujo se ha detenido para no enviar datos inconsistentes a los siguientes agentes. Pulsa en <strong>Reintentar</strong> para volver a ejecutar desde este nodo.
                     </p>
+                  </div>
+                )}
+
+                {result.status === 'skipped' && (
+                  <div className="p-4 bg-paper/5 border border-line rounded-xl text-sm text-muted">
+                    Motivo de omisión: <span className="font-mono text-paper">{result.omissionReason ?? 'no especificado'}</span>
+                  </div>
+                )}
+
+                {result.analysis && (
+                  <div className="p-5 bg-card/80 border border-line rounded-xl space-y-3">
+                    <div className="flex flex-wrap gap-2 text-xs font-mono">
+                      <span className="text-cyan">{result.analysis.status}</span>
+                      <span className="text-muted">sesgo={result.analysis.bias}</span>
+                      <span className="text-muted">confianza={result.analysis.confidence.toFixed(2)}</span>
+                      <span className="text-muted">datos={result.analysis.dataQuality}</span>
+                    </div>
+                    <p className="text-sm text-paper">{result.analysis.conclusion}</p>
+                    {result.analysis.facts.length > 0 && (
+                      <ul className="list-disc list-inside text-xs text-paper/80 space-y-1">
+                        {result.analysis.facts.map((fact, index) => (
+                          <li key={index}>{fact.claim} <span className="text-muted">[{fact.source}]</span></li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 )}
 

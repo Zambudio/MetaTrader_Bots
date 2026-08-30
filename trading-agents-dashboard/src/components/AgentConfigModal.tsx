@@ -162,6 +162,9 @@ export const AgentConfigModal = ({ agent, otherAgents, onClose, onSave, onDelete
               <option value="text" className="bg-panel">
                 Análisis de texto
               </option>
+              <option value="analysis" className="bg-panel">
+                Análisis estructurado
+              </option>
               <option value="strategy" className="bg-panel">
                 Estrategia final
               </option>

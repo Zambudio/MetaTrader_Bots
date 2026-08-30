@@ -114,8 +114,9 @@ describe('runPass — ejecución paralela por nivel', () => {
     const byId = new Map(run.results.map((r) => [r.agentId, r]));
     expect(byId.get('a1')!.status).toBe('error');
     expect(byId.get('a2')!.status).toBe('done'); // el hermano sí completó
-    expect(byId.get('a3')!.status).toBe('waiting'); // nunca arrancó
-    expect(byId.get('a4')!.status).toBe('waiting');
+    expect(byId.get('a3')!.status).toBe('skipped');
+    expect(byId.get('a3')!.omissionReason).toBe('MISSING_REQUIRED_DEPENDENCY');
+    expect(byId.get('a4')!.status).toBe('skipped');
     expect(timeline.a3).toBeUndefined();
   });
 });

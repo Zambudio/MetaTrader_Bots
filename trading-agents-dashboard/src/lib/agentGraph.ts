@@ -1,12 +1,14 @@
 import type { Agent } from '../types/agent';
 
+const allDependencies = (agent: Agent) => [...new Set([...agent.dependsOn, ...(agent.optionalDependsOn ?? [])])];
+
 export function buildLevels(agents: Agent[]): Agent[][] {
   const byId = new Map(agents.map((a) => [a.id, a]));
   const childrenOf = new Map<string, Agent[]>();
   const inDegree = new Map<string, number>();
 
   for (const agent of agents) {
-    const validParents = agent.dependsOn.filter((id) => byId.has(id));
+    const validParents = allDependencies(agent).filter((id) => byId.has(id));
     inDegree.set(agent.id, validParents.length);
     for (const parentId of validParents) {
       if (!childrenOf.has(parentId)) childrenOf.set(parentId, []);
@@ -74,7 +76,7 @@ export function wouldCreateCycle(agents: Agent[], agentId: string, candidatePare
     if (visited.has(current)) continue;
     visited.add(current);
     const agent = byId.get(current);
-    if (agent) queue.push(...agent.dependsOn);
+    if (agent) queue.push(...allDependencies(agent));
   }
   return false;
 }

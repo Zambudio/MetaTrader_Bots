@@ -25,9 +25,16 @@ export function parsePriceFromText(val: string | number | undefined): number | n
 
 export function validateStrategyProposal(
   proposal: StrategyProposalLite,
-  options: { minRrRatio?: number; requireNonEmptyFields?: boolean } = {}
+  options: {
+    minRrRatio?: number;
+    requireNonEmptyFields?: boolean;
+    maxRiskPercent?: number;
+    atrValue?: number;
+    minStopAtr?: number;
+    maxStopAtr?: number;
+  } = {}
 ): StrategyValidationResult {
-  const minRr = options.minRrRatio ?? 1.49;
+  const minRr = options.minRrRatio ?? 1.5;
   const requireNonEmpty = options.requireNonEmptyFields ?? true;
 
   // 2.5: Validar campos no vacíos
@@ -126,6 +133,24 @@ export function validateStrategyProposal(
       valid: false,
       error: `Relación Riesgo/Recompensa insuficiente: R:R = 1:${rrRatio.toFixed(2)} (requerido mínimo 1:${minRr.toFixed(2)}). Riesgo: ${riskDist.toFixed(5)}, Recompensa: ${rewardDist.toFixed(5)}.`,
     };
+  }
+
+  if (options.maxRiskPercent !== undefined) {
+    if (proposal.riskPercent === undefined || !Number.isFinite(proposal.riskPercent) || proposal.riskPercent <= 0) {
+      return { valid: false, error: 'riskPercent debe ser numérico y mayor que cero.' };
+    }
+    if (proposal.riskPercent > options.maxRiskPercent) {
+      return { valid: false, error: `Riesgo porcentual ${proposal.riskPercent}% supera el máximo determinista ${options.maxRiskPercent}%.` };
+    }
+  }
+
+  if (options.atrValue !== undefined && options.atrValue > 0) {
+    const stopAtr = riskDist / options.atrValue;
+    const minStopAtr = options.minStopAtr ?? 1;
+    const maxStopAtr = options.maxStopAtr ?? 2.5;
+    if (stopAtr < minStopAtr || stopAtr > maxStopAtr) {
+      return { valid: false, error: `Distancia del Stop Loss = ${stopAtr.toFixed(2)} ATR; debe estar entre ${minStopAtr} y ${maxStopAtr} ATR.` };
+    }
   }
 
   return {

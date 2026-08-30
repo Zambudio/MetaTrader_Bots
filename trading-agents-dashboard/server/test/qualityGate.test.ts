@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateQualityGate, QUALITY_GATE_THRESHOLDS } from '../src/engine/qualityGate.js';
+import { evaluateQualityGate } from '../src/engine/qualityGate.js';
 import type { Mt5LogStats } from '../src/engine/mt5LogParser.js';
 
 describe('3.4 Tests automatizados: Quality Gate Cuantitativo (Doc 20 §4)', () => {

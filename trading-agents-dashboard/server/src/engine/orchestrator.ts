@@ -1,8 +1,9 @@
-import type { Agent, AgentRunResult, Run, StrategyProposalLite, VerdictResult } from '../types.js';
+import type { Agent, AgentRunResult, DataCapability, Run, StrategyProposalLite, VerdictResult } from '../types.js';
 import { runAgent } from './executor.js';
 import { saveRun } from '../store/runsStore.js';
 import { buildMarketSnapshot } from './marketSnapshot.js';
 import { validateStrategyProposal } from './strategyValidator.js';
+import { allDependencies } from '../config/configValidation.js';
 
 export const DEFAULT_MAX_RETRIES = 2;
 export const MAX_RETRIES_CAP = 3;
@@ -27,7 +28,7 @@ export function detectCycle(agents: Agent[], agentId: string, candidateParentId:
     if (visited.has(current)) continue;
     visited.add(current);
     const agent = byId.get(current);
-    if (agent) queue.push(...agent.dependsOn);
+    if (agent) queue.push(...allDependencies(agent));
   }
   return false;
 }
@@ -58,9 +59,11 @@ export function filterEnabledAgents(agents: Agent[]): Agent[] {
 export function validateGraphIntegrity(agents: Agent[]): { valid: boolean; error?: string } {
   const byId = new Map(agents.map((a) => [a.id, a]));
 
+  if (byId.size !== agents.length) return { valid: false, error: 'Existen IDs de agente duplicados.' };
+
   // 1. Validar que no haya dependencias huérfanas
   for (const agent of agents) {
-    for (const depId of agent.dependsOn) {
+    for (const depId of allDependencies(agent)) {
       if (!byId.has(depId)) {
         return {
           valid: false,
@@ -72,7 +75,7 @@ export function validateGraphIntegrity(agents: Agent[]): { valid: boolean; error
 
   // 2. Validar que no haya ciclos
   for (const agent of agents) {
-    for (const depId of agent.dependsOn) {
+    for (const depId of allDependencies(agent)) {
       if (detectCycle(agents, agent.id, depId)) {
         return {
           valid: false,
@@ -91,7 +94,7 @@ export function buildLevels(agents: Agent[]): Agent[][] {
   const inDegree = new Map<string, number>();
 
   for (const agent of agents) {
-    const validParents = agent.dependsOn.filter((id) => byId.has(id));
+    const validParents = allDependencies(agent).filter((id) => byId.has(id));
     inDegree.set(agent.id, validParents.length);
     for (const parentId of validParents) {
       if (!childrenOf.has(parentId)) childrenOf.set(parentId, []);
@@ -130,13 +133,13 @@ export function ancestorChain(agents: Agent[], agentId: string): Agent[] {
   const orderIndex = new Map(order.map((a, i) => [a.id, i]));
 
   const visited = new Set<string>();
-  const queue = [...(byId.get(agentId)?.dependsOn ?? [])];
+  const queue = byId.get(agentId) ? allDependencies(byId.get(agentId)!) : [];
   while (queue.length > 0) {
     const current = queue.shift()!;
     if (visited.has(current)) continue;
     visited.add(current);
     const agent = byId.get(current);
-    if (agent) queue.push(...agent.dependsOn);
+    if (agent) queue.push(...allDependencies(agent));
   }
 
   return [...visited]
@@ -168,11 +171,36 @@ export function retryEntryPoints(agents: Agent[], subgraph: Set<string>): string
 
 function resultText(result: AgentRunResult | undefined): string {
   if (!result) return '';
+  if (result.status === 'skipped') return `[OMITIDO: ${result.omissionReason ?? 'sin motivo'}]`;
   if (result.status === 'error') return '[ERROR: este agente falló y no produjo salida — no asumas su contenido]';
   if (result.output) return result.output;
+  if (result.analysis) return JSON.stringify(result.analysis);
   if (result.strategy) return JSON.stringify(result.strategy);
   if (result.verdict) return JSON.stringify(result.verdict);
   return '';
+}
+
+export function evaluateAgentActivation(
+  agent: Agent,
+  capabilities: DataCapability[],
+  resultsById: Map<string, AgentRunResult>,
+  agents: Agent[] = []
+): { active: boolean; reason: string } {
+  if (agent.enabled === false) return { active: false, reason: 'AGENT_DISABLED' };
+  const rule = agent.activation;
+  if (!rule || rule.mode === 'always') return { active: true, reason: rule?.description ?? 'ALWAYS' };
+  if (rule.mode === 'data_available') {
+    const missing = (rule.requiredData ?? []).filter((item) => !capabilities.includes(item));
+    return missing.length === 0
+      ? { active: true, reason: rule.description }
+      : { active: false, reason: `DATA_NOT_AVAILABLE: ${missing.join(', ')}` };
+  }
+  const biases = ancestorChain(agents, agent.id)
+    .map((ancestor) => resultsById.get(ancestor.id)?.analysis?.bias)
+    .filter((bias) => bias && bias !== 'neutral' && bias !== 'not_applicable');
+  return new Set(biases).size > 1
+    ? { active: true, reason: 'CONFLICT_DETECTED' }
+    : { active: false, reason: 'NO_CONFLICT_DETECTED' };
 }
 
 function formatObjections(verdict: VerdictResult, attemptNumber: number): string {
@@ -238,6 +266,16 @@ async function executeAgentInPass(
   // Si ya está completado con éxito y no se forzó su reintento explícito, no repetir
   if (result.status === 'done' && !options.onlyAgentIds?.has(agent.id)) return 'skipped';
 
+  const activation = evaluateAgentActivation(agent, run.dataCapabilities ?? [], resultsById, agents);
+  if (!activation.active) {
+    result.status = 'skipped';
+    result.omissionReason = activation.reason;
+    result.finishedAt = new Date().toISOString();
+    await saveRun(run);
+    return 'skipped';
+  }
+  result.activationReason = activation.reason;
+
   // Si alguno de sus ancestros directos falló o no está completado, no puede ejecutarse
   const ancestorsIncomplete = agent.dependsOn.some((depId) => {
     const depResult = resultsById.get(depId);
@@ -245,15 +283,18 @@ async function executeAgentInPass(
   });
 
   if (ancestorsIncomplete) {
-    result.status = 'waiting';
-    await saveRun(run).catch(() => {});
+    result.status = 'skipped';
+    result.omissionReason = 'MISSING_REQUIRED_DEPENDENCY';
+    result.finishedAt = new Date().toISOString();
+    await saveRun(run);
     return 'skipped';
   }
 
   result.status = 'running';
   result.startedAt = new Date().toISOString();
   result.error = undefined;
-  await saveRun(run).catch(() => {});
+  result.omissionReason = undefined;
+  await saveRun(run);
 
   try {
     let context = ancestorChain(agents, agent.id)
@@ -264,6 +305,7 @@ async function executeAgentInPass(
     if (extra) context = context ? `${extra}\n\n${context}` : extra;
 
     let output: string | undefined;
+    let analysis: typeof result.analysis;
     let strategy: typeof result.strategy;
     let verdict: typeof result.verdict;
     let lastValidationError: string | undefined;
@@ -273,12 +315,21 @@ async function executeAgentInPass(
         ? `${context}\n\nTu propuesta anterior fue rechazada por incoherencia numérica: ${lastValidationError}\nCorrige los precios de entrada/stop loss/take profit para que sean matemáticamente coherentes con la dirección y cumplan el R:R mínimo exigido.`
         : context;
 
-      ({ output, strategy, verdict } = await runAgent(agent, attemptContext, run.pair, run.timeframe, snapshot));
+      ({ output, analysis, strategy, verdict } = await runAgent(agent, attemptContext, run.pair, run.timeframe, snapshot, run.executionMode));
 
       // 1.1: Validación determinista de coherencia numérica tras generación de estrategia
       if (!strategy) break;
 
-      const valResult = validateStrategyProposal(strategy);
+      const atrMatch = snapshot?.match(/ATR \(14[^)]*\):\s*([0-9.]+)/i);
+      const atrValue = atrMatch ? Number(atrMatch[1]) : undefined;
+      const riskPolicy = run.configuration?.riskPolicy;
+      const valResult = validateStrategyProposal(strategy, {
+        minRrRatio: riskPolicy?.minRrRatio,
+        maxRiskPercent: riskPolicy?.maxRiskPercent,
+        atrValue: Number.isFinite(atrValue) ? atrValue : undefined,
+        minStopAtr: riskPolicy?.minStopAtr,
+        maxStopAtr: riskPolicy?.maxStopAtr,
+      });
       if (valResult.valid) {
         if (valResult.normalized) {
           strategy.direction = valResult.normalized.direction;
@@ -297,17 +348,21 @@ async function executeAgentInPass(
     }
 
     result.output = output;
+    result.analysis = analysis;
     result.strategy = strategy;
     result.verdict = verdict;
     result.status = 'done';
     result.finishedAt = new Date().toISOString();
-    await saveRun(run).catch(() => {});
+    result.durationMs = result.startedAt ? Date.parse(result.finishedAt) - Date.parse(result.startedAt) : undefined;
+    await saveRun(run);
     return 'done';
   } catch (err) {
     result.status = 'error';
     result.error = err instanceof Error ? err.message : 'error desconocido';
     result.finishedAt = new Date().toISOString();
-    await saveRun(run).catch(() => {});
+    result.durationMs = result.startedAt ? Date.parse(result.finishedAt) - Date.parse(result.startedAt) : undefined;
+    run.issues = [...(run.issues ?? []), { code: 'MODEL_ERROR', severity: 'error', message: result.error, agentId: agent.id }];
+    await saveRun(run);
     console.warn(`[orchestrator] Agente ${agent.name} (${agent.id}) falló: ${result.error}`);
     return 'error';
   }
@@ -317,6 +372,7 @@ export async function runPass(run: Run, agents: Agent[], snapshot: string | null
   const levels = buildLevels(agents);
   const resultsById = new Map(run.results.map((r) => [r.agentId, r]));
   const limit = agentConcurrencyLimit();
+  let hasError = false;
 
   for (const level of levels) {
     const toRun = options.onlyAgentIds ? level.filter((a) => options.onlyAgentIds!.has(a.id)) : level;
@@ -330,14 +386,15 @@ export async function runPass(run: Run, agents: Agent[], snapshot: string | null
     // Se dejó terminar a todos los hermanos del nivel (su trabajo ya está guardado); si alguno
     // falló, no se continúa a los niveles dependientes.
     if (outcomes.includes('error')) {
+      hasError = true;
       run.status = 'error';
       await saveRun(run);
       console.warn('[orchestrator] Un agente del nivel falló. Flujo detenido, no se ejecutan los niveles dependientes.');
-      return false;
+      continue;
     }
   }
 
-  return true;
+  return !hasError;
 }
 
 export function resetForRetry(run: Run, subgraph: Set<string>): void {
@@ -345,10 +402,13 @@ export function resetForRetry(run: Run, subgraph: Set<string>): void {
 }
 
 export async function executeRun(run: Run, agents: Agent[]): Promise<void> {
-  // 2.1: Validar integridad del grafo antes de iniciar
+  run.startedAt = run.startedAt ?? new Date().toISOString();
+  run.issues = run.issues ?? [];
   const graphValidation = validateGraphIntegrity(agents);
   if (!graphValidation.valid) {
     run.status = 'error';
+    run.finalState = 'error';
+    run.issues.push({ code: 'CONFIGURATION_ERROR', severity: 'error', message: graphValidation.error ?? 'Grafo inválido' });
     const firstResult = run.results[0];
     if (firstResult) {
       firstResult.status = 'error';
@@ -361,12 +421,23 @@ export async function executeRun(run: Run, agents: Agent[]): Promise<void> {
   run.maxRetries = Math.min(MAX_RETRIES_CAP, Math.max(0, run.maxRetries ?? DEFAULT_MAX_RETRIES));
   run.retryCount = run.retryCount ?? 0;
 
-  // 1. Obtener snapshot de mercado real para el par y timeframe
-  const snapshot = await buildMarketSnapshot(run.pair, run.timeframe);
+  const snapshot = run.marketSnapshot === undefined ? await buildMarketSnapshot(run.pair, run.timeframe) : run.marketSnapshot;
+  run.marketSnapshot = snapshot;
+  run.dataQuality = !snapshot ? 'unavailable' : snapshot.includes('AVISO DE FRESCURA') ? 'stale' : 'good';
+  const configuredCapabilities = run.configuration?.dataPolicy.availableCapabilities ?? ['market_snapshot', 'ohlcv', 'session_clock'];
+  run.dataCapabilities = snapshot
+    ? [...configuredCapabilities]
+    : configuredCapabilities.filter((item) => item !== 'market_snapshot' && item !== 'ohlcv');
+  if (!snapshot) run.issues.push({ code: 'DATA_ERROR', severity: 'warning', message: 'DATA_NOT_AVAILABLE: market_snapshot, ohlcv' });
+  else if (run.dataQuality === 'stale') run.issues.push({ code: 'DATA_ERROR', severity: 'warning', message: 'El snapshot está obsoleto; la confianza debe reducirse.' });
+  await saveRun(run);
 
   const passed = await runPass(run, agents, snapshot);
   if (!passed) {
     run.status = 'error';
+    run.finalState = 'error';
+    run.finishedAt = new Date().toISOString();
+    run.durationMs = Date.parse(run.finishedAt) - Date.parse(run.startedAt);
     await saveRun(run);
     return;
   }
@@ -397,12 +468,13 @@ export async function executeRun(run: Run, agents: Agent[]): Promise<void> {
     }
   }
 
-  // 2.1: Si quedan agentes en waiting o running que no se pudieron ejecutar, marcar como error en vez de colgado
   const hasErrors = run.results.some((r) => r.status === 'error');
   const hasPending = run.results.some((r) => r.status === 'waiting' || r.status === 'running');
+  const verdict = verdictAgent ? run.results.find((result) => result.agentId === verdictAgent.id)?.verdict : undefined;
 
   if (hasErrors || hasPending) {
     run.status = 'error';
+    run.finalState = 'error';
     // Si quedaron en waiting sin error explícito, marcarlos
     for (const r of run.results) {
       if (r.status === 'waiting' || r.status === 'running') {
@@ -410,10 +482,28 @@ export async function executeRun(run: Run, agents: Agent[]): Promise<void> {
         r.error = r.error || 'Flujo interrumpido antes de completar la ejecución.';
       }
     }
+  } else if (!verdict) {
+    run.status = 'done';
+    run.finalState = run.dataQuality === 'unavailable' ? 'insufficient_data' : 'invalid_result';
+    if (run.finalState === 'invalid_result') {
+      run.status = 'error';
+      run.issues.push({ code: 'MISSING_AGENT', severity: 'error', message: 'El grafo terminó sin veredicto.' });
+    }
+  } else if (verdict.veredicto === 'ajustar') {
+    run.status = 'error';
+    run.finalState = 'invalid_result';
+    run.issues.push({ code: 'INVALID_RESULT', severity: 'error', message: 'Se agotaron las revisiones con veredicto AJUSTAR.' });
+  } else if (verdict.veredicto === 'go' && (verdict.unresolvedBlockers?.length ?? 0) > 0) {
+    run.status = 'error';
+    run.finalState = 'invalid_result';
+    run.issues.push({ code: 'CONTRACT_ERROR', severity: 'error', message: 'El juez emitió GO con blockers sin resolver.', agentId: verdictAgent?.id });
   } else {
     run.status = 'done';
+    run.finalState = verdict.veredicto === 'go' ? 'validated' : 'rejected';
   }
 
+  run.finishedAt = new Date().toISOString();
+  run.durationMs = Date.parse(run.finishedAt) - Date.parse(run.startedAt);
   await saveRun(run);
 }
 

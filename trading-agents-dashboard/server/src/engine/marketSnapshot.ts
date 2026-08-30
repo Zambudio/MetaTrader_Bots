@@ -50,6 +50,25 @@ export interface MarketSnapshotData {
     low: number;
     spread: number;
   };
+  volumeProfile?: { last: number; average20: number; ratioToAverage20: number };
+  gap?: { absolute: number; percent: number };
+  marketSession: { market: 'forex' | 'stocks' | 'crypto'; isOpen: boolean; label: string; note: string };
+}
+
+export function computeMarketSession(symbol: string, nowTimestampMs: number = Date.now()): MarketSnapshotData['marketSession'] {
+  const normalized = symbol.toUpperCase();
+  const date = new Date(nowTimestampMs);
+  const day = date.getUTCDay();
+  const hour = date.getUTCHours() + date.getUTCMinutes() / 60;
+  if (/BTC|ETH|XBT|SOL/.test(normalized)) {
+    return { market: 'crypto', isOpen: true, label: '24x7', note: 'Mercado cripto continuo; no implica liquidez uniforme.' };
+  }
+  if (normalized.includes('/')) {
+    const isOpen = (day > 0 && day < 5) || (day === 0 && hour >= 21) || (day === 5 && hour < 21);
+    return { market: 'forex', isOpen, label: isOpen ? 'FX_OPEN' : 'FX_WEEKEND_CLOSED', note: 'Reloj aproximado UTC; spread/bid-ask no disponibles.' };
+  }
+  const isOpen = day >= 1 && day <= 5 && hour >= 13.5 && hour < 20;
+  return { market: 'stocks', isOpen, label: isOpen ? 'US_CASH_OPEN' : 'US_CASH_CLOSED', note: 'Ventana regular aproximada UTC; festivos y pre/post-market no disponibles.' };
 }
 
 function roundTo(value: number, decimals = 5): number {
@@ -96,6 +115,7 @@ export function computeSnapshotFromCandles(
   const closes = candles.map((c) => c.close);
   const highs = candles.map((c) => c.high);
   const lows = candles.map((c) => c.low);
+  const volumes = candles.map((c) => c.volume);
 
   const lastCandle = candles[candles.length - 1];
   const prevCandle = candles[candles.length - 2];
@@ -205,6 +225,19 @@ export function computeSnapshotFromCandles(
     spread: roundTo(recentHigh - recentLow),
   };
 
+  const volumeSlice = volumes.slice(-20);
+  const average20 = volumeSlice.reduce((sum, value) => sum + value, 0) / volumeSlice.length;
+  const volumeProfile = {
+    last: roundTo(lastCandle.volume, 2),
+    average20: roundTo(average20, 2),
+    ratioToAverage20: average20 > 0 ? roundTo(lastCandle.volume / average20, 2) : 0,
+  };
+  const gapAbsolute = prevCandle ? lastCandle.open - prevCandle.close : 0;
+  const gap = {
+    absolute: roundTo(gapAbsolute),
+    percent: prevCandle?.close ? roundTo((gapAbsolute / prevCandle.close) * 100, 2) : 0,
+  };
+
   const isoTime = new Date(lastCandle.time * 1000).toISOString();
 
   return {
@@ -227,11 +260,14 @@ export function computeSnapshotFromCandles(
     bollinger,
     atr14,
     recentRange,
+    volumeProfile,
+    gap,
+    marketSession: computeMarketSession(pair, nowTimestampMs),
   };
 }
 
 export function formatSnapshotText(snapshot: MarketSnapshotData): string {
-  const { pair, timeframe, timestamp, isStale, staleDetails, currentPrice, movingAverages, rsi14, macd, bollinger, atr14, recentRange } = snapshot;
+  const { pair, timeframe, timestamp, isStale, staleDetails, currentPrice, movingAverages, rsi14, macd, bollinger, atr14, recentRange, volumeProfile, gap, marketSession } = snapshot;
 
   const lines: string[] = [
     `=== SNAPSHOT DE MERCADO REAL (${pair} · ${timeframe}) ===`,
@@ -241,6 +277,8 @@ export function formatSnapshotText(snapshot: MarketSnapshotData): string {
   if (isStale) {
     lines.push(`⚠ AVISO DE FRESCURA TEMPORAL: ${staleDetails || 'Snapshot con desfase temporal respecto a la hora actual.'}`);
   }
+
+  lines.push(`Sesión determinista: ${marketSession.label} | Mercado abierto: ${marketSession.isOpen ? 'sí' : 'no'} | ${marketSession.note}`);
 
   lines.push(`Precio Actual (Cierre): ${currentPrice.close} | Apertura: ${currentPrice.open} | Máx: ${currentPrice.high} | Mín: ${currentPrice.low} (Var: ${currentPrice.changePct > 0 ? '+' : ''}${currentPrice.changePct}%)`);
 
@@ -273,6 +311,9 @@ export function formatSnapshotText(snapshot: MarketSnapshotData): string {
   if (recentRange) {
     lines.push(`Rango reciente (${recentRange.candlesCount} velas): Máximo local: ${recentRange.high} | Mínimo local: ${recentRange.low} (Rango: ${recentRange.spread})`);
   }
+  if (volumeProfile) lines.push(`Volumen OHLCV: último ${volumeProfile.last} | media20 ${volumeProfile.average20} | ratio ${volumeProfile.ratioToAverage20}x`);
+  if (gap) lines.push(`Gap vs cierre anterior: ${gap.absolute} (${gap.percent}%)`);
+  lines.push('Datos NO disponibles: spread bid/ask, profundidad de libro, noticias/calendario verificados, fundamentales, derivados y on-chain salvo inyección explícita.');
 
   lines.push('========================================================');
   return lines.join('\n');

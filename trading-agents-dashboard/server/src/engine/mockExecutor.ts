@@ -1,11 +1,10 @@
-import type { Agent, StrategyProposalLite, VerdictResult } from '../types.js';
+import type { Agent, AgentAnalysis, StrategyProposalLite, VerdictResult } from '../types.js';
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export interface MockExecutionResult {
   output?: string;
+  analysis?: AgentAnalysis;
   strategy?: StrategyProposalLite;
   verdict?: VerdictResult;
 }
@@ -17,51 +16,64 @@ export async function runMockAgent(
   timeframe: string,
   snapshot?: string | null
 ): Promise<MockExecutionResult> {
-  await delay(600 + Math.floor(Math.random() * 600));
-
-  if (agent.outputType === 'strategy') {
-    return { strategy: buildMockStrategy(agent, pair, timeframe) };
-  }
-  if (agent.outputType === 'verdict') {
-    return { verdict: buildMockVerdict(context) };
-  }
-  return { output: buildMockText(agent, context, pair, timeframe, snapshot) };
+  await delay(5);
+  if (agent.outputType === 'strategy') return { strategy: buildMockStrategy(agent, pair, timeframe, snapshot) };
+  if (agent.outputType === 'verdict') return { verdict: buildMockVerdict(context) };
+  if (agent.outputType === 'analysis') return { analysis: buildMockAnalysis(agent, snapshot) };
+  return { output: `[SIMULADO] ${agent.name} analizó ${pair} ${timeframe}.` };
 }
 
-function buildMockText(agent: Agent, context: string, pair: string, timeframe: string, snapshot?: string | null): string {
-  const snapshotNote = snapshot ? `\n\n${snapshot}` : '\n\nSnapshot de mercado recibido: no (sin velas disponibles).';
-  const contextNote = context ? `\n\nContexto recibido de agentes anteriores:\n${context}` : '';
-  return `[SIMULADO] ${agent.name} (${agent.role}) analizando ${pair} en ${timeframe}.\n\nPrompt configurado: "${
-    agent.systemPrompt || '(sin prompt configurado)'
-  }"${snapshotNote}${contextNote}\n\nEsta es una salida de relleno para probar el flujo — conecta un LLM real para obtener un análisis de verdad.`;
+function extractNumber(snapshot: string | null | undefined, pattern: RegExp): number | undefined {
+  const match = snapshot?.match(pattern);
+  const value = match ? Number(match[1]) : NaN;
+  return Number.isFinite(value) ? value : undefined;
 }
 
-function buildMockStrategy(agent: Agent, pair: string, timeframe: string): StrategyProposalLite {
+function buildMockStrategy(agent: Agent, pair: string, timeframe: string, snapshot?: string | null): StrategyProposalLite {
+  const entry = extractNumber(snapshot, /Precio Actual \(Cierre\):\s*([0-9.]+)/i) ?? (pair.includes('BTC') ? 80_000 : pair.includes('/') ? 1.1 : 300);
+  const atr = extractNumber(snapshot, /ATR \(14[^)]*\):\s*([0-9.]+)/i) ?? entry * 0.005;
+  const sma200 = extractNumber(snapshot, /SMA\(200\):\s*([0-9.]+)/i);
+  const direction: 'buy' | 'sell' = sma200 !== undefined && entry < sma200 ? 'sell' : 'buy';
+  const riskDistance = atr * 1.5;
+  const rewardDistance = riskDistance * 1.7;
+  const stop = direction === 'buy' ? entry - riskDistance : entry + riskDistance;
+  const take = direction === 'buy' ? entry + rewardDistance : entry - rewardDistance;
   return {
-    pair,
-    timeframe,
-    resumen: `[SIMULADO] Propuesta de ${agent.name} para ${pair} en ${timeframe}, combinando el análisis de los agentes anteriores de la cadena.`,
-    indicadoresClave: ['Media móvil (mock)', 'RSI (mock)', 'Estructura de mercado (mock)'],
-    condicionEntrada: 'Condición de entrada simulada (mock) — pendiente de LLM real',
-    puntoEntrada: 'Zona de entrada simulada — pendiente de LLM real',
-    stopLoss: 'Nivel de stop loss simulado',
-    takeProfit: 'Nivel de take profit simulado',
-    entradasEscalonadas: 'Ejemplo: 3 entradas parciales al 33% cada una (simulado)',
-    confianza: 'media (simulado)',
+    status: 'valid', pair, timeframe,
+    resumen: `[SIMULADO] Propuesta de ${agent.name} para validar el flujo.`,
+    indicadoresClave: ['EMA20', 'SMA200', 'ATR14'],
+    condicionEntrada: direction === 'buy' ? 'Cierre cruza por encima de EMA20' : 'Cierre cruza por debajo de EMA20',
+    puntoEntrada: entry.toFixed(5), stopLoss: stop.toFixed(5), takeProfit: take.toFixed(5),
+    direction, entryPriceNum: entry, stopLossNum: stop, takeProfitNum: take, riskPercent: 0.5,
+    confianza: 'media (simulado)', confidence: 0.6,
+    evidence: [{ claim: 'Precios derivados del snapshot de simulación', source: 'market_snapshot' }],
+    risks: ['Resultado simulado; no demuestra rentabilidad'], invalidations: ['Snapshot no disponible'],
+    dataQuality: snapshot?.includes('AVISO DE FRESCURA') ? 'stale' : 'good',
+  };
+}
+
+function buildMockAnalysis(agent: Agent, snapshot?: string | null): AgentAnalysis {
+  const stale = Boolean(snapshot?.includes('AVISO DE FRESCURA'));
+  const reviewer = agent.interventionType === 'validator' || agent.interventionType === 'adversarial';
+  return {
+    status: snapshot ? 'valid' : 'data_not_available',
+    bias: reviewer ? 'not_applicable' : 'neutral', confidence: snapshot ? (stale ? 0.4 : 0.65) : 0,
+    dataQuality: snapshot ? (stale ? 'stale' : 'good') : 'unavailable',
+    facts: snapshot ? [{ claim: 'Snapshot recibido por el agente', source: 'market_snapshot' }] : [],
+    inferences: snapshot ? [{ claim: 'Sin conflicto estructural en la simulación', basedOn: ['market_snapshot'] }] : [],
+    hypotheses: ['Hipótesis simulada para validar el flujo, no el rendimiento'],
+    conclusion: snapshot ? `[SIMULADO] ${agent.name}: contrato válido.` : 'DATA_NOT_AVAILABLE',
+    risks: ['La simulación no sustituye datos reales ni backtest'], invalidations: [], blockers: [],
+    recommendation: reviewer ? 'approve' : 'not_applicable',
   };
 }
 
 function buildMockVerdict(context: string): VerdictResult {
-  const isRetry = context.includes('Objeciones del Razonador');
-  if (isRetry) {
-    return { veredicto: 'go', razon: '[SIMULADO] La propuesta corregida resuelve las objeciones planteadas.' };
-  }
   return {
-    veredicto: 'ajustar',
-    razon: '[SIMULADO] La propuesta necesita ajustes antes de darse por buena.',
-    objeciones: [
-      '[SIMULADO] Objeción de ejemplo del Validador de Coherencia Técnica.',
-      '[SIMULADO] Objeción de ejemplo del Refutador.',
-    ],
+    veredicto: 'go',
+    razon: '[SIMULADO] Contratos, dependencias y gate determinista válidos; elegible únicamente para backtest.',
+    objeciones: [], confidence: 0.6,
+    dataQuality: context.includes('AVISO DE FRESCURA') ? 'stale' : 'good',
+    resolvedConflicts: [], unresolvedBlockers: [],
   };
 }

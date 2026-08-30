@@ -9,6 +9,7 @@ describe('1.1 Validación determinista de coherencia numérica de la estrategia'
       timeframe: 'H1',
       resumen: 'Entrada en soporte con confirmación alcista',
       indicadoresClave: ['EMA 50', 'RSI 45'],
+      condicionEntrada: 'Cierre cruza por encima de EMA20',
       direction: 'buy',
       puntoEntrada: '1.08500',
       stopLoss: '1.08200', // Riesgo = 30 pips
@@ -30,6 +31,7 @@ describe('1.1 Validación determinista de coherencia numérica de la estrategia'
       timeframe: 'H1',
       resumen: 'Estrategia con stops rotos alucinados por LLM',
       indicadoresClave: ['RSI'],
+      condicionEntrada: 'Cierre cruza por encima de EMA20',
       direction: 'buy',
       puntoEntrada: '1.08500',
       stopLoss: '1.08900', // Error: SL por encima de entrada en compra
@@ -50,6 +52,7 @@ describe('1.1 Validación determinista de coherencia numérica de la estrategia'
       timeframe: 'H4',
       resumen: 'Rechazo en resistencia clave con divergencia bajista',
       indicadoresClave: ['MACD', 'Nivel semanal'],
+      condicionEntrada: 'Cierre cruza por debajo de EMA20',
       direction: 'sell',
       puntoEntrada: '1.27000',
       stopLoss: '1.27400', // Riesgo = 40 pips
@@ -71,6 +74,7 @@ describe('1.1 Validación determinista de coherencia numérica de la estrategia'
       timeframe: 'H4',
       resumen: 'Venta con stops invertidos',
       indicadoresClave: ['MACD'],
+      condicionEntrada: 'Cierre cruza por debajo de EMA20',
       direction: 'sell',
       puntoEntrada: '1.27000',
       stopLoss: '1.26500', // Error: SL por debajo de entrada en venta
@@ -91,6 +95,7 @@ describe('1.1 Validación determinista de coherencia numérica de la estrategia'
       timeframe: 'H1',
       resumen: 'Operación con mal R:R',
       indicadoresClave: ['RSI'],
+      condicionEntrada: 'Cierre cruza por encima de EMA20',
       direction: 'buy',
       puntoEntrada: '1.08500',
       stopLoss: '1.08000', // Riesgo = 50 pips
@@ -103,5 +108,25 @@ describe('1.1 Validación determinista de coherencia numérica de la estrategia'
     const res = validateStrategyProposal(poorRr);
     expect(res.valid).toBe(false);
     expect(res.error).toMatch(/Relación Riesgo\/Recompensa insuficiente/i);
+  });
+
+  it('rechaza riesgo porcentual por encima del límite determinista', () => {
+    const proposal: StrategyProposalLite = {
+      pair: 'TSLA', timeframe: 'H1', resumen: 'fixture', indicadoresClave: ['ATR'],
+      condicionEntrada: 'Cierre cruza EMA20', direction: 'buy', puntoEntrada: '100',
+      stopLoss: '98.5', takeProfit: '103', entryPriceNum: 100, stopLossNum: 98.5,
+      takeProfitNum: 103, riskPercent: 1.25,
+    };
+    expect(validateStrategyProposal(proposal, { maxRiskPercent: 1 }).error).toMatch(/Riesgo porcentual/i);
+  });
+
+  it('rechaza stops demasiado próximos o alejados respecto al ATR', () => {
+    const proposal: StrategyProposalLite = {
+      pair: 'BTC/USD', timeframe: 'H1', resumen: 'fixture', indicadoresClave: ['ATR'],
+      condicionEntrada: 'Cierre cruza EMA20', direction: 'buy', puntoEntrada: '100',
+      stopLoss: '99.5', takeProfit: '102', entryPriceNum: 100, stopLossNum: 99.5,
+      takeProfitNum: 102, riskPercent: 0.5,
+    };
+    expect(validateStrategyProposal(proposal, { atrValue: 1, minStopAtr: 1.25, maxStopAtr: 2.5 }).error).toMatch(/ATR/i);
   });
 });
