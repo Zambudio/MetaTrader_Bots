@@ -42,6 +42,8 @@ interface AgentEntry {
 interface RunEntry {
   run_id: string;
   scenario: string;
+  configurationId?: string;
+  configurationVersion?: string;
   configurationHash: string;
   dataProvenance: Record<string, unknown>;
   dataQuality?: string;
@@ -114,6 +116,27 @@ function auditRun(run: RunEntry) {
   const snapNums = snapshot ? snapshotNumbers(snapshot) : new Set<string>();
   const byId = new Map(run.agents.map((a) => [a.agentId, a]));
 
+  const expectedAbsentResult = run.scenario === 'r5a-absent'
+    && run.status === 'done'
+    && run.finalState === 'insufficient_data';
+  if (run.status !== 'done' && !expectedAbsentResult) {
+    push('error', 'RUN_NOT_FUNCTIONAL', `run status=${run.status} finalState=${run.finalState ?? 'n/a'}`);
+  }
+
+  if (run.dataProvenance?.mode === 'historical' && run.dataQuality === 'good') {
+    for (const agent of run.agents) {
+      if (!agent.analysis) continue;
+      const text = JSON.stringify(agent.analysis);
+      const citesDateOutsideSnapshot = [...text.matchAll(/\b20\d{2}-\d{2}-\d{2}\b/g)]
+        .some((match) => !snapshot.includes(match[0]));
+      if (agent.analysis.dataQuality === 'stale'
+        || /fecha actual del sistema|fecha de sesi.n actual|meses (?:posterior|despues)/i.test(text)
+        || citesDateOutsideSnapshot) {
+        push('error', 'TEMPORAL_CONTEXT_ERROR', `${agent.agentId} comparo una ventana HISTORICAL_AS_OF valida con la fecha actual.`);
+      }
+    }
+  }
+
   // Los revisores (fx-risk/fx-critic/fx-judge) citan LEGÍTIMAMENTE la geometría de la propuesta
   // (entry/SL/TP/riskPercent/RR) y las confidences de los ancestros, que NO están en el snapshot.
   const proposalStr = byId.get('fx-strategy')?.strategy;
@@ -145,7 +168,10 @@ function auditRun(run: RunEntry) {
 
   // --- por agente ---
   for (const a of run.agents) {
-    if (a.status === 'error') push('error', 'MODEL_ERROR', `${a.agentId} en error: ${a.error}`);
+    if (a.status === 'error') {
+      const code = /\[(?:claude|codex)Cli\]/i.test(a.error ?? '') ? 'TOOL_ERROR' : 'MODEL_ERROR';
+      push('error', code, `${a.agentId} en error: ${a.error}`);
+    }
     if (a.status === 'skipped') {
       if (!a.omissionReason) push('warn', 'ORCHESTRATION_ERROR', `${a.agentId} omitido sin razón`);
       continue;
@@ -208,6 +234,9 @@ function auditRun(run: RunEntry) {
       else push('info', 'STRATEGY_OK', `${a.agentId} gate OK: ${a.strategy.direction} entry ${v.normalized?.entryPriceNum} SL ${v.normalized?.stopLossNum} TP ${v.normalized?.takeProfitNum} R:R ${v.normalized?.rrRatio.toFixed(2)}`);
       // condición de entrada: mecánica, no un precio anecdótico
       const cond = String(a.strategy.condicionEntrada ?? '');
+      if (/no abrir si|ignorar si|primera vela|calendario|spread|slippage|H4|D1/i.test(cond)) {
+        push('error', 'STRATEGY_ERROR', `${a.agentId} condicionEntrada anade restricciones fuera del maximo de 1 evento + 1 filtro: "${cond}"`);
+      }
       if (/^\s*-?\d+\.\d+\s*$/.test(cond) || (/\d+\.\d{3,}/.test(cond) && !/(EMA|SMA|RSI|MACD|Bollinger|ATR|cruz|cross|banda|media)/i.test(cond))) {
         push('warn', 'STRATEGY_ERROR', `${a.agentId} condicionEntrada parece un nivel de precio anecdótico: "${cond}"`);
       }
@@ -262,6 +291,8 @@ function auditRun(run: RunEntry) {
   return {
     run_id: run.run_id,
     scenario: run.scenario,
+    configurationId: run.configurationId,
+    configurationVersion: run.configurationVersion,
     status: run.status,
     finalState: run.finalState,
     verdict: byId.get('fx-judge')?.verdict?.veredicto ?? null,

@@ -58,6 +58,7 @@ export function resolveAgentCliRetries(fallback: number): number {
 export function isTransientCliError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
   if (/timeout \(\d+s\)/i.test(msg)) return false;
+  if (/hit your (?:session|usage) limit|limite de (?:sesion|uso)/i.test(msg)) return false;
   if (/no contiene ningún objeto JSON|objeto JSON sin cerrar/i.test(msg)) return false;
   return (
     /salió con código \d+\. stderr: \(vacío\)/i.test(msg) ||
@@ -67,6 +68,27 @@ export function isTransientCliError(err: unknown): boolean {
     /no se pudo lanzar/i.test(msg) ||
     /codex falló \(código/i.test(msg)
   );
+}
+
+/**
+ * Conserva el diagnostico util de un CLI sin volcar respuestas completas. Claude Code puede
+ * escribir errores operativos en stdout aunque termine con codigo distinto de cero.
+ */
+export function formatCliFailureDetail(stderr: string, stdout: string, maxLength = 500): string {
+  const stderrDetail = stderr.trim();
+  if (stderrDetail) return stderrDetail.slice(0, maxLength);
+
+  const stdoutDetail = stdout.trim();
+  if (!stdoutDetail) return '(sin salida)';
+  try {
+    const envelope = JSON.parse(stdoutDetail) as { result?: unknown };
+    if (typeof envelope.result === 'string' && envelope.result.trim()) {
+      return envelope.result.trim().slice(0, maxLength);
+    }
+  } catch {
+    // La salida de error tambien puede ser texto plano; se conserva abajo.
+  }
+  return stdoutDetail.slice(0, maxLength);
 }
 
 export interface CliRunResult {

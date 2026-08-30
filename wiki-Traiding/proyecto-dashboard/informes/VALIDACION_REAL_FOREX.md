@@ -6,8 +6,8 @@ Seguridad: **0 órdenes live, 0 capital, 0 llamadas de ejecución**. Solo análi
 
 Relacionados: [auditoría](AUDITORIA_MULTIAGENTE.md) · [config Forex](CONFIGURACION_FOREX.md) · [validation loop simulado](VALIDATION_LOOP.md) · [estado final](ESTADO_FINAL_CONFIGURACIONES.md).
 
-> **ESTADO: EN CURSO — `UNSTABLE` (a la espera de re-ejecución tras corrección C2).**
-> Trabajo restante delegado a `codex exec` (cuota separada). Ver §"Handoff — pendiente".
+> **ESTADO FINAL DE ESTA EJECUCIÓN: `BLOCKED`.**
+> La baseline original `forex_v1` reprodujo defectos reales de prompt/modelo y el CLI de Claude agotó el límite de sesión (`resets 2:40am Europe/Madrid`). Se publicó `forex_v1.1` sin sobrescribir v1, pero no pudo someterse todavía a la matriz real completa. No existe GO elegible; por tanto no se generó MQL5 ni se abrió MetaTrader.
 
 ---
 
@@ -103,11 +103,81 @@ Runner: `trading-agents-dashboard/server/scripts/validateRealForex.ts` (orquesta
 
 Duración total R1: ~29 min (7 llamadas a `claude -p` de 95–240 s + reintentos + overhead de persistencia SMB).
 
-### R2–R5: **PENDIENTES** (no ejecutados).
+### R2–R5: estado al entregar el handoff
+
+En el checkpoint original estaban pendientes. La continuación Codex llegó a ejecutar R2 dos veces; R3–R5 quedaron bloqueados por el límite externo de sesión descrito abajo.
 
 ---
 
-## Handoff — pendiente (delegado a `codex exec`, cuota ChatGPT separada)
+## Continuación Codex — resultado real
+
+Rama: `validacion-real-forex`, partida `8d679da`. El worktree estaba limpio al empezar, `main` no divergió y el preset activo permaneció en todo momento en `baseline-acciones-stocks-v1`. No se tocó `README.md`, no hubo push/deploy y no se cerró ningún proceso del usuario.
+
+### Matriz acumulada de runs persistidos
+
+Éxito funcional exige `status=done`, sin `error/waiting`, roster FOREX exacto, `fx-macro` omitido por `DATA_NOT_AVAILABLE` y estado final coherente. Resultado: **0/4 runs registrados = 0%**. De ellos, tres fueron lanzados en esta continuación y uno era el R1 del checkpoint anterior.
+
+| run | preset | escenario | duración | ejecutados `done` | omitidos | resultado |
+|---|---|---|---:|---|---|---|
+| `real-forex-20260830150301-r1-current` | `forex_v1` | actual | ~29 min | structure, momentum, session, strategy, risk, critic | macro | `error`: juez, salida CLI 1 vacía; estrategia BUY gate PASS |
+| `real-forex-20260830195351-r1-current` | `forex_v1` | actual | 1.978 s | structure, momentum, session, strategy, risk, critic, judge | macro | `invalid_result`: juez mantuvo `AJUSTAR` tras 2 revisiones |
+| `real-forex-20260830202712-r2-trend` | `forex_v1` | histórico | 733 s | structure, momentum, session, strategy, risk, critic | macro | `error`: juez agotó 3 intentos CLI transitorios |
+| `real-forex-20260830203938-r2-trend` | `forex_v1` | histórico, retry `AGENT_CLI_RETRIES=3` | 85 s | ninguno | macro + downstream por dependencia | `error`: los 3 especialistas agotaron 4 intentos durante límite de sesión |
+
+En los cuatro runs el roster esperado fue exclusivamente `fx-*`; **cero agentes `stock-*`/`crypto-*`** y `fx-macro` se omitió siempre con `DATA_NOT_AVAILABLE: verified_macro_calendar, verified_news`. Las salidas completadas respetaron la forma de `AgentAnalysis`: `status`, `bias`, `confidence` 0..1, `dataQuality`, facts con source, inferencias, hipótesis y conclusión no vacía. Riesgo y crítico citaron geometría y evidencia ancestral; no aprobaron en vacío.
+
+### Estrategias y gates
+
+| run | propuesta | gate determinista | auditoría manual | decisión |
+|---|---|---|---|---|
+| R1 inicial | BUY 1.15373 / SL 1.15144 / TP 1.15768 / 0,5% | R:R 1,72; SL 1,50 ATR; PASS | 1 evento RSI + 1 filtro Bollinger; snapshot no persistido por runner antiguo | no aceptada: juez falló |
+| R1 reejecutado | SELL 1.15819 / SL 1.16320 / TP 1.14984 / 0,5% | R:R 1,667; SL 1,50 ATR; PASS | evento MACD + filtro EMA50, pero añadió dos restricciones operativas dentro de `condicionEntrada` (`mercado abierto` y `primera vela semanal`) | rechazada: `AJUSTAR`, 7 blockers |
+| R2 trend | BUY 1.15980 / SL 1.15560 / TP 1.16680 / 0,5% | R:R 1,667; SL 2,258 ATR; PASS | evento recuperación EMA20 + filtro SMA200, velas cerradas, sin look-ahead; niveles de referencia mezclados con una regla dinámica | no aceptada: juez no pudo ejecutarse |
+
+**Aceptadas por juez: 0. Rechazadas/no concluidas: 3.** Ninguna estrategia habilitó FASE 5. La prueba del script `generateValidatedForexMql5.ts` terminó correctamente en fail-closed: `No existe ningun run FOREX validated + GO + 0 blockers.`
+
+### Auditoría de afirmaciones y contexto
+
+- R1 reejecutado: facts de especialistas y revisores contrastados contra el snapshot (cierre 1.15819, medias, RSI 54.3, MACD, Bollinger, ATR 0.00334 y rango); sin números de mercado huérfanos detectados por el audit. El juez, sin embargo, convirtió capacidades ausentes conocidas —spread, calendario, volumen real, balance y serie histórica— en requisitos previos al propio backtest y exigió barrido/optimización walk-forward. Eso contradice el significado documentado de GO como **elegibilidad para backtest**, no rentabilidad.
+- R1 `condicionEntrada`: el evento y filtro eran codificables, pero las exclusiones adicionales violaban el máximo de un evento + un filtro. El audit ahora lo marca `STRATEGY_ERROR`.
+- R2: snapshot reproducible de 5.000 velas hasta `as_of=2026-03-25T00:00:00Z`, `dataQuality=good`. `fx-momentum`, `fx-session`, `fx-risk` y `fx-critic` lo compararon indebidamente con 2026-08-30 y generaron narrativa de “~5 meses obsoleto”. El audit lo marca `TEMPORAL_CONTEXT_ERROR`.
+- R2: la aritmética vinculante fue correcta (42 pips de riesgo, 70 de recompensa, R:R 1,67, SL 2,26 ATR), pero apareció una inferencia incorrecta: `1.16680 - 1.16300` se describió como 3,8 pips cuando son **38 pips**. También se citó un “spread típico” pese a estar ausente. Se clasifican `MODEL_ERROR`/`HALLUCINATION`; la estrategia no se acepta.
+- No se inventaron velas ni se alteraron snapshots. Las abstenciones por fuentes macro ausentes fueron correctas. La transferencia de contexto funcionó: los revisores citaron strategy, snapshot y especialistas; el problema fue cómo interpretaron ese contexto.
+
+### Defectos, causa raíz y correcciones
+
+1. **`TOOL_ERROR` — límite de sesión oculto y reintentos inútiles.** Claude Code devuelve el diagnóstico en stdout dentro del sobre JSON, pero `claudeCli` solo mostraba stderr. Reproducción mínima: `claude --version` = 2.1.251; prompt mínimo = exit 1, `You've hit your session limit · resets 2:40am (Europe/Madrid)`. Fix: `formatCliFailureDetail` prioriza stderr, extrae `.result` de stdout JSON y acota a 500 caracteres; `isTransientCliError` no reintenta límites de sesión. Verificación real: un único intento, mensaje completo.
+2. **`PROMPT_ERROR` / `TEMPORAL_CONTEXT_ERROR` — histórico tratado como live obsoleto.** Evidencia reproducible en R2. Se conserva `forex_v1` byte por byte y hash original; se publica **preset nuevo** `forex_v1.1`, id `baseline-forex-forex-v1-1`, hash `17affd3cd123e32dce5f25c27da0982d58ed8ebb7ed271707c4103a411fb1378`.
+3. **`PROMPT_ERROR` / `STRATEGY_ERROR` — requisitos imposibles y condición sobrecargada.** v1.1 mantiene los 8 agentes, todos `claude:sonnet`, DAG, pesos, activación y risk gate. Solo aclara: `HISTORICAL_AS_OF`; capacidad ausente no es blocker si la regla no depende de ella; GO no exige rentabilidad/optimización; `condicionEntrada` contiene solo un evento + un filtro; blockers técnicos reales (geometría, look-ahead, evidencia inventada, regla no codificable o dependencia real ausente) se conservan.
+4. **`VALIDATION_TOOL_ERROR` — audit daba OK a `status=error/invalid_result`.** `auditRealForex.ts` ahora emite `RUN_NOT_FUNCTIONAL`, detecta contaminación temporal y restricciones extra en la condición, conserva id/version de preset y clasifica fallos del CLI como `TOOL_ERROR`.
+5. **`MQL5_FIDELITY_ERROR` preventivo — pipeline optimizaba tras el smoke.** `generateMql5` podía relajar filtros o añadir indicadores por Quality Gate/cero trades, incompatible con esta validación. `MQL5_DISABLE_OPTIMIZATION=1` limita el pipeline a generación, correcciones de compilación, revisión estática y **un único smoke backtest**, sin cambiar la estrategia por rentabilidad.
+
+`forex_v1.1` quedó registrado sin sustituir v1; el preset activo siguió en ACCIONES. No se declara corregido en real: el límite de sesión impidió las corridas de regresión requeridas.
+
+### MQL5, compilación y backtest
+
+- Artefactos `.mq5/.ex5`: **ninguno**; el gate previo bloqueó correctamente.
+- Compilación de una estrategia aprobada: **no ejecutada** porque no hubo GO.
+- Smoke backtest: **no ejecutado**; `terminal64.exe` no se abrió ni se cerró.
+- Optimización: **0 ciclos**, por política y por ausencia de run elegible.
+
+### Verificación del repo
+
+- `npm run typecheck` (server): PASS.
+- `npx vitest run`: **17 files / 76 tests PASS** (antes 70; +6 regresiones).
+- `npm run build` (dashboard): PASS; warning no bloqueante ya conocido por chunk JS de 584,14 kB.
+- `npx tsx --env-file-if-exists=.env scripts/auditRealForex.ts`: 4 runs, 14 errores reales/esperados de los intentos fallidos y 1 limitación del snapshot antiguo; informe máquina en `server/src/data/validation-real-forex-audit.json` (gitignored).
+- `npm run lint`: no ejecutable por WDAC (`oxlint.win32-x64-msvc.node` bloqueado), limitación de máquina ya documentada.
+
+Tests nuevos: extracción/recorte de errores CLI desde stdout JSON y no-retry de límites de sesión; inmutabilidad hash de `forex_v1` + validez/modelos/guardrails de `forex_v1.1`; política `MQL5_DISABLE_OPTIMIZATION` (1 smoke vs. 3 ciclos normales). El script MQL5 fail-closed y el audit real completan la verificación operativa.
+
+### Trabajo bloqueado pendiente
+
+Tras el reset de la suscripción se deben ejecutar, **uno a uno**, los seis escenarios con `FOREX_VALIDATION_PRESET_ID=baseline-forex-forex-v1-1`, repetir el audit y exigir al menos R2 más dos corridas consecutivas sin `TEMPORAL_CONTEXT_ERROR`, blockers inventados, aritmética incorrecta o condición sobrecargada. Solo entonces, si aparece `validated + go + 0 blockers`, procede `generateValidatedForexMql5.ts`, inspección literal, MetaEditor 0 errores y un smoke headless con optimización desactivada.
+
+---
+
+## Handoff original — recibido por Codex
 
 Motivo del handoff: cuota general de Claude limitada. Los agentes siguen siendo `claude:sonnet` (inherente a validar `forex_v1`); lo que se delega es la **orquestación** (lanzar scripts, auditar, generar/compilar/backtestear MQL5, redactar, commit).
 

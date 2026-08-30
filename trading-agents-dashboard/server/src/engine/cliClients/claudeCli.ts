@@ -8,6 +8,7 @@ import {
 import {
   extractBalancedJson,
   flattenMessages,
+  formatCliFailureDetail,
   isTransientCliError,
   resolveAgentCliRetries,
   resolveAgentCliTimeoutMs,
@@ -58,6 +59,9 @@ async function claudeCliAttempt(
   }
   console.log(`[claudeCli] claude terminó en ${((Date.now() - startedAt) / 1000).toFixed(1)}s (código ${run.code})`);
 
+  if (run.code !== 0 && !run.stderr.trim() && run.stdout.trim()) {
+    run.stderr = `[stdout] ${formatCliFailureDetail('', run.stdout)}`;
+  }
   if (run.timedOut) {
     throw new Error(`[claudeCli] timeout (${Math.round(timeoutMs / 1000)}s) esperando a claude`);
   }

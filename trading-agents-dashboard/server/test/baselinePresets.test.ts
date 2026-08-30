@@ -3,16 +3,37 @@ import { BASELINE_PRESETS, cloneBaselinePresets } from '../src/config/baselinePr
 import { hashConfiguration, validatePreset } from '../src/config/configValidation.js';
 
 describe('baselines multiagente por mercado', () => {
-  it('define tres configuraciones independientes, válidas y versionadas', () => {
-    expect(BASELINE_PRESETS.map((preset) => preset.key)).toEqual(['FOREX', 'ACCIONES', 'CRIPTOMONEDAS']);
-    expect(BASELINE_PRESETS.map((preset) => preset.version)).toEqual(['forex_v1', 'stocks_v1', 'crypto_v1']);
-    expect(BASELINE_PRESETS.map((preset) => preset.referenceAsset)).toEqual(['EUR/USD', 'TSLA', 'BTC/USD']);
+  it('publica forex_v1.1 sin sobrescribir la baseline forex_v1 reproducible', () => {
+    const forexV1 = BASELINE_PRESETS.find((preset) => preset.version === 'forex_v1');
+    const forexV11 = BASELINE_PRESETS.find((preset) => preset.version === 'forex_v1.1');
+
+    expect(forexV1).toBeDefined();
+    expect(hashConfiguration(forexV1!)).toBe('504e6f2ac86fd05a321e99049b489654f48524f776b7bcf54e679fb70429bb8c');
+    expect(forexV11).toBeDefined();
+    expect(forexV11?.id).toBe('baseline-forex-forex-v1-1');
+    expect(forexV11?.agents.map((agent) => agent.model)).toEqual(Array(8).fill('claude:sonnet'));
+    expect(validatePreset(forexV11!)).toEqual({ valid: true, errors: [] });
+
+    const prompts = new Map(forexV11?.agents.map((agent) => [agent.id, agent.systemPrompt]));
+    expect(prompts.get('fx-session')).toContain('HISTORICAL_AS_OF');
+    expect(prompts.get('fx-strategy')).toContain('un evento y como maximo un filtro');
+    expect(prompts.get('fx-risk')).toContain('no es blocker por si sola');
+    expect(prompts.get('fx-critic')).toContain('no es blocker por si sola');
+    expect(prompts.get('fx-judge')).toContain('no exijas rentabilidad ni optimizacion');
+  });
+
+  it('define tres mercados independientes con baselines válidas y versionadas', () => {
+    expect(BASELINE_PRESETS.map((preset) => preset.key)).toEqual(['FOREX', 'FOREX', 'ACCIONES', 'CRIPTOMONEDAS']);
+    expect(BASELINE_PRESETS.map((preset) => preset.version)).toEqual(['forex_v1', 'forex_v1.1', 'stocks_v1', 'crypto_v1']);
+    expect(BASELINE_PRESETS.map((preset) => preset.referenceAsset)).toEqual(['EUR/USD', 'EUR/USD', 'TSLA', 'BTC/USD']);
     for (const preset of BASELINE_PRESETS) expect(validatePreset(preset)).toEqual({ valid: true, errors: [] });
   });
 
   it('no comparte IDs, prompts ni referencias entre mercados', () => {
-    const [forex, stocks, crypto] = BASELINE_PRESETS;
-    const ids = BASELINE_PRESETS.map((preset) => new Set(preset.agents.map((agent) => agent.id)));
+    const forex = BASELINE_PRESETS.find((preset) => preset.version === 'forex_v1.1')!;
+    const stocks = BASELINE_PRESETS.find((preset) => preset.version === 'stocks_v1')!;
+    const crypto = BASELINE_PRESETS.find((preset) => preset.version === 'crypto_v1')!;
+    const ids = [forex, stocks, crypto].map((preset) => new Set(preset.agents.map((agent) => agent.id)));
     expect([...ids[0]].some((id) => ids[1].has(id) || ids[2].has(id))).toBe(false);
     expect([...ids[1]].some((id) => ids[2].has(id))).toBe(false);
     expect(forex.agents.some((agent) => agent.id === 'fx-macro')).toBe(true);

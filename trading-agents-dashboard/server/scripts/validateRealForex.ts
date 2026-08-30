@@ -26,9 +26,14 @@ import type { AgentConfigPreset, Run } from '../src/types.js';
 // --- Ajustes de infraestructura para ejecución real (evidencia: run _rWt37-Ku2 timeout 180s) ---
 process.env.AGENT_CLI_TIMEOUT_MS = process.env.AGENT_CLI_TIMEOUT_MS || '600000';
 process.env.AGENT_MAX_CONCURRENCY = process.env.AGENT_MAX_CONCURRENCY || '2';
+process.env.AGENT_CLI_RETRIES = process.env.AGENT_CLI_RETRIES || '2';
 
-const FOREX_ID = 'baseline-forex-forex-v1';
-const EXPECTED_HASH = '504e6f2ac86fd05a321e99049b489654f48524f776b7bcf54e679fb70429bb8c';
+const FOREX_ID = process.env.FOREX_VALIDATION_PRESET_ID || 'baseline-forex-forex-v1';
+const EXPECTED_HASHES: Record<string, string> = {
+  'baseline-forex-forex-v1': '504e6f2ac86fd05a321e99049b489654f48524f776b7bcf54e679fb70429bb8c',
+  'baseline-forex-forex-v1-1': '17affd3cd123e32dce5f25c27da0982d58ed8ebb7ed271707c4103a411fb1378',
+};
+const EXPECTED_HASH = EXPECTED_HASHES[FOREX_ID];
 const PAIR = 'EUR/USD';
 const TF = 'H1';
 const REPORT_FILE = path.join(DATA_DIR, 'validation-real-forex-latest.json');
@@ -167,6 +172,7 @@ async function main() {
   }
 
   await loadAgentConfigsState();
+  if (!EXPECTED_HASH) throw new Error(`Preset FOREX no autorizado para esta validacion: ${FOREX_ID}`);
   const preset = await getPreset(FOREX_ID);
   if (!preset) throw new Error(`No se encontró el preset ${FOREX_ID}`);
   const presetHash = hashConfiguration(preset);
@@ -184,7 +190,11 @@ async function main() {
     liveOrdersExecuted: false,
     capitalUsed: false,
     preset: { id: preset.id, version: preset.version, hash: presetHash, expectedHash: EXPECTED_HASH, hashMatches: presetHash === EXPECTED_HASH },
-    infra: { AGENT_CLI_TIMEOUT_MS: process.env.AGENT_CLI_TIMEOUT_MS, AGENT_MAX_CONCURRENCY: process.env.AGENT_MAX_CONCURRENCY },
+    infra: {
+      AGENT_CLI_TIMEOUT_MS: process.env.AGENT_CLI_TIMEOUT_MS,
+      AGENT_MAX_CONCURRENCY: process.env.AGENT_MAX_CONCURRENCY,
+      AGENT_CLI_RETRIES: process.env.AGENT_CLI_RETRIES,
+    },
     runs: [...((existing.runs as unknown[]) ?? [])],
   };
 

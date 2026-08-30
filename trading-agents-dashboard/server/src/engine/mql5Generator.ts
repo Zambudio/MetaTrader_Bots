@@ -19,7 +19,17 @@ export type { Mql5GenerationProgress };
 export type Mql5ProgressCallback = (progress: Mql5GenerationProgress) => void;
 
 const MAX_COMPILE_ATTEMPTS = 3;
-const MAX_BACKTEST_OPTIMIZATION_CYCLES = 3;
+const DEFAULT_MAX_BACKTEST_OPTIMIZATION_CYCLES = 3;
+
+/**
+ * La validacion de fidelidad necesita exactamente un smoke backtest: un resultado pobre o cero
+ * trades se documenta, pero nunca autoriza a relajar filtros ni cambiar la estrategia aprobada.
+ */
+export function resolveMaxBacktestOptimizationCycles(): number {
+  return process.env.MQL5_DISABLE_OPTIMIZATION === '1'
+    ? 1
+    : DEFAULT_MAX_BACKTEST_OPTIMIZATION_CYCLES;
+}
 
 // Tiempo máximo para UNA llamada al LLM que escribe/corrige el .mq5. Escribir el archivo
 // completo es la petición más pesada del pipeline: los modelos por CLI de suscripción
@@ -534,6 +544,7 @@ async function runMql5Pipeline(
   let optimizationNotes: string[] = [];
   let currentIteration = startIteration;
   let cyclesUsed = 0;
+  const maxBacktestCycles = resolveMaxBacktestOptimizationCycles();
 
   if (compile.status === 'ok' || compile.status === 'unverified') {
     onProgress?.({ attempt: attempts, maxAttempts: MAX_COMPILE_ATTEMPTS, phase: 'backtesting', details: 'Ejecutando backtest headless en MetaTrader 5...' });
@@ -548,7 +559,7 @@ async function runMql5Pipeline(
     // bug real y corregible en el código (crash en runtime) en vez de una simple estrategia
     // subóptima — en ambos casos hay una razón concreta que el modelo puede corregir.
     let retryReasons = backtestRes.qualityGateVerdict?.failedReasons ?? (backtestRes.retriableCodeIssue ? [backtestRes.retriableCodeIssue] : undefined);
-    while (!backtestRes.passedQualityGate && cyclesUsed < MAX_BACKTEST_OPTIMIZATION_CYCLES - 1 && retryReasons) {
+    while (!backtestRes.passedQualityGate && cyclesUsed < maxBacktestCycles - 1 && retryReasons) {
       cyclesUsed++;
       currentIteration++;
       onProgress?.({

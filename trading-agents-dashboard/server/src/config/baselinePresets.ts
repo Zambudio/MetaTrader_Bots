@@ -163,6 +163,28 @@ const forexAgents: Agent[] = [
   judgeAgent('fx-judge', 'fx-risk', 'fx-critic'),
 ];
 
+// forex_v1.1 conserva grafo, modelos y gates de forex_v1. Solo corrige ambiguedades de prompt
+// reproducidas en runs reales: ventanas historicas tratadas como datos live obsoletos y
+// capacidades ausentes conocidas convertidas en requisitos imposibles previos al backtest.
+const forexAgentsV11: Agent[] = forexAgents.map((agent) => {
+  const common = `CORRECCION FOREX_V1.1:
+Si el snapshot declara VENTANA HISTORICA REPRODUCIBLE, opera en modo HISTORICAL_AS_OF: evalua frescura, sesion y vigencia respecto al as_of indicado, nunca respecto a la fecha actual del sistema. No presentes sus precios como cotizacion live.
+Una capacidad declarada DATA_NOT_AVAILABLE es una limitacion trazable; no invalida una hipotesis que no dependa de ella. Conserva como blocker cualquier dato realmente requerido por la regla, contradiccion, look-ahead, condicion no codificable o incumplimiento del gate determinista.`;
+
+  let roleGuardrail = '';
+  if (agent.id === 'fx-session') {
+    roleGuardrail = 'En HISTORICAL_AS_OF, interpreta el reloj y la apertura/cierre exclusivamente en el instante as_of.';
+  } else if (agent.id === 'fx-strategy') {
+    roleGuardrail = `condicionEntrada debe contener un evento y como maximo un filtro, ambos evaluables sobre velas cerradas y con indicadores disponibles. No metas calendario, spread, primera vela semanal, multi-timeframe ni otras exclusiones dentro de condicionEntrada. Los campos numericos son el ejemplo coherente del snapshot para el gate; expresa SL/TP de forma dinamica y repetible desde la vela de senal/ATR, sin look-ahead ni nivel anecdotico.`;
+  } else if (agent.id === 'fx-risk' || agent.id === 'fx-critic') {
+    roleGuardrail = `La ausencia conocida de spread, macro, volumen real, parametros de cuenta o marcos H4/D1 no es blocker por si sola si condicionEntrada y el sizing no dependen de ellos. No exijas optimizacion, walk-forward ni rentabilidad antes de permitir generar y hacer smoke backtest. Si detectas geometria incorrecta, riesgo excesivo, look-ahead, regla no codificable, evidencia inventada o dependencia real de un dato ausente, mantenlo como blocker.`;
+  } else if (agent.id === 'fx-judge') {
+    roleGuardrail = `GO solo significa elegible para generar y hacer smoke backtest; no exijas rentabilidad ni optimizacion para GO. No conviertas una limitacion conocida y no usada por la regla en blocker. Manten blockers tecnicos reales y exige cero unresolvedBlockers para GO.`;
+  }
+
+  return { ...agent, systemPrompt: `${agent.systemPrompt}\n\n${common}${roleGuardrail ? `\n${roleGuardrail}` : ''}` };
+});
+
 const stockAgents: Agent[] = [
   specialist('stock-structure', 'Estructura de Precio Acciones', 'Clasificar tendencia, niveles y riesgo de gap.', 'Usa OHLC, medias, ATR, rango y métricas de gap provistas. No traslades reglas de sesiones Forex.', ['market_snapshot', 'ohlcv']),
   specialist('stock-volume-gap', 'Volumen y Gaps', 'Evaluar volumen relativo y gaps con OHLCV.', 'Usa únicamente volumen relativo, gap y rango calculados. No inventes order flow, short interest ni volumen fuera del feed.', ['ohlcv']),
@@ -188,6 +210,7 @@ const cryptoAgents: Agent[] = [
 
 export const BASELINE_PRESETS: AgentConfigPreset[] = [
   preset('FOREX', 'forex_v1', 'forex', 'EUR/USD', ['market_snapshot', 'ohlcv', 'session_clock'], forexAgents),
+  preset('FOREX', 'forex_v1.1', 'forex', 'EUR/USD', ['market_snapshot', 'ohlcv', 'session_clock'], forexAgentsV11),
   preset('ACCIONES', 'stocks_v1', 'stocks', 'TSLA', ['market_snapshot', 'ohlcv', 'session_clock'], stockAgents),
   preset('CRIPTOMONEDAS', 'crypto_v1', 'crypto', 'BTC/USD', ['market_snapshot', 'ohlcv', 'session_clock'], cryptoAgents),
 ];

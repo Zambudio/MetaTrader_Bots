@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   extractBalancedJson,
   flattenMessages,
+  formatCliFailureDetail,
   isTransientCliError,
   resolveAgentCliRetries,
   resolveAgentCliTimeoutMs,
@@ -155,6 +156,30 @@ describe('isTransientCliError (regresión: fx-judge exit 1 stderr vacío tumbó 
     expect(isTransientCliError(new Error('[claudeCli] timeout (600s) esperando a claude'))).toBe(false);
     expect(isTransientCliError(new Error('la salida del CLI no contiene ningún objeto JSON'))).toBe(false);
     expect(isTransientCliError(new Error('[claudeCli] claude salió con código 2. stderr: Error: modelo no permitido'))).toBe(false);
+  });
+});
+
+describe('formatCliFailureDetail', () => {
+  it('conserva stdout cuando Claude Code reporta alli el limite de sesion', () => {
+    const stdout = JSON.stringify({
+      usage: { padding: 'x'.repeat(700) },
+      result: "You've hit your session limit - resets 2:40am",
+      is_error: true,
+    });
+    expect(formatCliFailureDetail('', stdout)).toBe(
+      "You've hit your session limit - resets 2:40am"
+    );
+  });
+
+  it('prioriza stderr y acota la salida para no volcar respuestas completas', () => {
+    expect(formatCliFailureDetail('error concreto', 'salida secundaria')).toBe('error concreto');
+    expect(formatCliFailureDetail('', 'x'.repeat(600))).toHaveLength(500);
+  });
+
+  it('no reintenta un limite de sesion aunque Claude salga con codigo 1', () => {
+    expect(isTransientCliError(new Error(
+      "[claudeCli] claude salio con codigo 1: You've hit your session limit - resets 2:40am"
+    ))).toBe(false);
   });
 });
 
