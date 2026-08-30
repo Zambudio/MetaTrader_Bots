@@ -1,5 +1,6 @@
 import { promises as fs, constants as fsConstants } from 'node:fs';
 import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import path from 'node:path';
 import { nanoid } from 'nanoid';
 import { parseMt5Log, type Mt5LogSession } from './mt5LogParser.js';
@@ -40,6 +41,31 @@ export interface BacktestExecutionResult {
 
 function normalizeSymbol(pair: string): string {
   return pair.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+}
+
+const execFileAsync = promisify(execFile);
+
+/**
+ * Comprueba si ya hay una instancia del terminal de MT5 en ejecución. Es determinante: cuando
+ * `terminal64.exe /config:<ini>` se lanza y YA hay un terminal abierto, Windows reenvía la
+ * config a esa instancia por línea de comandos y el proceso nuevo sale al instante — pero la
+ * instancia ya abierta IGNORA la sección [Tester] de una config reenviada y el backtest nunca
+ * corre. El sondeo entonces agota los 180s sin encontrar nada. Confirmado en los logs del
+ * terminal: una prueba de TSLA con MT5 ya abierto no dejó ni una línea de "Startup"/"Tester".
+ */
+export async function isTerminalRunning(terminalExe: string): Promise<boolean> {
+  const exeName = path.basename(terminalExe);
+  try {
+    const { stdout } = await execFileAsync(
+      'tasklist',
+      ['/FI', `IMAGENAME eq ${exeName}`, '/NH', '/FO', 'CSV'],
+      { windowsHide: true }
+    );
+    return stdout.toLowerCase().includes(exeName.toLowerCase());
+  } catch {
+    // Si tasklist no está disponible o falla, no bloqueamos — que el test lo intente.
+    return false;
+  }
 }
 
 async function resolveTerminalPath(): Promise<string | null> {
@@ -224,6 +250,20 @@ export async function runHeadlessBacktest(
       session: null,
       passedQualityGate: false,
       qualityNotes: ['MetaTrader 5 terminal no encontrado en el entorno para simulación headless automática.'],
+    };
+  }
+
+  // El backtest headless necesita arrancar SU PROPIA instancia limpia de MT5. Si ya hay una
+  // abierta (p. ej. la tienes tú mirando gráficos), la config del tester que le reenviamos se
+  // ignora en silencio y el sondeo agota los 180s para nada. Cortar aquí con un aviso claro.
+  if (await isTerminalRunning(terminalExe)) {
+    return {
+      session: null,
+      passedQualityGate: false,
+      error: 'MetaTrader 5 ya está abierto',
+      qualityNotes: [
+        `MetaTrader 5 (${path.basename(terminalExe)}) ya está abierto. El backtest headless necesita arrancar su propia instancia limpia — una ya en marcha ignora la configuración del tester y la simulación nunca corre. Cierra MetaTrader 5 y vuelve a generar (o pulsa "Optimizar" para reintentar solo el backtest).`,
+      ],
     };
   }
 
