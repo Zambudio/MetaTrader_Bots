@@ -45,7 +45,9 @@ export async function writeJson(filePath: string, data: unknown): Promise<void> 
     const dir = path.dirname(filePath);
     await fs.mkdir(dir, { recursive: true });
     const tmpPath = `${filePath}.${process.pid}.tmp`;
-    await fs.writeFile(tmpPath, JSON.stringify(data, null, 2), 'utf-8');
+    // Newline final: los ficheros semilla versionados (`agents.json`, `pairs.json`) lo llevan;
+    // sin esto, cada reescritura del servidor los dejaba como "modified" en git por 1 carácter.
+    await fs.writeFile(tmpPath, JSON.stringify(data, null, 2) + '\n', 'utf-8');
     await renameWithRetry(tmpPath, filePath);
   });
   writeQueues.set(
