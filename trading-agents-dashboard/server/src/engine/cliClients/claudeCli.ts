@@ -8,6 +8,7 @@ import {
 import {
   extractBalancedJson,
   flattenMessages,
+  resolveAgentCliTimeoutMs,
   resolveClaudeBin,
   spawnCli,
   toChoicesResponse,
@@ -56,7 +57,7 @@ export async function claudeCliChatCompletion(
   // `--disallowedTools <tools...>` es variádico: va el último para no tragarse otros flags.
   args.push('--disallowedTools', ...DISALLOWED_TOOLS);
 
-  const timeoutMs = options.timeoutMs ?? 180_000;
+  const timeoutMs = options.timeoutMs ?? resolveAgentCliTimeoutMs(180_000);
   const startedAt = Date.now();
   console.log(`[claudeCli] spawn: ${CLAUDE_BIN} -p --model ${model || 'sonnet'}${tool ? ` (JSON tool=${tool.function.name})` : ''} — suscripción`);
   let run;

@@ -20,7 +20,21 @@ function parseTwelveDataTime(datetime: string): number {
   return Math.floor(new Date(iso).getTime() / 1000);
 }
 
-export async function fetchTwelveDataCandles(pair: string, timeframe: string): Promise<Candle[]> {
+export interface TwelveDataQuery {
+  /**
+   * Fecha/hora de corte superior en UTC (`YYYY-MM-DD` o `YYYY-MM-DD HH:MM:SS`). Twelve Data
+   * devuelve las `outputsize` velas ANTERIORES a este instante — se usa para reconstruir la foto
+   * de mercado tal y como estaba en un periodo histórico concreto (tendencia clara, lateral, alta
+   * volatilidad) sin inventar velas.
+   */
+  endDate?: string;
+}
+
+export async function fetchTwelveDataCandles(
+  pair: string,
+  timeframe: string,
+  query: TwelveDataQuery = {}
+): Promise<Candle[]> {
   const apiKey = process.env.TWELVEDATA_API_KEY;
   if (!apiKey) {
     throw new Error(
@@ -28,9 +42,12 @@ export async function fetchTwelveDataCandles(pair: string, timeframe: string): P
     );
   }
   const interval = INTERVAL_MAP[timeframe] ?? '1h';
-  const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(
+  let url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(
     pair
   )}&interval=${interval}&outputsize=5000&timezone=UTC&apikey=${apiKey}`;
+  if (query.endDate) {
+    url += `&end_date=${encodeURIComponent(query.endDate)}`;
+  }
   const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
   const data = (await response.json()) as {
     status?: string;

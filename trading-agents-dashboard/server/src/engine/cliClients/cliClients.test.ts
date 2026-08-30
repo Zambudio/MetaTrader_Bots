@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest';
-import { extractBalancedJson, flattenMessages, stripPaidApiKeys, toChoicesResponse } from './shared.js';
+import { afterEach, describe, expect, it } from 'vitest';
+import {
+  extractBalancedJson,
+  flattenMessages,
+  resolveAgentCliTimeoutMs,
+  stripPaidApiKeys,
+  toChoicesResponse,
+} from './shared.js';
 import { buildJsonSchemaSystemMessage, type ToolDefinition } from '../omniClient.js';
 import { buildModelString, parseModelString } from '../../utils/modelString.js';
 
@@ -83,6 +89,30 @@ describe('toChoicesResponse', () => {
   it('produce la forma que espera parseToolArgs', () => {
     const r = toChoicesResponse('{"x":1}');
     expect(r.choices[0].message.content).toBe('{"x":1}');
+  });
+});
+
+describe('resolveAgentCliTimeoutMs', () => {
+  afterEach(() => {
+    delete process.env.AGENT_CLI_TIMEOUT_MS;
+  });
+
+  it('usa el fallback cuando AGENT_CLI_TIMEOUT_MS no está definido', () => {
+    delete process.env.AGENT_CLI_TIMEOUT_MS;
+    expect(resolveAgentCliTimeoutMs(180_000)).toBe(180_000);
+    expect(resolveAgentCliTimeoutMs(240_000)).toBe(240_000);
+  });
+
+  it('respeta un AGENT_CLI_TIMEOUT_MS válido (regresión: fx-risk/fx-critic morían a los 180 s)', () => {
+    process.env.AGENT_CLI_TIMEOUT_MS = '420000';
+    expect(resolveAgentCliTimeoutMs(180_000)).toBe(420_000);
+  });
+
+  it('ignora valores no numéricos o irrazonablemente bajos y cae al fallback', () => {
+    process.env.AGENT_CLI_TIMEOUT_MS = 'abc';
+    expect(resolveAgentCliTimeoutMs(180_000)).toBe(180_000);
+    process.env.AGENT_CLI_TIMEOUT_MS = '250';
+    expect(resolveAgentCliTimeoutMs(180_000)).toBe(180_000);
   });
 });
 

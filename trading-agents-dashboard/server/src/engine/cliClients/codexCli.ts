@@ -11,6 +11,7 @@ import {
 import {
   extractBalancedJson,
   flattenMessages,
+  resolveAgentCliTimeoutMs,
   resolveCodexEntry,
   spawnCli,
   toChoicesResponse,
@@ -57,7 +58,7 @@ export async function codexCliChatCompletion(
 
   const workDir = await mkdtemp(join(tmpdir(), 'codex-agent-'));
   const outFile = join(workDir, 'last-message.txt');
-  const timeoutMs = options.timeoutMs ?? 240_000;
+  const timeoutMs = options.timeoutMs ?? resolveAgentCliTimeoutMs(240_000);
 
   try {
     const args = [

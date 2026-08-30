@@ -1,5 +1,5 @@
 import { SMA, EMA, RSI, MACD, BollingerBands, ATR } from 'technicalindicators';
-import { getCandles } from '../marketData/index.js';
+import { candleSourceLabel, getCandles, parseEndDateToEpochSec } from '../marketData/index.js';
 import type { Candle } from '../marketData/types.js';
 
 export interface MarketSnapshotData {
@@ -319,19 +319,56 @@ export function formatSnapshotText(snapshot: MarketSnapshotData): string {
   return lines.join('\n');
 }
 
-export async function buildMarketSnapshot(pair: string, timeframe: string): Promise<string | null> {
+export interface BuildSnapshotOptions {
+  /**
+   * Reconstruye la foto de mercado tal y como estaba en un instante histórico (UTC,
+   * `YYYY-MM-DD` o `YYYY-MM-DD HH:MM:SS`): solo se usan velas cerradas hasta esa fecha y la
+   * frescura se calcula respecto a ese instante (no respecto a "ahora"). No inventa velas: si
+   * el proveedor no tiene histórico suficiente para ese rango, devuelve lo que haya o `null`.
+   */
+  asOf?: string;
+  /** Ignora la caché de 60 s de `getCandles` (para scripts de validación reproducible). */
+  noCache?: boolean;
+}
+
+/** Cabecera de trazabilidad para un snapshot histórico: fuente, símbolo, timeframe, rango y corte. */
+function historicalProvenanceHeader(
+  pair: string,
+  timeframe: string,
+  asOf: string,
+  candles: Candle[]
+): string {
+  const first = candles[0] ? new Date(candles[0].time * 1000).toISOString() : 'n/d';
+  const last = candles[candles.length - 1] ? new Date(candles[candles.length - 1].time * 1000).toISOString() : 'n/d';
+  return [
+    `=== VENTANA HISTÓRICA REPRODUCIBLE ===`,
+    `Fuente: ${candleSourceLabel(pair)} | Símbolo: ${pair} | Timeframe: ${timeframe}`,
+    `Corte superior (as_of, UTC): ${asOf}`,
+    `Velas usadas: ${candles.length} | Rango: ${first} → ${last}`,
+    `La foto refleja SOLO velas cerradas hasta el corte; la frescura se evalúa respecto a esa fecha.`,
+    `======================================`,
+  ].join('\n');
+}
+
+export async function buildMarketSnapshot(
+  pair: string,
+  timeframe: string,
+  opts: BuildSnapshotOptions = {}
+): Promise<string | null> {
   try {
-    const candles = await getCandles(pair, timeframe);
+    const candles = await getCandles(pair, timeframe, { endDate: opts.asOf, noCache: opts.noCache });
     if (!candles || candles.length === 0) {
       console.warn(`[marketSnapshot] No se obtuvieron velas para ${pair} (${timeframe})`);
       return null;
     }
-    const data = computeSnapshotFromCandles(candles, pair, timeframe);
+    const nowMs = opts.asOf ? (parseEndDateToEpochSec(opts.asOf) ?? Date.now() / 1000) * 1000 : Date.now();
+    const data = computeSnapshotFromCandles(candles, pair, timeframe, nowMs);
     if (!data) {
       console.warn(`[marketSnapshot] Velas insuficientes para calcular indicadores (${candles.length}) para ${pair}`);
       return null;
     }
-    return formatSnapshotText(data);
+    const body = formatSnapshotText(data);
+    return opts.asOf ? `${historicalProvenanceHeader(pair, timeframe, opts.asOf, candles)}\n${body}` : body;
   } catch (err) {
     console.warn(`[marketSnapshot] No se pudo obtener snapshot de mercado para ${pair} (${timeframe}):`, err instanceof Error ? err.message : err);
     return null;

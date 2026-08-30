@@ -21,6 +21,22 @@ export function stripPaidApiKeys(env: NodeJS.ProcessEnv = process.env): NodeJS.P
   return clean;
 }
 
+/**
+ * Timeout (ms) para UNA llamada a un CLI de agente de análisis (`claude -p`, `codex exec`).
+ * Configurable con `AGENT_CLI_TIMEOUT_MS`; si no está definido o es basura, se usa `fallbackMs`.
+ *
+ * Los revisores (`fx-risk`/`fx-critic` y equivalentes) reciben por stdin la cadena de contexto de
+ * TODOS sus ancestros + snapshot + propuesta de estrategia, y varios agentes del mismo nivel del
+ * grafo se lanzan en paralelo. Con el tope fijo de 180 s (`claude`) se les mataba a mitad de
+ * inferencia — evidencia: run `_rWt37-Ku2` (TSLA), `stock-risk` y `stock-critic` fallaron con
+ * `[claudeCli] timeout (180s)` y dejaron al juez en `waiting` y el run en `error`. Mismo patrón que
+ * `MQL5_GEN_TIMEOUT_MS` para la generación de código.
+ */
+export function resolveAgentCliTimeoutMs(fallbackMs: number): number {
+  const raw = Number(process.env.AGENT_CLI_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw >= 1000 ? Math.floor(raw) : fallbackMs;
+}
+
 export interface CliRunResult {
   code: number | null;
   stdout: string;
