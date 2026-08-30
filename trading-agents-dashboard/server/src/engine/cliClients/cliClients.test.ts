@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   extractBalancedJson,
   flattenMessages,
+  isTransientCliError,
+  resolveAgentCliRetries,
   resolveAgentCliTimeoutMs,
   stripPaidApiKeys,
   toChoicesResponse,
@@ -113,6 +115,46 @@ describe('resolveAgentCliTimeoutMs', () => {
     expect(resolveAgentCliTimeoutMs(180_000)).toBe(180_000);
     process.env.AGENT_CLI_TIMEOUT_MS = '250';
     expect(resolveAgentCliTimeoutMs(180_000)).toBe(180_000);
+  });
+});
+
+describe('resolveAgentCliRetries', () => {
+  afterEach(() => {
+    delete process.env.AGENT_CLI_RETRIES;
+  });
+
+  it('usa el fallback sin env y respeta un valor válido', () => {
+    delete process.env.AGENT_CLI_RETRIES;
+    expect(resolveAgentCliRetries(2)).toBe(2);
+    process.env.AGENT_CLI_RETRIES = '0';
+    expect(resolveAgentCliRetries(2)).toBe(0);
+    process.env.AGENT_CLI_RETRIES = '3';
+    expect(resolveAgentCliRetries(2)).toBe(3);
+  });
+
+  it('acota a 5 e ignora basura / negativos', () => {
+    process.env.AGENT_CLI_RETRIES = '99';
+    expect(resolveAgentCliRetries(2)).toBe(5);
+    process.env.AGENT_CLI_RETRIES = '-1';
+    expect(resolveAgentCliRetries(2)).toBe(2);
+    process.env.AGENT_CLI_RETRIES = 'x';
+    expect(resolveAgentCliRetries(2)).toBe(2);
+  });
+});
+
+describe('isTransientCliError (regresión: fx-judge exit 1 stderr vacío tumbó un run entero)', () => {
+  it('trata como transitorios los hipos de suscripción', () => {
+    expect(isTransientCliError(new Error('[claudeCli] claude salió con código 1. stderr: (vacío)'))).toBe(true);
+    expect(isTransientCliError(new Error('[claudeCli] stdout no es JSON parseable: '))).toBe(true);
+    expect(isTransientCliError(new Error('[claudeCli] claude no devolvió texto en .result'))).toBe(true);
+    expect(isTransientCliError(new Error('[claudeCli] claude devolvió error (subtype=error_during_execution): x'))).toBe(true);
+    expect(isTransientCliError(new Error('[codexCli] codex falló (código 1): rate limit'))).toBe(true);
+  });
+
+  it('NO reintenta timeouts ni errores de formato del JSON del modelo', () => {
+    expect(isTransientCliError(new Error('[claudeCli] timeout (600s) esperando a claude'))).toBe(false);
+    expect(isTransientCliError(new Error('la salida del CLI no contiene ningún objeto JSON'))).toBe(false);
+    expect(isTransientCliError(new Error('[claudeCli] claude salió con código 2. stderr: Error: modelo no permitido'))).toBe(false);
   });
 });
 

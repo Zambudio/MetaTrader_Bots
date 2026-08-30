@@ -159,9 +159,10 @@ function summarizeRun(run: Run, provenance: Record<string, unknown>) {
 
 async function main() {
   const which = process.argv[2] || 'all';
-  const specs = which === 'all' ? SCENARIOS : SCENARIOS.filter((s) => s.id === which);
+  const wanted = which.split(',').map((s) => s.trim()).filter(Boolean);
+  const specs = which === 'all' ? SCENARIOS : SCENARIOS.filter((s) => wanted.includes(s.id));
   if (specs.length === 0) {
-    console.error(`Escenario desconocido: ${which}. Válidos: ${SCENARIOS.map((s) => s.id).join(', ')}, all`);
+    console.error(`Escenario(s) desconocido(s): ${which}. Válidos: ${SCENARIOS.map((s) => s.id).join(', ')}, all`);
     process.exit(1);
   }
 

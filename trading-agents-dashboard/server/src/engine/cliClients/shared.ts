@@ -37,6 +37,38 @@ export function resolveAgentCliTimeoutMs(fallbackMs: number): number {
   return Number.isFinite(raw) && raw >= 1000 ? Math.floor(raw) : fallbackMs;
 }
 
+/**
+ * Nº de reintentos ante fallos TRANSITORIOS de un CLI de agente (`AGENT_CLI_RETRIES`, def.
+ * `fallback`, tope 5). Un hipo puntual de la suscripción (`claude` sale con código 1 y stderr
+ * vacío en pocos segundos) no debe tumbar un run entero cuando `llmRouter` no hace fallback.
+ */
+export function resolveAgentCliRetries(fallback: number): number {
+  const raw = Number(process.env.AGENT_CLI_RETRIES);
+  if (!Number.isFinite(raw) || raw < 0) return fallback;
+  return Math.min(5, Math.floor(raw));
+}
+
+/**
+ * ¿El error de una invocación de CLI es TRANSITORIO (merece reintento) y no un fallo de
+ * contenido/entrada? Transitorio: salida no cero con stderr vacío, stdout no parseable, `.result`
+ * vacío, `subtype != success`, o "no se pudo lanzar". NO transitorio: timeout (probable prompt
+ * demasiado grande / saturación — reintentar agrava) y errores de parseo del JSON del modelo
+ * (`extractBalancedJson` / `JSON.parse` del tool-call — el reintento daría el mismo formato).
+ */
+export function isTransientCliError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/timeout \(\d+s\)/i.test(msg)) return false;
+  if (/no contiene ningún objeto JSON|objeto JSON sin cerrar/i.test(msg)) return false;
+  return (
+    /salió con código \d+\. stderr: \(vacío\)/i.test(msg) ||
+    /stdout no es JSON parseable/i.test(msg) ||
+    /no devolvió texto en \.result/i.test(msg) ||
+    /devolvió error \(subtype=/i.test(msg) ||
+    /no se pudo lanzar/i.test(msg) ||
+    /codex falló \(código/i.test(msg)
+  );
+}
+
 export interface CliRunResult {
   code: number | null;
   stdout: string;

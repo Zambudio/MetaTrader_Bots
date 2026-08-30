@@ -11,11 +11,15 @@ import {
 import {
   extractBalancedJson,
   flattenMessages,
+  isTransientCliError,
+  resolveAgentCliRetries,
   resolveAgentCliTimeoutMs,
   resolveCodexEntry,
   spawnCli,
   toChoicesResponse,
 } from './shared.js';
+
+const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /**
  * Adaptador de la CLI `codex` (codex-cli) usando la SUSCRIPCIÓN ChatGPT del usuario
@@ -47,6 +51,32 @@ function codexEntry(): string {
 }
 
 export async function codexCliChatCompletion(
+  model: string,
+  effort: string | undefined,
+  messages: ChatMessage[],
+  tool?: ToolDefinition | null,
+  options: OmniClientOptions = {}
+): Promise<any> {
+  const maxRetries = resolveAgentCliRetries(2);
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await codexCliAttempt(model, effort, messages, tool, options);
+    } catch (err) {
+      lastErr = err;
+      if (attempt < maxRetries && isTransientCliError(err)) {
+        const backoffMs = 2_000 * (attempt + 1);
+        console.warn(`[codexCli] fallo transitorio (intento ${attempt + 1}/${maxRetries + 1}): ${err instanceof Error ? err.message : err}. Reintento en ${backoffMs / 1000}s.`);
+        await delay(backoffMs);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+}
+
+async function codexCliAttempt(
   model: string,
   effort: string | undefined,
   messages: ChatMessage[],

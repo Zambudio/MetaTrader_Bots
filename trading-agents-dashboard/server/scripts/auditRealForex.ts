@@ -106,9 +106,26 @@ function auditRun(run: RunEntry) {
   const findings: Array<{ severity: 'error' | 'warn' | 'info'; code: string; msg: string }> = [];
   const push = (severity: 'error' | 'warn' | 'info', code: string, msg: string) => findings.push({ severity, code, msg });
 
+  if (!run.marketSnapshotUsed && run.dataProvenance?.mode !== 'absent') {
+    push('warn', 'AUDIT_LIMITATION', 'El run no persistió el texto del snapshot (script previo a la mejora); el escaneo de alucinaciones numéricas queda inhabilitado para este run — vuelve a ejecutarlo con el runner actual.');
+  }
+
   const snapshot = run.marketSnapshotUsed ?? '';
   const snapNums = snapshot ? snapshotNumbers(snapshot) : new Set<string>();
   const byId = new Map(run.agents.map((a) => [a.agentId, a]));
+
+  // Los revisores (fx-risk/fx-critic/fx-judge) citan LEGÍTIMAMENTE la geometría de la propuesta
+  // (entry/SL/TP/riskPercent/RR) y las confidences de los ancestros, que NO están en el snapshot.
+  const proposalStr = byId.get('fx-strategy')?.strategy;
+  const knownExtra = new Set<string>();
+  for (const s of run.agents) {
+    if (s.analysis && typeof s.analysis.confidence === 'number') knownExtra.add(s.analysis.confidence.toFixed(2));
+  }
+  if (proposalStr) {
+    for (const v of [proposalStr.entryPriceNum, proposalStr.stopLossNum, proposalStr.takeProfitNum, proposalStr.riskPercent, proposalStr.confidence]) {
+      if (typeof v === 'number') { knownExtra.add(String(v)); knownExtra.add(v.toFixed(5)); knownExtra.add(v.toFixed(2)); }
+    }
+  }
 
   // --- selección de agentes ---
   const unexpected = run.executedAgents.filter((id) => !run.expectedAgents.includes(id));
@@ -139,12 +156,20 @@ function auditRun(run: RunEntry) {
       const cErrs = auditContract(a.analysis);
       if (cErrs.length) push('error', 'CONTRACT_ERROR', `${a.agentId}: ${cErrs.join(' | ')}`);
 
-      // alucinaciones: números afirmados como DATO que no están en el snapshot
-      for (const f of a.analysis.facts ?? []) {
-        for (const m of String(f.claim).matchAll(/-?\d+\.\d+/g)) {
-          const v = Number(m[0]);
-          if (!numberAppears(v, snapshot, snapNums)) {
-            push('warn', 'HALLUCINATION', `${a.agentId} DATO con número no presente en snapshot: "${f.claim}" (${m[0]})`);
+      // alucinaciones: números afirmados como DATO que no están en el snapshot.
+      // Solo se evalúa si hay snapshot de referencia; se ignoran números "no de mercado"
+      // (timestamps ISO, %, contadores) y se agrupa un aviso por fact (no por número).
+      if (snapshot) {
+        for (const f of a.analysis.facts ?? []) {
+          const claim = String(f.claim);
+          const orphan: string[] = [];
+          for (const m of claim.matchAll(/(?<![\d.:T-])-?\d+\.\d{2,}(?![\d:])/g)) {
+            const v = Number(m[0]);
+            // descarta fracciones triviales de pip que el modelo deriva (p. ej. "0.00088")
+            if (!numberAppears(v, snapshot, snapNums) && !knownExtra.has(m[0]) && Math.abs(v) >= 0.01) orphan.push(m[0]);
+          }
+          if (orphan.length) {
+            push('warn', 'HALLUCINATION', `${a.agentId} DATO con número(s) sin origen en snapshot [${[...new Set(orphan)].join(', ')}]: "${claim.slice(0, 120)}"`);
           }
         }
       }

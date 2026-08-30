@@ -8,6 +8,8 @@ import {
 import {
   extractBalancedJson,
   flattenMessages,
+  isTransientCliError,
+  resolveAgentCliRetries,
   resolveAgentCliTimeoutMs,
   resolveClaudeBin,
   spawnCli,
@@ -36,28 +38,16 @@ const DISALLOWED_TOOLS = [
 
 const CLAUDE_BIN = resolveClaudeBin();
 
-export async function claudeCliChatCompletion(
+const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** Una sola invocación de `claude -p`. Lanza en cualquier fallo; el reintento lo gestiona el caller. */
+async function claudeCliAttempt(
+  args: string[],
+  userPrompt: string,
+  timeoutMs: number,
   model: string,
-  messages: ChatMessage[],
-  tool?: ToolDefinition | null,
-  options: OmniClientOptions = {}
+  tool?: ToolDefinition | null
 ): Promise<any> {
-  const systemPrompt = messages
-    .filter((m) => m.role === 'system')
-    .map((m) => m.content.trim())
-    .filter(Boolean)
-    .join('\n\n');
-
-  let userPrompt = flattenMessages(messages, { includeSystem: false });
-  if (tool) userPrompt += `\n\n${buildJsonSchemaSystemMessage(tool)}`;
-
-  const args = ['-p', '--output-format', 'json'];
-  if (model.trim()) args.push('--model', model.trim());
-  if (systemPrompt) args.push('--system-prompt', systemPrompt);
-  // `--disallowedTools <tools...>` es variádico: va el último para no tragarse otros flags.
-  args.push('--disallowedTools', ...DISALLOWED_TOOLS);
-
-  const timeoutMs = options.timeoutMs ?? resolveAgentCliTimeoutMs(180_000);
   const startedAt = Date.now();
   console.log(`[claudeCli] spawn: ${CLAUDE_BIN} -p --model ${model || 'sonnet'}${tool ? ` (JSON tool=${tool.function.name})` : ''} — suscripción`);
   let run;
@@ -97,4 +87,53 @@ export async function claudeCliChatCompletion(
 
   const content = tool ? extractBalancedJson(sanitizeJsonResponse(result)) : result;
   return toChoicesResponse(content);
+}
+
+export async function claudeCliChatCompletion(
+  model: string,
+  messages: ChatMessage[],
+  tool?: ToolDefinition | null,
+  options: OmniClientOptions = {}
+): Promise<any> {
+  const systemPrompt = messages
+    .filter((m) => m.role === 'system')
+    .map((m) => m.content.trim())
+    .filter(Boolean)
+    .join('\n\n');
+
+  let userPrompt = flattenMessages(messages, { includeSystem: false });
+  if (tool) userPrompt += `\n\n${buildJsonSchemaSystemMessage(tool)}`;
+
+  const args = ['-p', '--output-format', 'json'];
+  if (model.trim()) args.push('--model', model.trim());
+  if (systemPrompt) args.push('--system-prompt', systemPrompt);
+  // `--disallowedTools <tools...>` es variádico: va el último para no tragarse otros flags.
+  args.push('--disallowedTools', ...DISALLOWED_TOOLS);
+
+  const timeoutMs = options.timeoutMs ?? resolveAgentCliTimeoutMs(180_000);
+  const maxRetries = resolveAgentCliRetries(2);
+
+  // Reintento acotado ante fallos TRANSITORIOS (salida rápida con código 1 y stderr vacío,
+  // stdout no parseable, `.result` vacío, subtype != success). Evidencia: run
+  // `real-forex-20260830150301-r1-current` — `fx-judge` falló con `claude salió con código 1.
+  // stderr: (vacío)` en 6.1 s, en la 3ª pasada, y tumbó un run de ~30 min ya completado hasta el
+  // juez. `llmRouter` NO hace fallback entre fuentes, así que sin esto un hipo puntual de la
+  // suscripción cuesta la ejecución entera. Un timeout NO se reintenta (probablemente el prompt
+  // es demasiado grande o el modelo está saturado — reintentar solo agravaría).
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await claudeCliAttempt(args, userPrompt, timeoutMs, model, tool);
+    } catch (err) {
+      lastErr = err;
+      if (attempt < maxRetries && isTransientCliError(err)) {
+        const backoffMs = 2_000 * (attempt + 1);
+        console.warn(`[claudeCli] fallo transitorio (intento ${attempt + 1}/${maxRetries + 1}): ${err instanceof Error ? err.message : err}. Reintento en ${backoffMs / 1000}s.`);
+        await delay(backoffMs);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
