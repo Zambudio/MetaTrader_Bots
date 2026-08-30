@@ -135,6 +135,7 @@ No se llegó a completar, dentro del presupuesto de esta sesión, un ciclo ínte
 
 ## Ver también
 
+- [`2026-08-30-resiliencia-generacion-mql5-y-backtest-mt5-abierto.md`](2026-08-30-resiliencia-generacion-mql5-y-backtest-mt5-abierto.md) — continuación directa de los hallazgos 5 y 6: el mismo patrón de `reconcileOrphanedRuns` aplicado ahora a los jobs de generación MQL5 (que también vivían solo en memoria), y un fallo determinista más del backtest (`terminal64.exe` ya abierto ignora la config del tester reenviada) detectado y avisado en vez de esperar 180 s.
 - [`2026-08-20-diagnostico-veredicto-vs-backtest-real.md`](2026-08-20-diagnostico-veredicto-vs-backtest-real.md) — diagnóstico y fix de continuación: por qué, incluso con los 9 problemas de este informe corregidos, el panel podía seguir dando "GO" a estrategias que pierden dinero en backtest real.
 - [`docs/ESQUEMA_AGENTES_ANALISIS.md`](../../../trading-agents-dashboard/docs/ESQUEMA_AGENTES_ANALISIS.md) — diseño original del roster de 6 agentes que esta sesión pone a prueba.
 - [`server/README.md`](../../../trading-agents-dashboard/server/README.md) — arquitectura técnica actualizada con el comportamiento corregido (orquestador, pipeline de backtest headless).

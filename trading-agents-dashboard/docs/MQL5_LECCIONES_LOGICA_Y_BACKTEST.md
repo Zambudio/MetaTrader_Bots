@@ -100,3 +100,23 @@ rentable?". Motiva la función descrita en `docs/BACKTEST_LOG_ANALYZER.md`: un a
 el dashboard donde se sube el log del Strategy Tester (arrastrando el archivo o abriendo
 el explorador de Windows) y el sistema calcula automáticamente win rate, R:R real
 observado y resultado neto, en vez de tener que leerlo a mano en el log de MetaTrader.
+
+## 5. Nota operativa (no de código): MetaTrader 5 debe estar CERRADO al generar
+
+Hermana de la nota del §2 sobre MetaEditor: el backtest headless automático lanza
+`terminal64.exe /config:<autotester_*.ini>`, que **solo ejecuta el tester en un arranque
+limpio**. Si ya tienes MetaTrader 5 abierto a mano (mirando gráficos), Windows le reenvía
+la config a esa instancia por línea de comandos y el proceso nuevo sale al instante — pero
+la instancia ya en marcha **ignora la sección `[Tester]` reenviada** y el backtest nunca
+corre. El sondeo agota los 180 s y devuelve "no se pudo confirmar la finalización".
+
+Confirmado 2026-08-30: una prueba de TSLA con MT5 abierto no dejó ni una línea de
+`Startup`/`Tester` en el log del terminal (el `.ini` generado era correcto — `Symbol=TSLA`,
+`Period=H4`; el problema no era el símbolo). Las pruebas de EUR/USD "siempre funcionaban"
+porque `ShutdownTerminal=1` cierra MT5 tras cada test, así que cada una era un arranque
+limpio.
+
+El dashboard ahora lo detecta (`isTerminalRunning` en `mql5Backtester.ts`, vía `tasklist`)
+y corta con un aviso accionable en vez de esperar los 180 s. Aun así, **cierra MetaTrader 5
+antes de darle a "Generar código MQL5"**. Detalle completo:
+`wiki-Traiding/proyecto-dashboard/informes/2026-08-30-resiliencia-generacion-mql5-y-backtest-mt5-abierto.md`.
