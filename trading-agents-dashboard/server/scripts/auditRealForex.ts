@@ -18,6 +18,13 @@ import path from 'node:path';
 import { readJson, writeJson } from '../src/store/jsonStore.js';
 import { DATA_DIR } from '../src/paths.js';
 import { validateStrategyProposal } from '../src/engine/strategyValidator.js';
+import {
+  hasHistoricalTemporalContextError,
+  hasInconsistentEntryReference,
+  hasOverloadedEntryCondition,
+  hasUnsupportedNumericExecutionCosts,
+  findWeekdayMismatch,
+} from '../src/validation/forexAuditRules.js';
 import type { AgentAnalysis, StrategyProposalLite, VerdictResult } from '../src/types.js';
 
 const REPORT_FILE = path.join(DATA_DIR, 'validation-real-forex-latest.json');
@@ -127,11 +134,7 @@ function auditRun(run: RunEntry) {
     for (const agent of run.agents) {
       if (!agent.analysis) continue;
       const text = JSON.stringify(agent.analysis);
-      const citesDateOutsideSnapshot = [...text.matchAll(/\b20\d{2}-\d{2}-\d{2}\b/g)]
-        .some((match) => !snapshot.includes(match[0]));
-      if (agent.analysis.dataQuality === 'stale'
-        || /fecha actual del sistema|fecha de sesi.n actual|meses (?:posterior|despues)/i.test(text)
-        || citesDateOutsideSnapshot) {
+      if (hasHistoricalTemporalContextError(text, snapshot, agent.analysis.dataQuality)) {
         push('error', 'TEMPORAL_CONTEXT_ERROR', `${agent.agentId} comparo una ventana HISTORICAL_AS_OF valida con la fecha actual.`);
       }
     }
@@ -218,6 +221,15 @@ function auditRun(run: RunEntry) {
       if (dataAbsent && a.analysis.status === 'valid' && (a.analysis.facts?.length ?? 0) > 0) {
         push('warn', 'INVALID_RESULT', `${a.agentId} status=valid con datos ausentes`);
       }
+      if (hasUnsupportedNumericExecutionCosts(JSON.stringify(a.analysis))) {
+        push('error', 'HALLUCINATION', `${a.agentId} asigna cifras a spread/slippage declarados DATA_NOT_AVAILABLE`);
+      }
+      if (a.agentId === 'fx-session') {
+        const mismatch = findWeekdayMismatch(JSON.stringify(a.analysis));
+        if (mismatch) {
+          push('error', 'MODEL_ERROR', `${a.agentId} dice ${mismatch.stated} para ${mismatch.date}; el calendario UTC da ${mismatch.expected}`);
+        }
+      }
     }
 
     if (a.strategy) {
@@ -234,8 +246,14 @@ function auditRun(run: RunEntry) {
       else push('info', 'STRATEGY_OK', `${a.agentId} gate OK: ${a.strategy.direction} entry ${v.normalized?.entryPriceNum} SL ${v.normalized?.stopLossNum} TP ${v.normalized?.takeProfitNum} R:R ${v.normalized?.rrRatio.toFixed(2)}`);
       // condición de entrada: mecánica, no un precio anecdótico
       const cond = String(a.strategy.condicionEntrada ?? '');
-      if (/no abrir si|ignorar si|primera vela|calendario|spread|slippage|H4|D1/i.test(cond)) {
+      if (hasOverloadedEntryCondition(cond)) {
         push('error', 'STRATEGY_ERROR', `${a.agentId} condicionEntrada anade restricciones fuera del maximo de 1 evento + 1 filtro: "${cond}"`);
+      }
+      if (hasInconsistentEntryReference(cond, a.strategy.puntoEntrada, a.strategy.stopLoss, a.strategy.takeProfit)) {
+        push('error', 'STRATEGY_ERROR', `${a.agentId} entra en la apertura siguiente pero ancla SL/TP al cierre de la vela de senal; el R:R ejecutado no queda garantizado`);
+      }
+      if (hasUnsupportedNumericExecutionCosts(JSON.stringify(a.strategy))) {
+        push('error', 'HALLUCINATION', `${a.agentId} asigna cifras a spread/slippage declarados DATA_NOT_AVAILABLE`);
       }
       if (/^\s*-?\d+\.\d+\s*$/.test(cond) || (/\d+\.\d{3,}/.test(cond) && !/(EMA|SMA|RSI|MACD|Bollinger|ATR|cruz|cross|banda|media)/i.test(cond))) {
         push('warn', 'STRATEGY_ERROR', `${a.agentId} condicionEntrada parece un nivel de precio anecdótico: "${cond}"`);
@@ -262,6 +280,9 @@ function auditRun(run: RunEntry) {
       }
       if (vd.veredicto === 'ajustar' && (vd.objeciones?.length ?? 0) === 0) {
         push('warn', 'CONTRACT_ERROR', `${a.agentId} AJUSTAR sin objeciones concretas`);
+      }
+      if (hasUnsupportedNumericExecutionCosts(JSON.stringify(vd))) {
+        push('error', 'HALLUCINATION', `${a.agentId} asigna cifras a spread/slippage declarados DATA_NOT_AVAILABLE`);
       }
     }
   }

@@ -214,6 +214,13 @@ Defectos reales del contenido, pese al GO:
 
 Decisión humana: **rechazar temporalmente este GO para FASE 5**. No se ejecuta `generateValidatedForexMql5.ts`, no se genera `.mq5/.ex5`, no hay compilación ni smoke. Próximo paso: corregir audit y aclarar solo `forex_v1.1` para cálculo determinista de día/ausencia de cifras inventadas y una única referencia coherente de entrada-SL-TP; actualizar hashes, añadir tests y repetir R2 + dos corridas limpias.
 
+### Corrección C5 aplicada tras R2
+
+- Audit extraído a reglas puras con regresiones: las negaciones HISTORICAL_AS_OF ya no son contaminación temporal; `No incluye filtros...` no cuenta como restricción; sí se detectan costes numéricos sin fuente, día ISO incorrecto y entrada en apertura siguiente con SL/TP anclados al cierre previo.
+- `forex_v1.1` aclara, sin tocar `forex_v1`: calcular o abstenerse del día de semana; no inventar cifras de spread/slippage; usar la **misma referencia de precio ejecutable** para entrada, SL y TP. Riesgo, crítico y juez deben conservar como blocker cualquier discrepancia de referencia que deje el R:R runtime sin garantizar.
+- Nuevo hash v1.1: `a48925ec9f91d84a319b54508cea40f06a622599b9fddc5645a6769b69797ed4`. Hash v1 permanece `504e6f2ac86fd05a321e99049b489654f48524f776b7bcf54e679fb70429bb8c`.
+- Verificación previa a repetir: `npm run typecheck` PASS; `npx vitest run` **18 files / 83 tests PASS**; `npm run build` PASS (solo warning conocido de chunk 584,14 kB).
+
 ---
 
 ## Handoff original — recibido por Codex
