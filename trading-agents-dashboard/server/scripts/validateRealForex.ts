@@ -16,7 +16,11 @@ import path from 'node:path';
 import { getPreset, loadAgentConfigsState } from '../src/store/agentConfigsStore.js';
 import { hashConfiguration, validatePreset } from '../src/config/configValidation.js';
 import { executeRun } from '../src/engine/orchestrator.js';
-import { buildMarketSnapshot, computeSnapshotFromCandles } from '../src/engine/marketSnapshot.js';
+import {
+  buildMarketSnapshot,
+  buildMarketSnapshotFromCandles,
+  computeSnapshotFromCandles,
+} from '../src/engine/marketSnapshot.js';
 import { getCandles, candleSourceLabel } from '../src/marketData/index.js';
 import { loadRun } from '../src/store/runsStore.js';
 import { readJson, writeJson } from '../src/store/jsonStore.js';
@@ -81,7 +85,7 @@ async function buildScenarioSnapshot(spec: ScenarioSpec): Promise<{ snapshot: st
   }
   if (spec.asOf) {
     const candles = await getCandles(PAIR, TF, { endDate: spec.asOf, noCache: true });
-    const snapshot = await buildMarketSnapshot(PAIR, TF, { asOf: spec.asOf, noCache: true });
+    const snapshot = buildMarketSnapshotFromCandles(candles, PAIR, TF, { asOf: spec.asOf });
     return {
       snapshot,
       provenance: {

@@ -177,6 +177,45 @@ Tras el reset de la suscripción se deben ejecutar, **uno a uno**, los seis esce
 
 ---
 
+## Continuación 2026-09-01 — checkpoint R2 sobre `forex_v1.1`
+
+Rama `validacion-real-forex`, partida `be7cddb`. `claude -p "ping"` respondió correctamente; no había límite de sesión. El preset activo no se cambió, no se tocaron procesos de MetaTrader, no hubo órdenes live, push ni deploy.
+
+### Incidencia de datos y corrección C4
+
+El primer intento de `r2-trend` abortó antes de crear el run: `fetchTwelveDataCandles` agotó su timeout fijo de 10 s. Repro mínimo, dos veces: `TimeoutError` a los 10.010 s. La misma URL real con timeout de 45 s devolvió HTTP 200 y 5.000 velas en 11.139 s. Clasificación: **`DATA_PROVIDER_TIMEOUT` / `TOOL_ERROR`**.
+
+Corrección de causa raíz, sin tocar la baseline:
+
+- `TWELVEDATA_TIMEOUT_MS`, 30 s por defecto y acotado a 1–120 s; documentado en `.env.example`.
+- El runner histórico reutiliza la misma serie ya descargada para procedencia y snapshot; elimina la segunda petición idéntica con `noCache: true`.
+- Regresión: `marketDataHistorical.test.ts`, 7/7 PASS (timeout configurable realmente conectado al `AbortSignal` + snapshot histórico desde velas ya obtenidas).
+- Repro original tras el fix: 5.000 velas, PASS en 3.060 s.
+
+### Run `real-forex-20260901174952-r2-trend`
+
+| preset | escenario | duración | ejecutados | omitidos | resultado funcional |
+|---|---|---:|---|---|---|
+| `forex_v1.1` (`baseline-forex-forex-v1-1`) | R2 tendencia, `as_of=2026-03-25T00:00:00Z` | 1.991 s | `fx-structure`, `fx-momentum-volatility`, `fx-session`, `fx-strategy`, `fx-risk`, `fx-critic`, `fx-judge` | `fx-macro`: `DATA_NOT_AVAILABLE: verified_macro_calendar, verified_news` | `status=done`, `finalState=validated`, juez `go`, 0 blockers declarados, 0 agentes error/waiting |
+
+Roster exclusivamente `fx-*`, cero contaminación ACCIONES/CRIPTO. Los cinco `AgentAnalysis` persistidos tienen contrato válido, facts con source, inferencias/hipótesis/conclusión y confidence 0..1. La transferencia de contexto llegó a riesgo, crítico y juez. Snapshot real: 5.000 velas de Twelve Data, rango `2025-07-02T19:00:00Z → 2026-03-25T00:00:00Z`, `dataQuality=good`, última vela igual al corte.
+
+Propuesta final: BUY; condición = un evento (recruce alcista de EMA20 en vela H1 cerrada) + un filtro (MACD línea > señal); ejecución en apertura de la vela siguiente; instancia ilustrativa `entry=1.15980`, `SL=1.15738`, `TP=1.16389`, riesgo 0,5 %. Recalculo independiente: riesgo `0.00242` = 24,2 pips = 1,301 ATR; recompensa `0.00409` = 40,9 pips; R:R `1,690`; geometría y gate numérico ilustrativo PASS.
+
+### Auditoría manual: GO todavía NO elegible para MQL5
+
+El audit automático marcó tres `TEMPORAL_CONTEXT_ERROR` falsos: los textos dicen explícitamente que la fecha del sistema **no** se usa. También marcó como condición extra la frase negativa `No incluye filtros de calendario, spread, sesión...`; la regla efectiva sí cumple 1 evento + 1 filtro. Se clasifica como **`VALIDATION_TOOL_ERROR`** y debe corregirse con regresión antes del siguiente audit.
+
+Defectos reales del contenido, pese al GO:
+
+1. **`MODEL_ERROR` / aritmética calendaria:** `fx-session` afirmó que 2026-03-25 era martes; era miércoles. El crítico lo detectó y el juez lo dio por resuelto, pero la exigencia de corridas limpias no permite conservar el error en la cadena.
+2. **`HALLUCINATION`:** estrategia/revisores introdujeron spread `0,6–1,0 pip` y slippage `0,2–0,5 pip` sin fuente. Se presentan como supuesto de backtest, no como DATO observado, pero siguen siendo cifras fabricadas en un entorno que declara spread/slippage `DATA_NOT_AVAILABLE`; no se aceptan como evidencia ni parámetros de esta validación.
+3. **`STRATEGY_ERROR`:** la entrada real se define en la apertura de la vela siguiente, pero SL/TP se anclan al cierre de la vela de señal. El propio crítico y juez reconocen que el R:R realizado puede caer por debajo de 1,6; por tanto el triplete ilustrativo no garantiza el gate en runtime y esto es un blocker técnico, no una condición posponible al backtest.
+
+Decisión humana: **rechazar temporalmente este GO para FASE 5**. No se ejecuta `generateValidatedForexMql5.ts`, no se genera `.mq5/.ex5`, no hay compilación ni smoke. Próximo paso: corregir audit y aclarar solo `forex_v1.1` para cálculo determinista de día/ausencia de cifras inventadas y una única referencia coherente de entrada-SL-TP; actualizar hashes, añadir tests y repetir R2 + dos corridas limpias.
+
+---
+
 ## Handoff original — recibido por Codex
 
 Motivo del handoff: cuota general de Claude limitada. Los agentes siguen siendo `claude:sonnet` (inherente a validar `forex_v1`); lo que se delega es la **orquestación** (lanzar scripts, auditar, generar/compilar/backtestear MQL5, redactar, commit).

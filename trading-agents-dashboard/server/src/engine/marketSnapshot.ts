@@ -350,6 +350,24 @@ function historicalProvenanceHeader(
   ].join('\n');
 }
 
+/**
+ * Construye el texto desde velas ya obtenidas. Permite que runners de validación conserven
+ * exactamente la serie usada para la procedencia sin hacer una segunda petición al proveedor.
+ */
+export function buildMarketSnapshotFromCandles(
+  candles: Candle[],
+  pair: string,
+  timeframe: string,
+  opts: Pick<BuildSnapshotOptions, 'asOf'> = {}
+): string | null {
+  if (candles.length === 0) return null;
+  const nowMs = opts.asOf ? (parseEndDateToEpochSec(opts.asOf) ?? Date.now() / 1000) * 1000 : Date.now();
+  const data = computeSnapshotFromCandles(candles, pair, timeframe, nowMs);
+  if (!data) return null;
+  const body = formatSnapshotText(data);
+  return opts.asOf ? `${historicalProvenanceHeader(pair, timeframe, opts.asOf, candles)}\n${body}` : body;
+}
+
 export async function buildMarketSnapshot(
   pair: string,
   timeframe: string,
@@ -361,14 +379,12 @@ export async function buildMarketSnapshot(
       console.warn(`[marketSnapshot] No se obtuvieron velas para ${pair} (${timeframe})`);
       return null;
     }
-    const nowMs = opts.asOf ? (parseEndDateToEpochSec(opts.asOf) ?? Date.now() / 1000) * 1000 : Date.now();
-    const data = computeSnapshotFromCandles(candles, pair, timeframe, nowMs);
-    if (!data) {
+    const snapshot = buildMarketSnapshotFromCandles(candles, pair, timeframe, opts);
+    if (!snapshot) {
       console.warn(`[marketSnapshot] Velas insuficientes para calcular indicadores (${candles.length}) para ${pair}`);
       return null;
     }
-    const body = formatSnapshotText(data);
-    return opts.asOf ? `${historicalProvenanceHeader(pair, timeframe, opts.asOf, candles)}\n${body}` : body;
+    return snapshot;
   } catch (err) {
     console.warn(`[marketSnapshot] No se pudo obtener snapshot de mercado para ${pair} (${timeframe}):`, err instanceof Error ? err.message : err);
     return null;

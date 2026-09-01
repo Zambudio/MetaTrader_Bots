@@ -11,6 +11,18 @@ export function isTwelveDataConfigured(): boolean {
   return Boolean(process.env.TWELVEDATA_API_KEY);
 }
 
+const DEFAULT_TWELVEDATA_TIMEOUT_MS = 30_000;
+
+/**
+ * Las ventanas históricas de 5.000 velas superan ocasionalmente los 10 s. El timeout sigue
+ * siendo finito y acotado, pero puede adaptarse al entorno de validación sin tocar código.
+ */
+export function resolveTwelveDataTimeoutMs(fallback = DEFAULT_TWELVEDATA_TIMEOUT_MS): number {
+  const configured = Number(process.env.TWELVEDATA_TIMEOUT_MS);
+  if (!Number.isFinite(configured) || configured <= 0) return fallback;
+  return Math.max(1_000, Math.min(120_000, Math.round(configured)));
+}
+
 // Twelve Data devuelve "YYYY-MM-DD HH:mm:ss" o "YYYY-MM-DD" sin offset de zona horaria.
 // `new Date(...)` interpretaría eso como hora local del proceso, lo que colisiona
 // timestamps distintos durante el cambio de hora (DST) del huso horario del servidor.
@@ -48,7 +60,7 @@ export async function fetchTwelveDataCandles(
   if (query.endDate) {
     url += `&end_date=${encodeURIComponent(query.endDate)}`;
   }
-  const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+  const response = await fetch(url, { signal: AbortSignal.timeout(resolveTwelveDataTimeoutMs()) });
   const data = (await response.json()) as {
     status?: string;
     message?: string;
