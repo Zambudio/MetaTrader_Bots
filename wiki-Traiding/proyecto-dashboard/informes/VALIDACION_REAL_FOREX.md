@@ -6,8 +6,8 @@ Seguridad: **0 órdenes live, 0 capital, 0 llamadas de ejecución**. Solo análi
 
 Relacionados: [auditoría](AUDITORIA_MULTIAGENTE.md) · [config Forex](CONFIGURACION_FOREX.md) · [validation loop simulado](VALIDATION_LOOP.md) · [estado final](ESTADO_FINAL_CONFIGURACIONES.md).
 
-> **ESTADO FINAL DE ESTA EJECUCIÓN: `BLOCKED`.**
-> La baseline original `forex_v1` reprodujo defectos reales de prompt/modelo y el CLI de Claude agotó el límite de sesión (`resets 2:40am Europe/Madrid`). Se publicó `forex_v1.1` sin sobrescribir v1, pero no pudo someterse todavía a la matriz real completa. No existe GO elegible; por tanto no se generó MQL5 ni se abrió MetaTrader.
+> **ESTADO FINAL DE ESTA EJECUCIÓN: `BLOCKED` sobre `forex_v1.1` hash `c3d6b2b0…09a77`.**
+> Hay 7 runs persistidos: 4 de `forex_v1` y 3 de `forex_v1.1`. Solo 1/7 fue funcional (14,3%; v1.1: 1/3 = 33,3%), pero su GO fue rechazado por la auditoría manual y ya quedó superado por correcciones posteriores. Los dos runs posteriores fueron cortados por el límite externo de Claude (`resets 1am Europe/Madrid`). No existe ninguna corrida limpia y elegible posterior a C7/C8; por tanto no se generó MQL5, no se compiló y no se abrió MetaTrader.
 
 ---
 
@@ -240,6 +240,24 @@ FASE 5 continúa bloqueada: ningún run limpio posterior a C7/C8, cero MQL5, cer
 ### Run `real-forex-20260901191422-r5a-absent`
 
 Prueba negativa con `marketSnapshot=null` sobre hash `c3d6b2b0…09a77`. `fx-structure`, `fx-momentum-volatility` y `fx-macro` se omitieron por datos ausentes; estrategia, riesgo, crítico y juez se omitieron por dependencias. `fx-session` se activó legítimamente porque `session_clock` sí está disponible, pero su única llamada falló por el mismo límite de sesión (`resets 1am`). Resultado: `status=error`, `finalState=error`, 9 s; no valida aún el esperado `insufficient_data`. No se cambia el DAG para evitar la llamada: la selección coincide con las capacidades declaradas.
+
+### Cierre de esta ejecución
+
+| preset | runs persistidos | éxito funcional | estrategia / juez | aceptación manual |
+|---|---:|---:|---|---:|
+| `forex_v1` original | 4 | 0/4 (0 %) | 3 propuestas; 0 GO | 0 |
+| `forex_v1.1` (hashes sucesivos documentados) | 3 | 1/3 (33,3 %) | 2 propuestas; 1 GO, 1 sin juez, R5a sin estrategia | 0 |
+| **Total** | **7** | **1/7 (14,3 %)** | **5 propuestas; 1 GO LLM** | **0/5** |
+
+Agentes: en el único run funcional se ejecutaron los siete `fx-*` no macro y `fx-macro` se omitió `DATA_NOT_AVAILABLE`; en el R2 parcial completaron los tres especialistas + estrategia, macro se omitió, riesgo/crítico fallaron por cuota y juez se omitió; en R5a solo sesión intentó ejecutarse y los otros siete se omitieron por datos/dependencias. Cero agentes `stock-*` o `crypto-*` en los siete runs.
+
+MQL5/MT5: **0 `.mq5`, 0 `.ex5`, 0 compilaciones, 0 smoke backtests, 0 optimizaciones**. El gate manual bloqueó el único GO y la cuota impidió obtener un run limpio posterior. No se abrió ni cerró `terminal64.exe`; no hubo órdenes live, capital ni cuenta live.
+
+Defectos nuevos de esta continuación y estado: timeout real Twelve Data + doble fetch (corregidos); falsos positivos del audit (corregidos); día de semana incorrecto, costes inventados y referencia de R:R incoherente (guardrails/audit corregidos); baseline persistida obsoleta (store corregido); barra H1 abierta incluida en `as_of` / look-ahead (corregido y verificado con 4.999 velas); liquidez inferida sin métrica y gap anterior usado como proxy de fill futuro (guardrails/audit corregidos). Falta demostrar estas dos últimas correcciones en una corrida completa por la cuota.
+
+Verificación final de código: `npm run typecheck` PASS; `npx vitest run` **19 files / 88 tests PASS**; `npm run build` PASS con el warning conocido de chunk 584,14 kB. `npm run lint` sigue no ejecutable por WDAC. Worktree y commits no incluyen `README.md`, `agents.json` ni datos runtime ignorados; no hubo push/deploy.
+
+Para desbloquear: después del reset, repetir primero R2 con hash `c3d6b2b0…09a77`; después exigir dos corridas consecutivas limpias adicionales (prioridad R3/R4), completar R1/R5a/R5b y reauditar. Solo un run `validated + go + 0 blockers` que además pase la auditoría manual puede entrar en FASE 5.
 
 ---
 
