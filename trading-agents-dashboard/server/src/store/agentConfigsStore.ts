@@ -10,17 +10,33 @@ interface AgentConfigsFile {
 
 const EMPTY_STATE: AgentConfigsFile = { presets: [], activePresetId: null };
 
-export async function loadAgentConfigsState(): Promise<AgentConfigsFile> {
-  const state = await readJson<AgentConfigsFile>(AGENT_CONFIGS_FILE, EMPTY_STATE);
-  const baselines = cloneBaselinePresets();
+/**
+ * Las baselines son código versionado e inmutable por API. Si una versión publicada conserva su
+ * ID pero recibe una corrección de prompt autorizada, la copia persistida debe refrescarse; los
+ * presets custom y la selección activa permanecen intactos.
+ */
+export function mergeBaselinesIntoState(
+  state: AgentConfigsFile,
+  baselines: AgentConfigPreset[],
+): boolean {
   let changed = false;
   for (const baseline of baselines) {
     const index = state.presets.findIndex((preset) => preset.id === baseline.id);
     if (index === -1) {
-      state.presets.push(baseline);
+      state.presets.push(structuredClone(baseline));
+      changed = true;
+    } else if (JSON.stringify(state.presets[index]) !== JSON.stringify(baseline)) {
+      state.presets[index] = structuredClone(baseline);
       changed = true;
     }
   }
+  return changed;
+}
+
+export async function loadAgentConfigsState(): Promise<AgentConfigsFile> {
+  const state = await readJson<AgentConfigsFile>(AGENT_CONFIGS_FILE, EMPTY_STATE);
+  const baselines = cloneBaselinePresets();
+  let changed = mergeBaselinesIntoState(state, baselines);
   const active = state.presets.find((preset) => preset.id === state.activePresetId);
   const activeIsDeprecatedBaseline = Boolean(active?.id.startsWith('baseline-') && !baselines.some((baseline) => baseline.id === active.id));
   if (!active || active.schemaVersion !== 'multiagent-config.v1' || activeIsDeprecatedBaseline) {

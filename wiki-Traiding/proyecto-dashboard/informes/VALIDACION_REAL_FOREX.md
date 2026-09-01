@@ -221,6 +221,10 @@ Decisión humana: **rechazar temporalmente este GO para FASE 5**. No se ejecuta 
 - Nuevo hash v1.1: `a48925ec9f91d84a319b54508cea40f06a622599b9fddc5645a6769b69797ed4`. Hash v1 permanece `504e6f2ac86fd05a321e99049b489654f48524f776b7bcf54e679fb70429bb8c`.
 - Verificación previa a repetir: `npm run typecheck` PASS; `npx vitest run` **18 files / 83 tests PASS**; `npm run build` PASS (solo warning conocido de chunk 584,14 kB).
 
+### Corrección C6 — sincronización del store de baselines
+
+El primer relanzamiento tras C5 abortó fail-closed antes de agentes: el código esperaba `a48925ec…ed4`, pero `getPreset` devolvió la copia persistida antigua `17affd3c…1378`. Causa: `loadAgentConfigsState` solo añadía IDs ausentes y nunca refrescaba una baseline inmutable existente. Fix: los IDs baseline se sincronizan desde código al cargar; presets custom y `activePresetId` se conservan. Regresión pura 2/2 + typecheck PASS. Verificación real del JSON: v1.1=`a48925ec…ed4`, activo=`baseline-acciones-stocks-v1`, 1 preset custom conservado. El aborto no creó run ni invocó modelos.
+
 ---
 
 ## Handoff original — recibido por Codex
