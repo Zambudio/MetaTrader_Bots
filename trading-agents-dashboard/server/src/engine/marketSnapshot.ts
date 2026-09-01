@@ -1,5 +1,5 @@
 import { SMA, EMA, RSI, MACD, BollingerBands, ATR } from 'technicalindicators';
-import { candleSourceLabel, getCandles, parseEndDateToEpochSec } from '../marketData/index.js';
+import { candleIntervalSeconds, candleSourceLabel, getCandles, parseEndDateToEpochSec } from '../marketData/index.js';
 import type { Candle } from '../marketData/types.js';
 
 export interface MarketSnapshotData {
@@ -271,7 +271,7 @@ export function formatSnapshotText(snapshot: MarketSnapshotData): string {
 
   const lines: string[] = [
     `=== SNAPSHOT DE MERCADO REAL (${pair} · ${timeframe}) ===`,
-    `Fecha/Hora última vela: ${timestamp}`,
+    `Fecha/Hora APERTURA última vela: ${timestamp}`,
   ];
 
   if (isStale) {
@@ -340,11 +340,16 @@ function historicalProvenanceHeader(
 ): string {
   const first = candles[0] ? new Date(candles[0].time * 1000).toISOString() : 'n/d';
   const last = candles[candles.length - 1] ? new Date(candles[candles.length - 1].time * 1000).toISOString() : 'n/d';
+  const interval = candleIntervalSeconds(timeframe);
+  const lastClose = candles[candles.length - 1] && interval
+    ? new Date((candles[candles.length - 1].time + interval) * 1000).toISOString()
+    : 'n/d';
   return [
     `=== VENTANA HISTÓRICA REPRODUCIBLE ===`,
     `Fuente: ${candleSourceLabel(pair)} | Símbolo: ${pair} | Timeframe: ${timeframe}`,
     `Corte superior (as_of, UTC): ${asOf}`,
-    `Velas usadas: ${candles.length} | Rango: ${first} → ${last}`,
+    `Velas usadas: ${candles.length} | Rango de aperturas: ${first} → ${last}`,
+    `Cierre derivado de la última vela usada: ${lastClose} (apertura + intervalo)`,
     `La foto refleja SOLO velas cerradas hasta el corte; la frescura se evalúa respecto a esa fecha.`,
     `======================================`,
   ].join('\n');

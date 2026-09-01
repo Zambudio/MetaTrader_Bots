@@ -9,7 +9,9 @@ function contextAround(text: string, index: number, radius = 180): string {
 function negatesCurrentDateComparison(context: string): boolean {
   return /no (?:se )?(?:evalua|compara|usa|aplica)(?:[^.]{0,100})(?:fecha actual|fecha del sistema|fecha de sistema)/.test(context)
     || /(?:fecha actual|fecha del sistema|fecha de sistema)[^.]{0,100}no (?:aplica|se usa|se evalua)/.test(context)
-    || /nunca[^.]{0,120}(?:fecha actual|fecha del sistema|fecha de sistema)/.test(context);
+    || /nunca[^.]{0,120}(?:fecha actual|fecha del sistema|fecha de sistema)/.test(context)
+    || /no (?:esta )?(?:obsolet|desactualiz|stale)/.test(context)
+    || /no (?:debe )?(?:evaluarse|considerarse|tratarse) como (?:obsolet|desactualiz|stale)/.test(context);
 }
 
 /** Detecta comparación temporal real; ignora declaraciones explícitas de que esa comparación NO se hace. */
@@ -19,7 +21,10 @@ export function hasHistoricalTemporalContextError(
   dataQuality?: string,
 ): boolean {
   if (dataQuality === 'stale') return true;
-  const currentDatePattern = /meses (?:posterior|despu[eé]s)|(?:obsolet|desactualiz|stale)[^.]{0,160}(?:fecha actual|fecha (?:del|de) sistema|hoy)|(?:fecha actual|fecha (?:del|de) sistema|hoy)[^.]{0,160}(?:obsolet|desactualiz|stale)/gi;
+  // `text` suele ser JSON serializado: no cruzar comillas hacia otro campo, porque una
+  // invalidación legítima sobre `as_of` y una mención separada a la fecha del sistema formarían
+  // un falso positivo al concatenarse.
+  const currentDatePattern = /meses (?:posterior|despu[eé]s)|(?:obsolet|desactualiz|stale)[^."}]{0,160}(?:fecha actual|fecha (?:del|de) sistema|hoy)|(?:fecha actual|fecha (?:del|de) sistema|hoy)[^."}]{0,160}(?:obsolet|desactualiz|stale)/gi;
   for (const match of text.matchAll(currentDatePattern)) {
     if (!negatesCurrentDateComparison(contextAround(text, match.index ?? 0))) return true;
   }
@@ -38,6 +43,20 @@ export function hasOverloadedEntryCondition(condition: string): boolean {
 /** Un coste de ejecución ausente puede mencionarse, pero no recibir una cifra inventada. */
 export function hasUnsupportedNumericExecutionCosts(text: string): boolean {
   return /(?:spread|slippage|deslizamiento)[^.;\n]{0,100}\d+(?:[.,]\d+)?(?:\s*[–-]\s*\d+(?:[.,]\d+)?)?\s*(?:pip(?:s)?|puntos?|%)/i.test(text);
+}
+
+/** No hay métrica de liquidez en el snapshot; hora/sesión no permite asignarle intensidad. */
+export function hasUnsupportedLiquidityClaim(text: string): boolean {
+  const normalized = fold(text);
+  if (/no (?:se )?(?:afirma|infiere|deduce)[^.]{0,80}liquidez/.test(normalized)) return false;
+  return /(?:baja|alta|menor|mayor|reducida|escasa|fina) liquidez|liquidez (?:baja|alta|menor|mayor|reducida|escasa|fina)/.test(normalized);
+}
+
+/** Un gap observado antes del as_of no predice la apertura de una vela futura. */
+export function hasPredictedFutureFill(text: string): boolean {
+  const normalized = fold(text);
+  return /apertura[^.]{0,100}(?:siguiente|posterior)/.test(normalized)
+    && /gap[^.]{0,140}(?:proxy|razonable|aproxim|~?0)/.test(normalized);
 }
 
 const WEEKDAYS_ES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'] as const;

@@ -11,16 +11,18 @@ describe('baselines multiagente por mercado', () => {
     expect(hashConfiguration(forexV1!)).toBe('504e6f2ac86fd05a321e99049b489654f48524f776b7bcf54e679fb70429bb8c');
     expect(forexV11).toBeDefined();
     expect(forexV11?.id).toBe('baseline-forex-forex-v1-1');
-    expect(hashConfiguration(forexV11!)).toBe('a48925ec9f91d84a319b54508cea40f06a622599b9fddc5645a6769b69797ed4');
+    expect(hashConfiguration(forexV11!)).toBe('c3d6b2b00627115ddaf10d740db8bdbf8e1b65f93ab6fb6edefe08fbe1809a77');
     expect(forexV11?.agents.map((agent) => agent.model)).toEqual(Array(8).fill('claude:sonnet'));
     expect(validatePreset(forexV11!)).toEqual({ valid: true, errors: [] });
 
     const prompts = new Map(forexV11?.agents.map((agent) => [agent.id, agent.systemPrompt]));
     expect(prompts.get('fx-session')).toContain('HISTORICAL_AS_OF');
     expect(prompts.get('fx-session')).toContain('dia de la semana');
+    expect(prompts.get('fx-session')).toContain('No infieras liquidez');
     expect(prompts.get('fx-strategy')).toContain('un evento y como maximo un filtro');
     expect(prompts.get('fx-strategy')).toContain('misma referencia de precio ejecutable');
     expect(prompts.get('fx-strategy')).toContain('No inventes cifras de spread ni slippage');
+    expect(prompts.get('fx-strategy')).toContain('no predice la apertura futura');
     expect(prompts.get('fx-risk')).toContain('no es blocker por si sola');
     expect(prompts.get('fx-risk')).toContain('misma referencia de precio ejecutable');
     expect(prompts.get('fx-critic')).toContain('no es blocker por si sola');

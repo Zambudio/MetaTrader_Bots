@@ -51,18 +51,29 @@ describe('Ventana histórica reproducible (getCandles endDate + snapshot as_of)'
     const startSec = Date.parse('2026-01-01T00:00:00Z') / 1000;
     const candles = series(240, startSec); // 10 días de H1
     const cutoff = '2026-01-04 00:00:00';
-    const filtered = filterCandlesByEndDate(candles, cutoff);
+    const filtered = filterCandlesByEndDate(candles, cutoff, 'H1');
     const cutoffSec = parseEndDateToEpochSec(cutoff)!;
     expect(filtered.length).toBeGreaterThan(0);
     expect(filtered.length).toBeLessThan(candles.length);
-    expect(filtered.every((c) => c.time <= cutoffSec)).toBe(true);
+    expect(filtered.every((c) => c.time + 3600 <= cutoffSec)).toBe(true);
     // no se añaden velas que no existían
     expect(filtered.every((c) => candles.includes(c))).toBe(true);
   });
 
   it('filterCandlesByEndDate con corte inválido devuelve la serie intacta', () => {
     const candles = series(30, 1_800_000_000);
-    expect(filterCandlesByEndDate(candles, 'basura')).toBe(candles);
+    expect(filterCandlesByEndDate(candles, 'basura', 'H1')).toBe(candles);
+  });
+
+  it('excluye una H1 cuyo timestamp de APERTURA coincide con el as_of', () => {
+    const cutoff = '2026-03-25 00:00:00';
+    const cutoffSec = parseEndDateToEpochSec(cutoff)!;
+    const candles: Candle[] = [
+      { time: cutoffSec - 3600, open: 1, high: 2, low: 0.5, close: 1.5, volume: 0 },
+      { time: cutoffSec, open: 1.5, high: 3, low: 1, close: 2.5, volume: 0 },
+    ];
+
+    expect(filterCandlesByEndDate(candles, cutoff, 'H1')).toEqual([candles[0]]);
   });
 
   it('el snapshot "as of" la última vela histórica NO se marca obsoleto', () => {

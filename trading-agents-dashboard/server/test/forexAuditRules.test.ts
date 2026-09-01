@@ -4,6 +4,8 @@ import {
   hasInconsistentEntryReference,
   hasOverloadedEntryCondition,
   hasUnsupportedNumericExecutionCosts,
+  hasUnsupportedLiquidityClaim,
+  hasPredictedFutureFill,
   findWeekdayMismatch,
 } from '../src/validation/forexAuditRules.js';
 
@@ -22,6 +24,16 @@ describe('reglas puras del audit FOREX real', () => {
     )).toBe(false);
     expect(hasHistoricalTemporalContextError(
       'La fecha de sistema 2026-09-01 no se usa para evaluar frescura.',
+      snapshot,
+      'good',
+    )).toBe(false);
+    expect(hasHistoricalTemporalContextError(
+      'La foto está vigente respecto al as_of y no obsoleta frente a la fecha del sistema.',
+      snapshot,
+      'good',
+    )).toBe(false);
+    expect(hasHistoricalTemporalContextError(
+      'La foto está vigente y no debe evaluarse como obsoleta frente a la fecha del sistema.',
       snapshot,
       'good',
     )).toBe(false);
@@ -73,5 +85,19 @@ describe('reglas puras del audit FOREX real', () => {
       date: '2026-03-25', stated: 'martes', expected: 'miércoles',
     });
     expect(findWeekdayMismatch('Corte 2026-03-25 00:00 UTC (miércoles).')).toBeNull();
+  });
+
+  it('detecta liquidez afirmada sin métrica y no la ausencia declarada', () => {
+    expect(hasUnsupportedLiquidityClaim('00:00 UTC es una franja típicamente de baja liquidez.')).toBe(true);
+    expect(hasUnsupportedLiquidityClaim('Liquidez DATA_NOT_AVAILABLE; no se infiere desde la hora.')).toBe(false);
+  });
+
+  it('detecta el gap anterior usado para predecir una apertura futura', () => {
+    expect(hasPredictedFutureFill(
+      'Entrada en la apertura siguiente; el cierre es un proxy razonable porque el gap intervela previo fue ~0.',
+    )).toBe(true);
+    expect(hasPredictedFutureFill(
+      'Entrada en la apertura siguiente; SL/TP se recalculan desde el precio real de fill.',
+    )).toBe(false);
   });
 });

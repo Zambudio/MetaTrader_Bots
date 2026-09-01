@@ -23,6 +23,8 @@ import {
   hasInconsistentEntryReference,
   hasOverloadedEntryCondition,
   hasUnsupportedNumericExecutionCosts,
+  hasUnsupportedLiquidityClaim,
+  hasPredictedFutureFill,
   findWeekdayMismatch,
 } from '../src/validation/forexAuditRules.js';
 import type { AgentAnalysis, StrategyProposalLite, VerdictResult } from '../src/types.js';
@@ -224,6 +226,9 @@ function auditRun(run: RunEntry) {
       if (hasUnsupportedNumericExecutionCosts(JSON.stringify(a.analysis))) {
         push('error', 'HALLUCINATION', `${a.agentId} asigna cifras a spread/slippage declarados DATA_NOT_AVAILABLE`);
       }
+      if (hasUnsupportedLiquidityClaim(JSON.stringify(a.analysis))) {
+        push('error', 'HALLUCINATION', `${a.agentId} afirma un nivel de liquidez sin metrica aportada`);
+      }
       if (a.agentId === 'fx-session') {
         const mismatch = findWeekdayMismatch(JSON.stringify(a.analysis));
         if (mismatch) {
@@ -255,6 +260,12 @@ function auditRun(run: RunEntry) {
       if (hasUnsupportedNumericExecutionCosts(JSON.stringify(a.strategy))) {
         push('error', 'HALLUCINATION', `${a.agentId} asigna cifras a spread/slippage declarados DATA_NOT_AVAILABLE`);
       }
+      if (hasUnsupportedLiquidityClaim(JSON.stringify(a.strategy))) {
+        push('error', 'HALLUCINATION', `${a.agentId} afirma un nivel de liquidez sin metrica aportada`);
+      }
+      if (hasPredictedFutureFill(`${a.strategy.resumen} ${a.strategy.puntoEntrada} ${(a.strategy.evidence ?? []).map((e) => e.claim).join(' ')}`)) {
+        push('error', 'STRATEGY_ERROR', `${a.agentId} usa un gap pasado para predecir la apertura/fill futuro`);
+      }
       if (/^\s*-?\d+\.\d+\s*$/.test(cond) || (/\d+\.\d{3,}/.test(cond) && !/(EMA|SMA|RSI|MACD|Bollinger|ATR|cruz|cross|banda|media)/i.test(cond))) {
         push('warn', 'STRATEGY_ERROR', `${a.agentId} condicionEntrada parece un nivel de precio anecdótico: "${cond}"`);
       }
@@ -283,6 +294,9 @@ function auditRun(run: RunEntry) {
       }
       if (hasUnsupportedNumericExecutionCosts(JSON.stringify(vd))) {
         push('error', 'HALLUCINATION', `${a.agentId} asigna cifras a spread/slippage declarados DATA_NOT_AVAILABLE`);
+      }
+      if (hasUnsupportedLiquidityClaim(JSON.stringify(vd))) {
+        push('error', 'HALLUCINATION', `${a.agentId} afirma un nivel de liquidez sin metrica aportada`);
       }
     }
   }

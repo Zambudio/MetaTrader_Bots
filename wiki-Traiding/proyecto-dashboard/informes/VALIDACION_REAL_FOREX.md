@@ -225,6 +225,18 @@ Decisión humana: **rechazar temporalmente este GO para FASE 5**. No se ejecuta 
 
 El primer relanzamiento tras C5 abortó fail-closed antes de agentes: el código esperaba `a48925ec…ed4`, pero `getPreset` devolvió la copia persistida antigua `17affd3c…1378`. Causa: `loadAgentConfigsState` solo añadía IDs ausentes y nunca refrescaba una baseline inmutable existente. Fix: los IDs baseline se sincronizan desde código al cargar; presets custom y `activePresetId` se conservan. Regresión pura 2/2 + typecheck PASS. Verificación real del JSON: v1.1=`a48925ec…ed4`, activo=`baseline-acciones-stocks-v1`, 1 preset custom conservado. El aborto no creó run ni invocó modelos.
 
+### Run `real-forex-20260901183540-r2-trend` y correcciones C7/C8
+
+Segundo R2 sobre v1.1 tras C5/C6: 5.000 filas descargadas, `fx-structure`, `fx-momentum-volatility`, `fx-session` y `fx-strategy` completados; `fx-macro` omitido correctamente. Tras dos rondas `AJUSTAR`, la tercera estrategia terminó, pero `fx-risk` y `fx-critic` fallaron en 7,4/7,5 s con límite de sesión (`resets 1am Europe/Madrid`); `fx-judge` quedó omitido por dependencia. Resultado: `status=error`, 1.767 s, no funcional, no cuenta como corrida limpia.
+
+Mejoras confirmadas antes del corte: `fx-session` calculó **miércoles** correctamente; no aparecieron cifras inventadas de spread/slippage; la estrategia final expresó SL/TP desde el precio de entrada. Persistieron dos defectos: momentum/estrategia afirmaron “baja liquidez” sin métrica y la estrategia usó el gap anterior `−0.00002` para suponer que la apertura futura sería próxima al cierre.
+
+El agente de sesión detectó además un defecto real de datos: la fila Twelve Data `2026-03-25T00:00:00Z` no era una vela cerrada al corte. La [documentación oficial de Twelve Data](https://twelvedata.com/docs#time-series) define `datetime` como el instante de **apertura** de la barra. C7 corrige el filtro: una barra solo entra si `open_time + intervalo <= as_of`; el repro real devuelve 4.999 velas, última apertura `2026-03-24T23:00:00Z` y cierre derivado `2026-03-25T00:00:00Z`. El snapshot etiqueta explícitamente apertura y cierre derivado. Se elimina así el look-ahead de una hora.
+
+C8 amplía audit/prompt v1.1: error ante liquidez alta/baja sin métrica y ante uso de un gap pasado para predecir fill futuro; el prompt prohíbe ambas inferencias. Nuevo hash v1.1: `c3d6b2b00627115ddaf10d740db8bdbf8e1b65f93ab6fb6edefe08fbe1809a77`; v1 sigue intacto. Verificación: `npm run typecheck` PASS; `npx vitest run` **19 files / 88 tests PASS**; `npm run build` PASS (warning conocido de chunk 584,14 kB). Audit del run parcial: sin falso `TEMPORAL_CONTEXT_ERROR`; conserva `RUN_NOT_FUNCTIONAL`, liquidez inventada, proxy de fill y los dos `TOOL_ERROR` de cuota.
+
+FASE 5 continúa bloqueada: ningún run limpio posterior a C7/C8, cero MQL5, cero compilaciones y cero backtests.
+
 ---
 
 ## Handoff original — recibido por Codex

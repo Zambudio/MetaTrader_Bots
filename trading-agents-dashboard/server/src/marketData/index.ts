@@ -34,11 +34,19 @@ export function parseEndDateToEpochSec(endDate: string): number | null {
   return Number.isFinite(ms) ? Math.floor(ms / 1000) : null;
 }
 
-/** Deja solo las velas cuyo `time` (apertura, epoch s) es <= al corte. Pura, para pruebas. */
-export function filterCandlesByEndDate(candles: Candle[], endDate: string): Candle[] {
+export function candleIntervalSeconds(timeframe: string): number | null {
+  return ({ M15: 15 * 60, H1: 60 * 60, H4: 4 * 60 * 60, D1: 24 * 60 * 60 } as Record<string, number>)[timeframe] ?? null;
+}
+
+/**
+ * Twelve Data etiqueta cada barra por su APERTURA. Solo es utilizable si apertura + intervalo <=
+ * corte; incluir una barra que abre justo en `as_of` introduciría su H/L/C futuros (look-ahead).
+ */
+export function filterCandlesByEndDate(candles: Candle[], endDate: string, timeframe: string): Candle[] {
   const cutoff = parseEndDateToEpochSec(endDate);
   if (cutoff === null) return candles;
-  return candles.filter((c) => c.time <= cutoff);
+  const interval = candleIntervalSeconds(timeframe);
+  return candles.filter((c) => interval === null ? c.time <= cutoff : c.time + interval <= cutoff);
 }
 
 export async function getCandles(pair: string, timeframe: string, query: CandleQuery = {}): Promise<Candle[]> {
@@ -60,7 +68,7 @@ export async function getCandles(pair: string, timeframe: string, query: CandleQ
   // Kraken (y cualquier proveedor sin `end_date` nativo) se recorta aquí para que el corte
   // histórico sea consistente sea cual sea la fuente.
   if (query.endDate) {
-    candles = filterCandlesByEndDate(candles, query.endDate);
+    candles = filterCandlesByEndDate(candles, query.endDate, timeframe);
   }
 
   cache.set(cacheKey, { data: candles, expiresAt: Date.now() + CACHE_TTL_MS });
