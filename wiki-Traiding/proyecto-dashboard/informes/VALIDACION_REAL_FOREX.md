@@ -237,6 +237,10 @@ C8 amplía audit/prompt v1.1: error ante liquidez alta/baja sin métrica y ante 
 
 FASE 5 continúa bloqueada: ningún run limpio posterior a C7/C8, cero MQL5, cero compilaciones y cero backtests.
 
+### Run `real-forex-20260901191422-r5a-absent`
+
+Prueba negativa con `marketSnapshot=null` sobre hash `c3d6b2b0…09a77`. `fx-structure`, `fx-momentum-volatility` y `fx-macro` se omitieron por datos ausentes; estrategia, riesgo, crítico y juez se omitieron por dependencias. `fx-session` se activó legítimamente porque `session_clock` sí está disponible, pero su única llamada falló por el mismo límite de sesión (`resets 1am`). Resultado: `status=error`, `finalState=error`, 9 s; no valida aún el esperado `insufficient_data`. No se cambia el DAG para evitar la llamada: la selección coincide con las capacidades declaradas.
+
 ---
 
 ## Handoff original — recibido por Codex
