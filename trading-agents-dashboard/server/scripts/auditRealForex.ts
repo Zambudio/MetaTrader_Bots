@@ -328,6 +328,7 @@ function auditRun(run: RunEntry) {
     scenario: run.scenario,
     configurationId: run.configurationId,
     configurationVersion: run.configurationVersion,
+    configurationHash: run.configurationHash,
     status: run.status,
     finalState: run.finalState,
     verdict: byId.get('fx-judge')?.verdict?.veredicto ?? null,
