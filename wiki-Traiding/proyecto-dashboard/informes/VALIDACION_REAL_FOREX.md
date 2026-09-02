@@ -6,8 +6,8 @@ Seguridad: **0 órdenes live, 0 capital, 0 llamadas de ejecución**. Solo análi
 
 Relacionados: [auditoría](AUDITORIA_MULTIAGENTE.md) · [config Forex](CONFIGURACION_FOREX.md) · [validation loop simulado](VALIDATION_LOOP.md) · [estado final](ESTADO_FINAL_CONFIGURACIONES.md).
 
-> **ESTADO DE LA EJECUCIÓN: `EN_VALIDACION` sobre `forex_v1.1` hash activo `64c35dc7…be9d135`.**
-> Hay 11 runs persistidos: 4 de `forex_v1` y 7 de `forex_v1.1`. El nuevo R2 obtuvo `validated + go + 0 blockers`, pero no es limpio: momentum y riesgo compararon indebidamente la ventana histórica con la fecha del sistema. C16 corrige dos falsos positivos del auditor y refuerza el prompt contra esa contaminación; el quórum del hash nuevo exige repetir R2 más dos corridas limpias consecutivas. Siguen pendientes la matriz completa y MQL5/MetaEditor/smoke antes de declarar un estado final.
+> **ESTADO DE LA EJECUCIÓN: `EN_VALIDACION`, pausada por petición del usuario para limitar cuota, sobre `forex_v1.1` hash activo `64c35dc7…be9d135`.**
+> Hay 11 runs completados/evaluables (4 de `forex_v1` y 7 de `forex_v1.1`) más un intento R2 interrumpido deliberadamente, excluido de métricas y quórum. El último R2 completo obtuvo `validated + go + 0 blockers`, pero no fue limpio: momentum y riesgo compararon indebidamente la ventana histórica con la fecha del sistema. C16 corrigió el auditor y reforzó el prompt; aún no existe una corrida completa sobre el hash activo. El quórum exige un R2 limpio más dos corridas limpias consecutivas del mismo hash. Siguen pendientes la matriz completa y MQL5/MetaEditor/smoke antes de declarar un estado final.
 
 ---
 
@@ -314,6 +314,38 @@ La estrategia final pasa recálculo: BUY; evento cruce alcista MACD/señal en ve
 Rechazo manual: `fx-momentum-volatility` llamó la foto “desactualizada” contra `2026-09-02` y `fx-risk` repitió que tenía “~5 meses de antigüedad”. Aunque ambos aclararon que no era cotización live, el contrato HISTORICAL_AS_OF exige juzgar frescura exclusivamente contra `as_of`; son dos `TEMPORAL_CONTEXT_ERROR`. El audit inicialmente sumó dos falsos positivos: interpretó “Sin más filtros, sin calendario…” como condición extra y una doble negación de liquidez como afirmación. C16 reconoce ambos formatos negativos con regresiones; el audit definitivo conserva sólo los dos errores temporales y `STRATEGY_OK`.
 
 La causa raíz se corrige exclusivamente en `forex_v1.1`: en HISTORICAL_AS_OF queda prohibido calcular/mencionar antigüedad frente al reloj del sistema o calificar la foto de obsoleta/stale, incluso al advertir que no es live. Hash activo nuevo: `64c35dc7e78d558c4329d58c1ba62f733c0dc28bef248db358527d2cabe9d135`; `forex_v1` permanece inmutable. Acumulado: `forex_v1` 0/4 funcional; `forex_v1.1` 3/7 funcional; total 3/11 (27,3%). Estrategias: 9; GO del modelo: 3; aceptadas manualmente: 1. Esta R2 no cuenta para el quórum; debe repetirse sobre `64c35dc7…be9d135` seguida de dos runs limpios.
+
+### Pausa de cuota — R2 del hash definitivo interrumpido
+
+Se inició `real-forex-20260902165546-r2-trend` sobre el hash definitivo `64c35dc7e78d558c4329d58c1ba62f733c0dc28bef248db358527d2cabe9d135`. Antes de la petición de detener el consumo completaron `fx-structure`, `fx-momentum-volatility` y `fx-session`; `fx-macro` se omitió según contrato. La ejecución estaba en `fx-strategy` cuando se envió `Ctrl+C`. El archivo persistido quedó con `status=error`, sin `finalState`, sin estrategia ni veredicto; estrategia, riesgo, crítico y juez muestran el error genérico de reinicio del servidor provocado por la interrupción.
+
+Este intento se clasifica como **`USER_ABORTED_QUOTA_GUARD`** a efectos del informe: no demuestra un defecto del modelo, del preset ni del runner, no se incluye entre los 11 runs completados/evaluables, no altera la tasa 3/11 y no puede participar en el quórum. Tras detenerlo no se hicieron nuevas llamadas a Claude/OmniRoute/Antigravity, no se ejecutaron más escenarios ni tests y no quedó una llamada Claude nueva en curso. No se abrió ni cerró MetaTrader y no hubo ninguna ruta live.
+
+### Estado documentado y trabajo pendiente — modo ahorro de cuota
+
+Avance consolidado:
+
+- FASE 0 e infraestructura C1–C16 completadas; `forex_v1` permanece inmutable y documentado por separado: 4 runs, 0 GO, contrato y gate determinista correctos, juez sobre-bloqueante; superado por `forex_v1.1`.
+- 11 runs completados/evaluables más 1 intento interrumpido por el usuario. Resultado evaluable: 3/11 funcionales (27,3 %), 9 estrategias persistidas, 3 GO del modelo y 1 estrategia aceptada manualmente como evidencia histórica. Ninguna satisface el quórum del hash activo.
+- Última verificación de código anterior a la pausa: `npm run typecheck` PASS, `npx vitest run` 19 archivos / 99 tests PASS y `npm run build` PASS con el warning conocido del chunk. No se repiten en este checkpoint documental.
+- FASE 5 no iniciada para una estrategia final: 0 artefactos MQL5 definitivos, 0 compilaciones MetaEditor definitivas y 0 smoke backtests definitivos. Los controles estáticos y smoke de fixture previos no sustituyen este gate.
+- Estado formal: **`EN_VALIDACION` / pausa operativa solicitada por el usuario**. No cumple `VALIDATED_REAL`, `VALIDATED_ANALYSIS_AND_COMPILE` ni un cierre `UNSTABLE`; la evidencia simplemente está incompleta.
+
+Pendiente, en este orden y únicamente cuando el usuario autorice reanudar con cuota disponible:
+
+1. Repetir una sola vez R2 sobre `baseline-forex-forex-v1-1` y hash exacto `64c35dc7…be9d135`; auditarlo automática y manualmente y documentar/commitear el resultado antes de otra corrida.
+2. Si R2 es limpio, ejecutar R3 y R4 uno a uno hasta reunir R2 + dos corridas consecutivas limpias del mismo hash. Son como mínimo tres runs completos para el quórum; no se repetirán para perseguir un GO.
+3. Completar después la matriz restante R1, R5a y R5b, cada escenario una sola vez y con checkpoint documental. Los escenarios negativos deben demostrar abstención correcta, no generar estrategia.
+4. Solo con un run `finalState=validated`, `go`, 0 blockers y quórum limpio: generar el MQL5 con optimización desactivada, revisar fidelidad/seguridad, compilar con 0 errores y ejecutar un smoke headless si `terminal64.exe` está cerrado. Si está abierto, registrar `BLOCKED_EXTERNAL_MT5_RUNNING` sin cerrarlo.
+5. Ejecutar una única verificación final proporcionada al cambio realizado: tests focales solo si se modifica código; `typecheck` + suite + build una vez al cierre. Actualizar matriz, estado final e índice y crear el commit final sin push.
+
+Política de consumo para la reanudación:
+
+- Nada de sondeos periódicos `claude -p "ping"`; como máximo uno inmediatamente antes de una corrida autorizada.
+- Una corrida a la vez, sin paralelismo de modelos, sin reintentos automáticos para conseguir GO y parada inmediata ante el primer aviso de cuota.
+- Auditoría determinista, lectura de artefactos, redacción y commits se hacen localmente con Codex; no se delegan a otro modelo ni consumen llamadas Claude.
+- Actualizaciones al usuario solo en hitos (run terminada, defecto real o bloqueo), evitando mensajes y ciclos de inspección redundantes.
+- El presupuesto estimado observado sigue siendo 15–30 minutos por run completo, con varias llamadas `claude:sonnet`; antes de cada nueva corrida se priorizará preservar cuota sobre completar rápidamente la matriz.
 
 ---
 
