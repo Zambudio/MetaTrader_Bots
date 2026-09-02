@@ -34,7 +34,7 @@ export function hasHistoricalTemporalContextError(
 /** Máximo 1 evento + 1 filtro; las frases "No incluye..." son declaraciones, no restricciones. */
 export function hasOverloadedEntryCondition(condition: string): boolean {
   const withoutNegativeDeclarations = condition.replace(
-    /(?:^|[.!?]\s+)(?:no incluye|no usa|no depende de|sin filtros? de)[^.?!]*(?:[.?!]|$)/gi,
+    /(?:^|[.!?;]\s+)(?:no incluye|no usa|no depende de|sin filtros? de)[^.?!]*(?:[.?!]|$)/gi,
     ' ',
   );
   return /no abrir si|ignorar si|primera vela|calendario|spread|slippage|\bH4\b|\bD1\b/i.test(withoutNegativeDeclarations);
@@ -55,8 +55,16 @@ export function hasUnsupportedLiquidityClaim(text: string): boolean {
 /** Un gap observado antes del as_of no predice la apertura de una vela futura. */
 export function hasPredictedFutureFill(text: string): boolean {
   const normalized = fold(text);
-  return /apertura[^.]{0,100}(?:siguiente|posterior)/.test(normalized)
-    && /gap[^.]{0,140}(?:proxy|razonable|aproxim|~?0)/.test(normalized);
+  const assertions = normalized
+    .split(/[!?]|\.(?=\s|$)/)
+    .filter((sentence) => !(
+      /gap[^;]{0,140}no (?:se )?(?:asume|usa|considera|toma)(?: como)? (?:proxy|aproxim|referencia)/.test(sentence)
+      || /gap (?:pasado|anterior)[^;]{0,100}no (?:predice|anticipa)/.test(sentence)
+      || /no (?:se )?(?:asume|usa|considera|toma)[^;]{0,100}gap/.test(sentence)
+    ))
+    .join('.');
+  return /apertura[^.]{0,100}(?:siguiente|posterior)/.test(assertions)
+    && /gap[^.]{0,140}(?:proxy|razonable|aproxim|~?0)/.test(assertions);
 }
 
 const WEEKDAYS_ES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'] as const;

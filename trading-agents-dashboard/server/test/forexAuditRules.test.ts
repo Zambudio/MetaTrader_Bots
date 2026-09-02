@@ -51,6 +51,9 @@ describe('reglas puras del audit FOREX real', () => {
     expect(hasOverloadedEntryCondition(
       'EVENTO: cruce EMA20. FILTRO: MACD > señal. No abrir si el spread es alto ni en la primera vela semanal.',
     )).toBe(true);
+    expect(hasOverloadedEntryCondition(
+      'EVENTO: cruce MACD. FILTRO UNICO: cierre > EMA(50). Ambas condiciones se evaluan sobre velas cerradas; no incluye calendario, spread, primera vela semanal ni multi-timeframe.',
+    )).toBe(false);
   });
 
   it('marca costes numéricos sin fuente, no la mera ausencia declarada', () => {
@@ -98,6 +101,9 @@ describe('reglas puras del audit FOREX real', () => {
     )).toBe(true);
     expect(hasPredictedFutureFill(
       'Entrada en la apertura siguiente; SL/TP se recalculan desde el precio real de fill.',
+    )).toBe(false);
+    expect(hasPredictedFutureFill(
+      'Entrada en la apertura siguiente. Un gap pasado (aqui -0.00002) no se asume como proxy del gap futuro.',
     )).toBe(false);
   });
 });

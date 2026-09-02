@@ -6,8 +6,8 @@ Seguridad: **0 órdenes live, 0 capital, 0 llamadas de ejecución**. Solo análi
 
 Relacionados: [auditoría](AUDITORIA_MULTIAGENTE.md) · [config Forex](CONFIGURACION_FOREX.md) · [validation loop simulado](VALIDATION_LOOP.md) · [estado final](ESTADO_FINAL_CONFIGURACIONES.md).
 
-> **ESTADO FINAL DE ESTA EJECUCIÓN: `BLOCKED` sobre `forex_v1.1` hash `c3d6b2b0…09a77`.**
-> Hay 7 runs persistidos: 4 de `forex_v1` y 3 de `forex_v1.1`. Solo 1/7 fue funcional (14,3%; v1.1: 1/3 = 33,3%), pero su GO fue rechazado por la auditoría manual y ya quedó superado por correcciones posteriores. Los dos runs posteriores fueron cortados por el límite externo de Claude (`resets 1am Europe/Madrid`). No existe ninguna corrida limpia y elegible posterior a C7/C8; por tanto no se generó MQL5, no se compiló y no se abrió MetaTrader.
+> **ESTADO DE LA EJECUCIÓN: `EN_VALIDACION` sobre `forex_v1.1` hash `c3d6b2b0…09a77`.**
+> Hay 8 runs persistidos: 4 de `forex_v1` y 4 de `forex_v1.1`. El nuevo R2 posterior a C7/C8 es funcional, `validated + go + 0 blockers` y pasa auditoría automática y manual; es la primera corrida limpia elegible. Todavía faltan dos corridas limpias consecutivas, completar la matriz y las fases MQL5/MetaEditor/smoke antes de declarar un estado final.
 
 ---
 
@@ -258,6 +258,24 @@ Defectos nuevos de esta continuación y estado: timeout real Twelve Data + doble
 Verificación final de código: `npm run typecheck` PASS; `npx vitest run` **19 files / 88 tests PASS**; `npm run build` PASS con el warning conocido de chunk 584,14 kB. `npm run lint` sigue no ejecutable por WDAC. Worktree y commits no incluyen `README.md`, `agents.json` ni datos runtime ignorados; no hubo push/deploy.
 
 Para desbloquear: después del reset, repetir primero R2 con hash `c3d6b2b0…09a77`; después exigir dos corridas consecutivas limpias adicionales (prioridad R3/R4), completar R1/R5a/R5b y reauditar. Solo un run `validated + go + 0 blockers` que además pase la auditoría manual puede entrar en FASE 5.
+
+---
+
+## Continuación 2026-09-02 — R2 limpio posterior a C7/C8
+
+`claude -p "ping"` respondió `pong`; se reanudó la matriz sobre `baseline-forex-forex-v1-1` sin cambiar el preset activo. Run `real-forex-20260902063009-r2-trend`, hash exacto `c3d6b2b00627115ddaf10d740db8bdbf8e1b65f93ab6fb6edefe08fbe1809a77`:
+
+| escenario | snapshot real | duración | ejecutados | omitidos | resultado |
+|---|---|---:|---|---|---|
+| R2 tendencia | Twelve Data, 4.999 velas H1 **cerradas**, aperturas `2025-07-02T19:00:00Z → 2026-03-24T23:00:00Z`, cierre derivado final = `as_of 2026-03-25T00:00:00Z` | 1.584 s | `fx-structure`, `fx-momentum-volatility`, `fx-session`, `fx-strategy`, `fx-risk`, `fx-critic`, `fx-judge` | `fx-macro`: `DATA_NOT_AVAILABLE: verified_macro_calendar, verified_news` | `status=done`, `finalState=validated`, juez `go`, 0 blockers, gate PASS |
+
+Los contratos de los cinco `AgentAnalysis`, `StrategyProposal` y `AgentVerdict` son válidos; el roster contiene solo agentes `fx-*`. Estructura, momentum y sesión separan hechos citados del snapshot, inferencias, hipótesis, conclusión, riesgos e invalidaciones. Riesgo/crítico recibieron el snapshot, los especialistas y la propuesta; el juez recibió ambas revisiones. No se detectaron comparaciones con la fecha del sistema, día semanal erróneo, liquidez inferida, cifras de spread/slippage fabricadas ni dependencia de datos macro ausentes.
+
+Estrategia final aceptada manualmente: BUY; EVENTO = histograma MACD(12,26,9) cruza de `<=0` a `>0` en vela H1 cerrada; FILTRO único = cierre de esa vela `> EMA(50)`; entrada en la apertura siguiente, con SL y TP calculados desde el **fill real** usando el ATR(14) de la vela señal cerrada. Ejemplo numérico no hardcodeable: entrada `1.16145`, SL `1.15807`, TP `1.16709`, riesgo `0,5%`. Recalculo: riesgo `0.00338`, recompensa `0.00564`, R:R `1,6686`; SL `1,798×ATR` y TP `3,0×ATR`. Geometría BUY, policy y ausencia de look-ahead: PASS. En el `as_of` no existía cruce vivo; los niveles son ilustrativos para el gate y no una orden.
+
+El audit inicialmente dio dos falsos positivos sobre esta salida: contó como restricción la declaración negativa tras punto y coma `no incluye calendario...`, y tomó `un gap pasado no se asume como proxy` como una predicción positiva. Clasificación **`VALIDATION_TOOL_ERROR`**, no defecto del preset. Loop rojo reproducible: `npx vitest run test/forexAuditRules.test.ts` → 2 fallos. C9 amplía el reconocimiento de declaraciones negativas tras `;` y excluye aserciones de gap explícitamente negadas sin cortar números decimales como `0.00002`. Regresión final: 7/7 PASS; `auditRealForex.ts` clasifica el nuevo R2 como **OK** y conserva los hallazgos históricos de runs anteriores.
+
+Acumulado tras este checkpoint: `forex_v1` 0/4 funcional; `forex_v1.1` 2/4 funcional; total 2/8 (25%). Estrategias persistidas: 6; GO del modelo: 2; aceptadas manualmente: 1. Aún no se genera MQL5 porque falta satisfacer R2 + dos corridas limpias consecutivas y completar la matriz. Seguridad: cero órdenes/capital/cuenta live, cero procesos MetaTrader cerrados, cero push/deploy.
 
 ---
 
