@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { reviewMql5Code } from '../src/engine/codeReviewer.js';
 
-describe('3.4 Tests automatizados: CodeReviewerAgent (22 Reglas Doc 17)', () => {
+describe('3.4 Tests automatizados: CodeReviewerAgent (22 Reglas Doc 17 + tester-only)', () => {
   const validEaCode = `
 #property version "1.00"
 #property strict
@@ -16,6 +16,7 @@ CTrade trade;
 datetime lastBarTime = 0;
 
 int OnInit() {
+  if(!MQLInfoInteger(MQL_TESTER)) return INIT_FAILED;
   trade.SetExpertMagicNumber(InpMagicNumber);
   trade.SetTypeFillingBySymbol(_Symbol);
   return INIT_SUCCEEDED;
@@ -59,7 +60,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans, const MqlTradeRequest 
 
   it('Verifica y aprueba un EA que cumple las reglas del Doc 17', () => {
     const res = reviewMql5Code(validEaCode, ['Histórico de ticks reales disponible']);
-    expect(res.evaluations.length).toBe(22);
+    expect(res.evaluations.length).toBe(23);
     expect(res.passed).toBe(true);
     expect(res.blockingRules.length).toBe(0);
     expect(res.score).toBe(100);
@@ -110,5 +111,10 @@ void OnTradeTransaction(const MqlTradeTransaction &trans, const MqlTradeRequest 
     const res = reviewMql5Code(blind, ['Supuesto 1']);
     expect(res.blockingRules).toContain(12);
     expect(res.blockingRules).toContain(13);
+  });
+
+  it('bloquea cualquier EA sin guard tester-only fail-closed', () => {
+    const liveCapable = validEaCode.replace('if(!MQLInfoInteger(MQL_TESTER)) return INIT_FAILED;', '');
+    expect(reviewMql5Code(liveCapable, ['Supuesto 1']).blockingRules).toContain(23);
   });
 });

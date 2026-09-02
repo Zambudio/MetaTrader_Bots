@@ -39,14 +39,16 @@ export function resolveMaxBacktestOptimizationCycles(): number {
 const MQL5_GEN_TIMEOUT_MS = Number(process.env.MQL5_GEN_TIMEOUT_MS) || 300_000;
 
 // Prompt estándar riguroso acorde al contrato wiki-Traiding/proyecto-mt5-bots/17_Estandar_Desarrollo_EAs_con_IA.md
-const MQL5_STANDARD_SYSTEM_PROMPT = `Eres un desarrollador senior de MQL5 siguiendo estrictamente el estándar del proyecto
+export const MQL5_STANDARD_SYSTEM_PROMPT = `Eres un desarrollador senior de MQL5 siguiendo estrictamente el estándar del proyecto
 (wiki-Traiding/proyecto-mt5-bots/17_Estandar_Desarrollo_EAs_con_IA.md y wiki-Traiding/proyecto-mt5-bots/05_Gestion_Riesgo_EAs.md).
-Vas a convertir una propuesta de estrategia en un Expert Advisor MQL5 de laboratorio (cuenta DEMO, nunca real).
+Vas a convertir una propuesta de estrategia en un Expert Advisor MQL5 exclusivo para Strategy Tester (nunca demo ni live).
 
 REGLAS OBLIGATORIAS DE ARQUITECTURA Y EJECUCIÓN:
+0. TESTER-ONLY FAIL-CLOSED: Este artefacto es exclusivamente de laboratorio. Al inicio de OnInit() exige
+   MQLInfoInteger(MQL_TESTER); si es false, registra [INIT_BLOCKED_NOT_TESTER] y devuelve INIT_FAILED.
+   No incluyas ningún bypass ni ruta que permita operar en cuenta demo o live.
 1. NO INVENTES APIS, CAMPOS, CONSTANTES NI SOBRECARGAS: Usa únicamente identificadores y firmas oficiales del MQL5 Reference.
-   - Identificadores prohibidos/inexistentes: TRADE_RETCODE_DONE_PARTIAL, TRADE_RETCODE_INVALID_ORDER,
-     TRADE_RETCODE_NO_CHANGES, TRADE_TRANSACTION_POSITION_DELETE, trans.magic, trans.profit,
+   - Identificadores prohibidos/inexistentes: TRADE_TRANSACTION_POSITION_DELETE, trans.magic, trans.profit,
      ORDER_MAGIC_NUMBER y AccountBalanceDouble.
    - CTrade::Buy y CTrade::Sell aceptan COMO MÁXIMO 6 argumentos: volume, symbol, price, sl, tp, comment
      (el sexto es el comentario). NUNCA añadas un séptimo argumento de salida para el ticket.
@@ -58,7 +60,8 @@ REGLAS OBLIGATORIAS DE ARQUITECTURA Y EJECUCIÓN:
    - Si la estrategia exige registrar cierres: detecta TRADE_TRANSACTION_DEAL_ADD, selecciona con HistoryDealSelect(trans.deal),
      comprueba HistoryDealGetInteger(trans.deal, DEAL_ENTRY) == DEAL_ENTRY_OUT, y obtén el beneficio con
      HistoryDealGetDouble(trans.deal, DEAL_PROFIT). Nunca leas el beneficio de trans.
-   - Retcodes oficiales de éxito: TRADE_RETCODE_DONE (10009), TRADE_RETCODE_PLACED (10008). Usa CTrade para ejecución limpia y valida su resultado.
+   - Retcodes oficiales de éxito: TRADE_RETCODE_DONE (10009), TRADE_RETCODE_PLACED (10008) y
+     TRADE_RETCODE_DONE_PARTIAL (10010). Usa CTrade para ejecución limpia y valida retcode + deal/order.
 2. STOP LOSS OBLIGATORIO: Toda apertura de posición (OrderSend/trade.Buy/trade.Sell/trade.PositionOpen) DEBE
    incluir un Stop Loss válido — está estrictamente prohibido enviar una orden sin SL.
 3. POSITION SIZING DETERMINISTA POR RIESGO REAL:
@@ -232,6 +235,11 @@ datetime       currentDayTime = 0;
 //+------------------------------------------------------------------+
 int OnInit()
   {
+   if(!MQLInfoInteger(MQL_TESTER))
+     {
+      Print("[INIT_BLOCKED_NOT_TESTER] Este EA solo puede ejecutarse en Strategy Tester.");
+      return(INIT_FAILED);
+     }
    trade.SetExpertMagicNumber(InpMagicNumber);
    trade.SetTypeFillingBySymbol(_Symbol);
    
@@ -529,10 +537,10 @@ async function runMql5Pipeline(
     }
   }
 
-  // 1.6: CodeReviewerAgent que evalúa las 22 reglas del Doc 17
+  // 1.6: CodeReviewerAgent que evalúa las 22 reglas del Doc 17 + tester-only
   let review: CodeReviewResult | undefined;
   if (compile.status === 'ok' || compile.status === 'unverified') {
-    onProgress?.({ attempt: attempts, maxAttempts: MAX_COMPILE_ATTEMPTS, phase: 'evaluating', details: 'Auditando cumplimiento de las 22 reglas del Doc 17...' });
+    onProgress?.({ attempt: attempts, maxAttempts: MAX_COMPILE_ATTEMPTS, phase: 'evaluating', details: 'Auditando 23 controles, incluido tester-only fail-closed...' });
     review = reviewMql5Code(draft.code, draft.assumptionsToVerify);
     if (!review.passed) {
       console.warn(`[CodeReviewer] Advertencia en reglas de código: ${review.summary}`);

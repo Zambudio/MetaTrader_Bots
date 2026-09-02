@@ -244,13 +244,24 @@ export function reviewMql5Code(code: string, assumptions: string[] = []): CodeRe
     details: hasAssumptions ? `${assumptions.length} supuestos documentados para validación.` : 'Falta lista de supuestos a verificar.',
   });
 
+  // Regla 23 (validación real FOREX): el artefacto no debe tener ninguna ruta de ejecución live.
+  const hasTesterOnlyGuard = /if\s*\(\s*!\s*MQLInfoInteger\s*\(\s*MQL_TESTER\s*\)\s*\)[^{;]{0,80}(?:\{[^}]{0,160})?return\s*\(?\s*INIT_FAILED/i.test(code);
+  evaluations.push({
+    ruleNumber: 23,
+    ruleName: 'Ejecución exclusiva en Strategy Tester',
+    verdict: hasTesterOnlyGuard ? 'cumple' : 'no_cumple',
+    details: hasTesterOnlyGuard
+      ? 'OnInit falla de forma cerrada cuando MQL_TESTER no está activo.'
+      : 'Falta un guard fail-closed con MQLInfoInteger(MQL_TESTER) y retorno INIT_FAILED.',
+  });
+
   const passedCount = evaluations.filter((e) => e.verdict === 'cumple').length;
   const score = Math.round((passedCount / evaluations.length) * 100);
   const blocking = evaluations.filter((e) => e.verdict === 'no_cumple').map((e) => e.ruleNumber);
 
   const passed = blocking.length === 0;
   const summary = passed
-    ? `Código revisado: Cumple las 22 reglas del Doc 17 (${score}%).`
+    ? `Código revisado: Cumple las ${evaluations.length} reglas obligatorias (${score}%).`
     : `Código revisado: Incumple ${blocking.length} regla(s) obligatoria(s) (Reglas: ${blocking.join(', ')}).`;
 
   return {
