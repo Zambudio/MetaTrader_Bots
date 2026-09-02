@@ -34,7 +34,7 @@ export function hasHistoricalTemporalContextError(
 /** Máximo 1 evento + 1 filtro; las frases "No incluye..." son declaraciones, no restricciones. */
 export function hasOverloadedEntryCondition(condition: string): boolean {
   const withoutNegativeDeclarations = condition.replace(
-    /(?:^|[.!?;]\s+)(?:no incluye|no usa|no depende de|sin filtros? de)[^.?!]*(?:[.?!]|$)/gi,
+    /(?:^|[.!?;]\s+)(?:no incluye|no usa|no depende de|sin (?:m[aá]s )?filtros?(?: de)?)[^.?!]*(?:[.?!]|$)/gi,
     ' ',
   );
   return /no abrir si|ignorar si|primera vela|calendario|spread|slippage|\bH4\b|\bD1\b/i.test(withoutNegativeDeclarations);
@@ -51,13 +51,14 @@ export function hasUnsupportedLiquidityClaim(text: string): boolean {
   const intensityPattern = /(?:baja|alta|menor|mayor|reducida|escasa|fina) liquidez|liquidez[^.;\n]{0,40}(?:baja|alta|menor|mayor|reducida|escasa|fina)/g;
   for (const match of normalized.matchAll(intensityPattern)) {
     const index = match.index ?? 0;
+    if (/no (?:se )?(?:debe )?(?:afirma|afirmar|infiere|inferir|deduce|deducir)/.test(match[0])) continue;
     const clauseStart = Math.max(
       normalized.lastIndexOf('.', index - 1),
       normalized.lastIndexOf(';', index - 1),
       normalized.lastIndexOf('\n', index - 1),
     );
     const prefix = normalized.slice(clauseStart + 1, index);
-    if (/no (?:se )?(?:afirma|infiere|deduce)[^.;\n]{0,80}$/.test(prefix)) continue;
+    if (/no (?:se )?(?:debe )?(?:afirma|afirmar|infiere|inferir|deduce|deducir)[^.;\n]{0,80}$/.test(prefix)) continue;
     return true;
   }
   return false;

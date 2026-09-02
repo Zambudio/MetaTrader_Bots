@@ -55,6 +55,9 @@ describe('reglas puras del audit FOREX real', () => {
     expect(hasOverloadedEntryCondition(
       'EVENTO: cruce MACD. FILTRO UNICO: cierre > EMA(50). Ambas condiciones se evaluan sobre velas cerradas; no incluye calendario, spread, primera vela semanal ni multi-timeframe.',
     )).toBe(false);
+    expect(hasOverloadedEntryCondition(
+      'EVENTO: cruce MACD. FILTRO UNICO: cierre > EMA(50). Sin mas filtros, sin calendario, sin spread, sin marco superior.',
+    )).toBe(false);
   });
 
   it('marca costes numéricos sin fuente, no la mera ausencia declarada', () => {
@@ -139,6 +142,10 @@ describe('reglas puras del audit FOREX real', () => {
     expect(hasUnsupportedLiquidityClaim('00:00 UTC es una franja típicamente de baja liquidez.')).toBe(true);
     expect(hasUnsupportedLiquidityClaim('Liquidez DATA_NOT_AVAILABLE; no se infiere desde la hora.')).toBe(false);
     expect(hasUnsupportedLiquidityClaim('No se infiere liquidez baja desde la hora.')).toBe(false);
+    expect(hasUnsupportedLiquidityClaim('No debe inferirse liquidez alta/baja por la hora o sesion.')).toBe(false);
+    expect(hasUnsupportedLiquidityClaim(
+      'No se aporta metrica de liquidez y no se infiere liquidez alta/baja por la hora.',
+    )).toBe(false);
     expect(hasUnsupportedLiquidityClaim(
       'Entradas próximas a Asia: liquidez potencialmente más fina; no hay métrica aportada y no se infiere desde la hora.',
     )).toBe(true);

@@ -6,8 +6,8 @@ Seguridad: **0 órdenes live, 0 capital, 0 llamadas de ejecución**. Solo análi
 
 Relacionados: [auditoría](AUDITORIA_MULTIAGENTE.md) · [config Forex](CONFIGURACION_FOREX.md) · [validation loop simulado](VALIDATION_LOOP.md) · [estado final](ESTADO_FINAL_CONFIGURACIONES.md).
 
-> **ESTADO DE LA EJECUCIÓN: `EN_VALIDACION` sobre `forex_v1.1` hash activo `2d0f2986…55159b6`.**
-> Hay 10 runs persistidos: 4 de `forex_v1` y 6 de `forex_v1.1`. R2 fue limpio sobre el hash anterior `c3d6b2b0…09a77`; dos intentos posteriores de R3 terminaron fail-closed por cuota y el segundo reveló un error aritmético de pips. C15 corrige auditor y prompt, por lo que el quórum del hash nuevo exige repetir R2 más dos corridas limpias consecutivas. Siguen pendientes la matriz completa y MQL5/MetaEditor/smoke antes de declarar un estado final.
+> **ESTADO DE LA EJECUCIÓN: `EN_VALIDACION` sobre `forex_v1.1` hash activo `64c35dc7…be9d135`.**
+> Hay 11 runs persistidos: 4 de `forex_v1` y 7 de `forex_v1.1`. El nuevo R2 obtuvo `validated + go + 0 blockers`, pero no es limpio: momentum y riesgo compararon indebidamente la ventana histórica con la fecha del sistema. C16 corrige dos falsos positivos del auditor y refuerza el prompt contra esa contaminación; el quórum del hash nuevo exige repetir R2 más dos corridas limpias consecutivas. Siguen pendientes la matriz completa y MQL5/MetaEditor/smoke antes de declarar un estado final.
 
 ---
 
@@ -303,7 +303,17 @@ La auditoría manual detectó un `MODEL_ERROR` no cubierto: `fx-session` afirmó
 
 La causa raíz se refuerza sólo en `forex_v1.1`: todos los agentes deben usar `1 pip = 0.0001`, recalcular toda distancia entre precios o abstenerse de cuantificarla. `forex_v1` no cambia y conserva hash `504e6f2a…29bb8c`; el hash activo de `forex_v1.1` se actualiza y queda anclado en código/test. Verificación: tests focales 12/12, `npm run typecheck` PASS, suite **19 archivos / 99 tests PASS**, `npm run build` PASS (sólo warning conocido de chunk 584,14 kB). `npm run lint` continúa bloqueado por WDAC.
 
-Acumulado tras C15: `forex_v1` 0/4 funcional; `forex_v1.1` 2/6 funcional; total 2/10 (20%). Estrategias persistidas: 8; GO del modelo: 2; aceptadas manualmente: 1. El R2 limpio pertenece al hash anterior y queda como evidencia histórica, pero no satisface el quórum estricto del hash `2d0f2986…55159b6`: tras el reset se repetirá R2 y se exigirán dos corridas limpias consecutivas adicionales. Aún no se genera MQL5. Seguridad: cero órdenes/capital/cuenta live, cero procesos MetaTrader cerrados, cero push/deploy.
+Acumulado tras C15: `forex_v1` 0/4 funcional; `forex_v1.1` 2/6 funcional; total 2/10 (20%). Estrategias persistidas: 8; GO del modelo: 2; aceptadas manualmente: 1. El R2 limpio pertenece a un hash anterior y queda como evidencia histórica, pero no satisface el quórum estricto del hash activo: tras el reset se repetirá R2 y se exigirán dos corridas limpias consecutivas adicionales. Aún no se genera MQL5. Seguridad: cero órdenes/capital/cuenta live, cero procesos MetaTrader cerrados, cero push/deploy.
+
+### C16 — R2 funcional rechazado por contaminación temporal
+
+Run `real-forex-20260902162126-r2-trend`, sobre hash `2d0f2986ef976559e7dea8657fe92f5f27041e20aec9410e25f85917f55159b6`: 4.999 velas H1 cerradas, cierre derivado `2026-03-25T00:00:00Z` exactamente igual al `as_of`; 1.665,3 s. Completaron los siete agentes no macro, `fx-macro` se omitió correctamente, y el segundo juez cerró `status=done`, `finalState=validated`, `go`, cero `unresolvedBlockers`.
+
+La estrategia final pasa recálculo: BUY; evento cruce alcista MACD/señal en vela cerrada + filtro único cierre `> EMA50`; ejecución en primer tick posterior; SL/TP desde el fill real con ATR de la vela señal. Ejemplo `1.16145 / 1.15863 / 1.16615`, riesgo `0,5%`; riesgo `0,00282` = 28,2 pips = `1,5×ATR`; recompensa `0,00470` = 47 pips = `2,5×ATR`; R:R `1,6667`. Sin look-ahead, geometría y gate PASS. La vela del snapshot no dispara el cruce; los niveles son plantilla, no orden.
+
+Rechazo manual: `fx-momentum-volatility` llamó la foto “desactualizada” contra `2026-09-02` y `fx-risk` repitió que tenía “~5 meses de antigüedad”. Aunque ambos aclararon que no era cotización live, el contrato HISTORICAL_AS_OF exige juzgar frescura exclusivamente contra `as_of`; son dos `TEMPORAL_CONTEXT_ERROR`. El audit inicialmente sumó dos falsos positivos: interpretó “Sin más filtros, sin calendario…” como condición extra y una doble negación de liquidez como afirmación. C16 reconoce ambos formatos negativos con regresiones; el audit definitivo conserva sólo los dos errores temporales y `STRATEGY_OK`.
+
+La causa raíz se corrige exclusivamente en `forex_v1.1`: en HISTORICAL_AS_OF queda prohibido calcular/mencionar antigüedad frente al reloj del sistema o calificar la foto de obsoleta/stale, incluso al advertir que no es live. Hash activo nuevo: `64c35dc7e78d558c4329d58c1ba62f733c0dc28bef248db358527d2cabe9d135`; `forex_v1` permanece inmutable. Acumulado: `forex_v1` 0/4 funcional; `forex_v1.1` 3/7 funcional; total 3/11 (27,3%). Estrategias: 9; GO del modelo: 3; aceptadas manualmente: 1. Esta R2 no cuenta para el quórum; debe repetirse sobre `64c35dc7…be9d135` seguida de dos runs limpios.
 
 ---
 

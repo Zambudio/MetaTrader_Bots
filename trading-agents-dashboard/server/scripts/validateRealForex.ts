@@ -35,7 +35,7 @@ process.env.AGENT_CLI_RETRIES = process.env.AGENT_CLI_RETRIES || '2';
 const FOREX_ID = process.env.FOREX_VALIDATION_PRESET_ID || 'baseline-forex-forex-v1';
 const EXPECTED_HASHES: Record<string, string> = {
   'baseline-forex-forex-v1': '504e6f2ac86fd05a321e99049b489654f48524f776b7bcf54e679fb70429bb8c',
-  'baseline-forex-forex-v1-1': '2d0f2986ef976559e7dea8657fe92f5f27041e20aec9410e25f85917f55159b6',
+  'baseline-forex-forex-v1-1': '64c35dc7e78d558c4329d58c1ba62f733c0dc28bef248db358527d2cabe9d135',
 };
 const EXPECTED_HASH = EXPECTED_HASHES[FOREX_ID];
 const PAIR = 'EUR/USD';

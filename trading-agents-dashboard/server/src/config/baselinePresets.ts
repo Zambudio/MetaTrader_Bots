@@ -168,7 +168,7 @@ const forexAgents: Agent[] = [
 // capacidades ausentes conocidas convertidas en requisitos imposibles previos al backtest.
 const forexAgentsV11: Agent[] = forexAgents.map((agent) => {
   const common = `CORRECCION FOREX_V1.1:
-Si el snapshot declara VENTANA HISTORICA REPRODUCIBLE, opera en modo HISTORICAL_AS_OF: evalua frescura, sesion y vigencia respecto al as_of indicado, nunca respecto a la fecha actual del sistema. No presentes sus precios como cotizacion live.
+Si el snapshot declara VENTANA HISTORICA REPRODUCIBLE, opera en modo HISTORICAL_AS_OF: evalua frescura, sesion y vigencia respecto al as_of indicado, nunca respecto a la fecha actual del sistema. No calcules ni menciones antiguedad contra la fecha del sistema y no llames obsoleto, desactualizado o stale al snapshot, tampoco al hablar de operativa live; basta indicar que no es una cotizacion live. No presentes sus precios como cotizacion live.
 Una capacidad declarada DATA_NOT_AVAILABLE es una limitacion trazable; no invalida una hipotesis que no dependa de ella. No inventes cifras de spread ni slippage: si faltan, conserva DATA_NOT_AVAILABLE y deja que el smoke use solo costes realmente configurados por el tester. No infieras liquidez alta/baja desde la hora o sesion si no existe una metrica aportada.
 Para EUR/USD, 1 pip = 0.0001: si expresas en pips la distancia entre dos precios, resta ambos precios y divide el valor absoluto por 0.0001; recalcula cada cifra antes de responder o abstente de cuantificarla.
 Conserva como blocker cualquier dato realmente requerido por la regla, contradiccion, look-ahead, condicion no codificable o incumplimiento del gate determinista.`;
