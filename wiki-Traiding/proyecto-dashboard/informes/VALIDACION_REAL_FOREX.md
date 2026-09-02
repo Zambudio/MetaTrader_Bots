@@ -287,6 +287,8 @@ C11 refuerza preventivamente la auditoría estática MQL5 antes de generar el ar
 
 C12 cierra la ruta live del artefacto generado: el prompt MQL5 y el revisor exigen que `OnInit()` consulte `MQLInfoInteger(MQL_TESTER)` y devuelva `INIT_FAILED` si es falso, sin bypass demo/live. La API es oficial y `MQL_TESTER` indica de forma booleana que el programa corre en el tester ([MQL5 Reference](https://www.mql5.com/en/docs/constants/environment_state/mql5_programm_info)). Se corrige también el texto contradictorio “cuenta DEMO” por “exclusivo Strategy Tester” y se eliminan de la lista de APIs inexistentes los retcodes oficiales `DONE_PARTIAL`, `INVALID_ORDER` y `NO_CHANGES`. Regresión roja: un EA live-capable recibía PASS; final: 23 controles estáticos y test explícito del prompt, 19 archivos / **94 tests**, typecheck y build PASS.
 
+C13 hace verificable el requisito de velas cerradas: el revisor bloquea `CopyBuffer/CopyClose/CopyOpen/CopyHigh/CopyLow/CopyRates` con `start_pos=0` y lecturas `iClose/iOpen/iHigh/iLow` con `shift=0`, manteniendo `iTime(...,0)` únicamente para el guard de nueva barra. El prompt exige `start_pos >= 1`, copiar todos los índices usados, crear handles en `OnInit`, liberarlos con `IndicatorRelease` y validar conjuntamente stops/freeze. Dos regresiones rojas pasan; suite final provisional: 19 archivos / **96 tests**, typecheck y build PASS.
+
 Acumulado tras este checkpoint: `forex_v1` 0/4 funcional; `forex_v1.1` 2/5 funcional; total 2/9 (22,2%). Estrategias persistidas: 7; GO del modelo: 2; aceptadas manualmente: 1. Aún no se genera MQL5 porque falta satisfacer R2 + dos corridas limpias consecutivas y completar la matriz. Seguridad: cero órdenes/capital/cuenta live, cero procesos MetaTrader cerrados, cero push/deploy.
 
 ---

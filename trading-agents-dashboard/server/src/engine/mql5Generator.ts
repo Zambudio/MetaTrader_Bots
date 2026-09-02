@@ -75,12 +75,15 @@ REGLAS OBLIGATORIAS DE ARQUITECTURA Y EJECUCIÓN:
    En OnTick(), calcula la pérdida acumulada y drawdown del día contra AccountInfoDouble(ACCOUNT_BALANCE) y
    AccountInfoDouble(ACCOUNT_EQUITY). Si la pérdida diaria supera InpMaxDailyLossPct o el drawdown supera
    InpMaxDrawdownPct, bloquea inmediatamente nuevas entradas de forma determinista.
-5. NO LOOK-AHEAD: Ningún cálculo ni señal de la barra actual puede depender de datos o índices futuros.
+5. NO LOOK-AHEAD Y HANDLES: Crea los handles de indicadores una sola vez en OnInit() y libera cada uno con
+   IndicatorRelease() en OnDeinit(). Toda señal debe leer exclusivamente velas cerradas: usa CopyBuffer/CopyClose
+   con start_pos >= 1 y copia tantos elementos como índices vayas a acceder; nunca uses shift/start_pos 0 para
+   calcular el evento, el filtro o el ATR de la señal. iTime(_Symbol,_Period,0) solo se permite para el guard de nueva barra.
 6. PROPIEDADES DINÁMICAS EN RUNTIME:
    - SYMBOL_VOLUME_STEP, SYMBOL_VOLUME_MIN, SYMBOL_VOLUME_MAX, SYMBOL_POINT, SYMBOL_TRADE_TICK_SIZE,
      SYMBOL_TRADE_TICK_VALUE son propiedades DOUBLE (SymbolInfoDouble).
    - SYMBOL_TRADE_STOPS_LEVEL y SYMBOL_TRADE_FREEZE_LEVEL son propiedades INTEGER (SymbolInfoInteger, variable long).
-7. VALIDACIÓN DE STOPS: Valida SL y TP contra SYMBOL_TRADE_STOPS_LEVEL antes de enviar órdenes.
+7. VALIDACIÓN DE STOPS: Valida SL y TP contra SYMBOL_TRADE_STOPS_LEVEL y SYMBOL_TRADE_FREEZE_LEVEL antes de enviar órdenes.
 8. MAGIC NUMBER: Usa un Magic Number fijo (input ulong InpMagicNumber) en toda orden y transacción.
 9. PREVENCIÓN DE ENTRADAS DUPLICADAS: Verifica siempre PositionsTotal() o el ticket abierto antes de emitir señal.
 10. GUARD DE NUEVA BARRA: En estrategias bar-based, coloca al inicio de OnTick():

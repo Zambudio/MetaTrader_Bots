@@ -63,11 +63,16 @@ export function reviewMql5Code(code: string, assumptions: string[] = []): CodeRe
 
   // Regla 5: No usar look-ahead
   const hasNegativeShift = /iTime\s*\([^)]*,[^)]*,[ \t]*-\d+\)|iClose\s*\([^)]*,[^)]*,[ \t]*-\d+\)/.test(code);
+  const readsOpenIndicatorBuffer = /Copy(?:Buffer|Close|Open|High|Low|Rates)\s*\(\s*[^,]+,\s*[^,]+,\s*0\s*,/i.test(code);
+  const readsOpenPriceBar = /i(?:Close|Open|High|Low)\s*\(\s*[^,]+,\s*[^,]+,\s*0\s*\)/i.test(code);
+  const hasLookAhead = hasNegativeShift || readsOpenIndicatorBuffer || readsOpenPriceBar;
   evaluations.push({
     ruleNumber: 5,
     ruleName: 'No usar look-ahead',
-    verdict: hasNegativeShift ? 'no_cumple' : 'cumple',
-    details: hasNegativeShift ? 'Detectado acceso a índice de barra negativo (look-ahead).' : 'Indexación temporal correcta (sin look-ahead).',
+    verdict: hasLookAhead ? 'no_cumple' : 'cumple',
+    details: hasLookAhead
+      ? 'Detectada lectura de señal con índice inválido o desde la vela aún abierta (shift/start_pos 0).'
+      : 'Señales e indicadores usan velas cerradas (shift/start_pos >= 1), sin índices futuros.',
   });
 
   // Regla 6: No mezclar lógica de señal y ejecución

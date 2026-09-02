@@ -25,4 +25,9 @@ describe('politica de optimizacion del pipeline MQL5', () => {
     expect(MQL5_STANDARD_SYSTEM_PROMPT).not.toMatch(/Identificadores prohibidos[^\n]*TRADE_RETCODE_DONE_PARTIAL/);
     expect(MQL5_STANDARD_SYSTEM_PROMPT).toContain('nunca demo ni live');
   });
+
+  it('exige indicadores sobre velas cerradas y liberar sus handles', () => {
+    expect(MQL5_STANDARD_SYSTEM_PROMPT).toContain('start_pos >= 1');
+    expect(MQL5_STANDARD_SYSTEM_PROMPT).toContain('IndicatorRelease');
+  });
 });

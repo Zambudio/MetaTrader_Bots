@@ -31,6 +31,10 @@ void OnTick() {
 
   if(PositionsTotal() > 0) return;
 
+  double atrBuffer[];
+  if(CopyBuffer(atrHandle, 0, 1, 2, atrBuffer) < 2) return;
+  double signalClose = iClose(_Symbol, _Period, 1);
+
   double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
   double step = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
   double minVol = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
@@ -116,5 +120,12 @@ void OnTradeTransaction(const MqlTradeTransaction &trans, const MqlTradeRequest 
   it('bloquea cualquier EA sin guard tester-only fail-closed', () => {
     const liveCapable = validEaCode.replace('if(!MQLInfoInteger(MQL_TESTER)) return INIT_FAILED;', '');
     expect(reviewMql5Code(liveCapable, ['Supuesto 1']).blockingRules).toContain(23);
+  });
+
+  it('bloquea buffers y precios de señal leídos desde la vela abierta', () => {
+    const openBuffer = validEaCode.replace('CopyBuffer(atrHandle, 0, 1, 2, atrBuffer)', 'CopyBuffer(atrHandle, 0, 0, 2, atrBuffer)');
+    const openClose = validEaCode.replace('iClose(_Symbol, _Period, 1)', 'iClose(_Symbol, _Period, 0)');
+    expect(reviewMql5Code(openBuffer, ['Supuesto 1']).blockingRules).toContain(5);
+    expect(reviewMql5Code(openClose, ['Supuesto 1']).blockingRules).toContain(5);
   });
 });
