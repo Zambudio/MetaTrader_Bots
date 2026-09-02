@@ -18,9 +18,6 @@ export function reviewMql5Code(code: string, assumptions: string[] = []): CodeRe
 
   // Regla 1: No inventar APIs de MQL5 (Identificadores inexistentes comunes)
   const inventedApis = [
-    'TRADE_RETCODE_DONE_PARTIAL',
-    'TRADE_RETCODE_INVALID_ORDER',
-    'TRADE_RETCODE_NO_CHANGES',
     'trans.magic',
     'ORDER_MAGIC_NUMBER',
     'AccountBalanceDouble',
@@ -92,30 +89,43 @@ export function reviewMql5Code(code: string, assumptions: string[] = []): CodeRe
   });
 
   // Regla 8: Consultar propiedades reales del símbolo en runtime
-  const usesSymbolInfo = code.includes('SymbolInfoDouble') || code.includes('_Point') || code.includes('_Digits');
+  const hasTickSize = code.includes('SYMBOL_TRADE_TICK_SIZE');
+  const hasTickValue = /SYMBOL_TRADE_TICK_VALUE(?:_PROFIT|_LOSS)?/.test(code);
+  const hasPointSize = code.includes('SYMBOL_POINT') || code.includes('_Point');
+  const usesSymbolInfo = hasTickSize && hasTickValue && hasPointSize;
   evaluations.push({
     ruleNumber: 8,
     ruleName: 'Consultar propiedades de símbolo en runtime',
     verdict: usesSymbolInfo ? 'cumple' : 'no_cumple',
-    details: usesSymbolInfo ? 'Consulta propiedades dinámicas del símbolo en runtime.' : 'No se detectaron consultas a propiedades de símbolo.',
+    details: usesSymbolInfo
+      ? 'Consulta tick size, tick value y point dinámicos del símbolo en runtime.'
+      : 'El sizing no consulta conjuntamente SYMBOL_TRADE_TICK_SIZE, SYMBOL_TRADE_TICK_VALUE y SYMBOL_POINT/_Point.',
   });
 
   // Regla 9: Normalizar volumen a SYMBOL_VOLUME_STEP y acotar a MIN/MAX
-  const hasVolumeLogic = code.includes('SYMBOL_VOLUME_STEP') || code.includes('SYMBOL_VOLUME_MIN') || code.includes('MathFloor') || code.includes('MathRound');
+  const hasVolumeLogic = code.includes('SYMBOL_VOLUME_STEP')
+    && code.includes('SYMBOL_VOLUME_MIN')
+    && code.includes('SYMBOL_VOLUME_MAX')
+    && (code.includes('MathFloor') || code.includes('MathRound'));
   evaluations.push({
     ruleNumber: 9,
     ruleName: 'Normalizar volumen a step y límites',
     verdict: hasVolumeLogic ? 'cumple' : 'no_cumple',
-    details: hasVolumeLogic ? 'Position sizing contempla step o límites de volumen.' : 'Falta lógica de normalización de volumen a SYMBOL_VOLUME_STEP.',
+    details: hasVolumeLogic
+      ? 'Position sizing normaliza a step y acota a volumen mínimo/máximo.'
+      : 'Falta alguna parte de la normalización: SYMBOL_VOLUME_STEP, MIN, MAX o redondeo.',
   });
 
   // Regla 10: Validar stops contra STOPS_LEVEL y FREEZE_LEVEL
-  const checksStopsLevel = code.includes('SYMBOL_TRADE_STOPS_LEVEL') || code.includes('STOPS_LEVEL') || code.includes('FreezeLevel') || code.includes('StopLoss');
+  const checksStopsLevel = code.includes('SYMBOL_TRADE_STOPS_LEVEL')
+    && code.includes('SYMBOL_TRADE_FREEZE_LEVEL');
   evaluations.push({
     ruleNumber: 10,
     ruleName: 'Validar stops contra stops/freeze level',
     verdict: checksStopsLevel ? 'cumple' : 'no_cumple',
-    details: checksStopsLevel ? 'Considera niveles mínimos de distancia de stop.' : 'No se verifica distancia mínima de stops.',
+    details: checksStopsLevel
+      ? 'Consulta stops level y freeze level del símbolo.'
+      : 'No consulta conjuntamente SYMBOL_TRADE_STOPS_LEVEL y SYMBOL_TRADE_FREEZE_LEVEL.',
   });
 
   // Regla 11: Usar Magic Number en toda operación
@@ -128,21 +138,27 @@ export function reviewMql5Code(code: string, assumptions: string[] = []): CodeRe
   });
 
   // Regla 12: Tratar errores y retcodes explícitamente
-  const checksRetcode = code.includes('retcode') || code.includes('ResultRetcode') || code.includes('TRADE_RETCODE_DONE') || code.includes('trade.Buy');
+  const checksRetcode = /\.ResultRetcode\s*\(\s*\)/.test(code)
+    && /TRADE_RETCODE_[A-Z_]+/.test(code);
   evaluations.push({
     ruleNumber: 12,
     ruleName: 'Tratamiento explícito de retcodes/errores',
     verdict: checksRetcode ? 'cumple' : 'no_cumple',
-    details: checksRetcode ? 'Manejo de resultados de ejecución o uso de CTrade verificado.' : 'Falta verificación de resultado de ejecución.',
+    details: checksRetcode
+      ? 'Lee ResultRetcode() y lo contrasta con códigos del servidor.'
+      : 'Falta leer ResultRetcode() y contrastarlo con TRADE_RETCODE_*.',
   });
 
   // Regla 13: No asumir que OrderSend() == true implica fill
-  const checksFill = code.includes('OnTradeTransaction') || code.includes('trade.ResultOrder') || code.includes('ResultDeal') || code.includes('CTrade');
+  const checksFill = /\.ResultOrder\s*\(\s*\)/.test(code)
+    || /\.ResultDeal\s*\(\s*\)/.test(code);
   evaluations.push({
     ruleNumber: 13,
     ruleName: 'No asumir fill ciego',
     verdict: checksFill ? 'cumple' : 'no_cumple',
-    details: checksFill ? 'Arquitectura asíncrona / CTrade con control de fills.' : 'Falta control de estado real tras envío de orden.',
+    details: checksFill
+      ? 'Controla ticket de orden/deal o reconstruye el fill en OnTradeTransaction.'
+      : 'CTrade/Buy por sí solos no prueban fill: falta ResultDeal/ResultOrder u OnTradeTransaction.',
   });
 
   // Regla 14: Observar OnTradeTransaction para reconstruir estado real

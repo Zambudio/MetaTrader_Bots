@@ -34,14 +34,22 @@ void OnTick() {
   double step = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
   double minVol = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
   double maxVol = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
+  double tickSize = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
+  double tickValue = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
+  double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
   double sl = NormalizeDouble(ask - 0.0030, _Digits);
   double tp = NormalizeDouble(ask + 0.0060, _Digits);
 
   long stopsLevel = 0;
   SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL, stopsLevel);
+  long freezeLevel = 0;
+  SymbolInfoInteger(_Symbol, SYMBOL_TRADE_FREEZE_LEVEL, freezeLevel);
 
   double lot = MathFloor(0.10 / step) * step;
   if(trade.Buy(lot, _Symbol, ask, sl, tp, "Test")) {
+    ulong retcode = trade.ResultRetcode();
+    ulong deal = trade.ResultDeal();
+    if(retcode != TRADE_RETCODE_DONE && retcode != TRADE_RETCODE_DONE_PARTIAL && retcode != TRADE_RETCODE_PLACED) return;
     Print("Orden compra enviada");
   }
 }
@@ -76,5 +84,31 @@ void OnTradeTransaction(const MqlTradeTransaction &trans, const MqlTradeRequest 
     const res = reviewMql5Code(noGuardCode, ['Supuesto 1']);
     expect(res.passed).toBe(false);
     expect(res.blockingRules).toContain(16);
+  });
+
+  it('reconoce TRADE_RETCODE_DONE_PARTIAL como constante oficial', () => {
+    const res = reviewMql5Code(validEaCode, ['Supuesto 1']);
+    expect(res.blockingRules).not.toContain(1);
+  });
+
+  it('exige tick size/value y el trio volume step/min/max para el sizing', () => {
+    const noTickValue = validEaCode.replace('double tickValue = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);', '');
+    const noMinVolume = validEaCode.replace('double minVol = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);', '');
+    expect(reviewMql5Code(noTickValue, ['Supuesto 1']).blockingRules).toContain(8);
+    expect(reviewMql5Code(noMinVolume, ['Supuesto 1']).blockingRules).toContain(9);
+  });
+
+  it('exige validar tanto STOPS_LEVEL como FREEZE_LEVEL', () => {
+    const noFreeze = validEaCode.replace('SymbolInfoInteger(_Symbol, SYMBOL_TRADE_FREEZE_LEVEL, freezeLevel);', '');
+    expect(reviewMql5Code(noFreeze, ['Supuesto 1']).blockingRules).toContain(10);
+  });
+
+  it('no confunde CTrade/Buy con comprobación de retcode y fill', () => {
+    const blind = validEaCode
+      .replace('ulong retcode = trade.ResultRetcode();', '')
+      .replace('ulong deal = trade.ResultDeal();', '');
+    const res = reviewMql5Code(blind, ['Supuesto 1']);
+    expect(res.blockingRules).toContain(12);
+    expect(res.blockingRules).toContain(13);
   });
 });
