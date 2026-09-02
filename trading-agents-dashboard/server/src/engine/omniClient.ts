@@ -21,6 +21,18 @@ export interface OmniClientOptions {
 const DEFAULT_TIMEOUT_MS = Number(process.env.OMNIROUTE_TIMEOUT_MS) || 180_000;
 const DEFAULT_MAX_RETRIES = 2;
 const DEFAULT_RETRY_DELAY_MS = 2000;
+const DEFAULT_FALLBACK_MODELS = ['auto/pro-coding', 'auto/smart'];
+
+export function resolveOmniRouteMaxRetries(raw: string | undefined): number {
+  if (raw === undefined || raw.trim() === '') return DEFAULT_MAX_RETRIES;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed >= 0 && parsed <= 5 ? parsed : DEFAULT_MAX_RETRIES;
+}
+
+export function resolveOmniRouteFallbackModels(raw: string | undefined): string[] {
+  const source = raw === undefined ? DEFAULT_FALLBACK_MODELS.join(',') : raw;
+  return source.split(',').map((item) => item.trim()).filter(Boolean);
+}
 
 // 3.5 Circuit Breaker simple
 class CircuitBreaker {
@@ -107,18 +119,14 @@ export async function fetchWithTimeout(url: string, options: RequestInit, timeou
  * Lección del bucle /loop 2026-08-29: `cerebras/gpt-oss-120b` hace 404 intermitente
  * ("Model zai-glm-4.7 is archived") y tumbaba los jobs largos de generación MQL5.
  */
-const FALLBACK_MODELS = (process.env.OMNIROUTE_FALLBACK_MODELS ?? 'auto/pro-coding,auto/smart')
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
-
 export async function chatCompletion(
   model: string,
   messages: ChatMessage[],
   tool?: ToolDefinition | null,
   options: OmniClientOptions = {}
 ): Promise<any> {
-  const chain = [model, ...FALLBACK_MODELS.filter((m) => m !== model)];
+  const fallbackModels = resolveOmniRouteFallbackModels(process.env.OMNIROUTE_FALLBACK_MODELS);
+  const chain = [model, ...fallbackModels.filter((m) => m !== model)];
   let lastError: unknown;
   for (let i = 0; i < chain.length; i++) {
     try {
@@ -148,7 +156,7 @@ async function chatCompletionOnce(
   }
 
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
+  const maxRetries = options.maxRetries ?? resolveOmniRouteMaxRetries(process.env.OMNIROUTE_MAX_RETRIES);
   const retryDelayMs = options.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
 
   globalCircuitBreaker.check();

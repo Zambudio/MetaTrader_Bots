@@ -7,7 +7,7 @@ Seguridad: **0 órdenes live, 0 capital, 0 llamadas de ejecución**. Solo análi
 Relacionados: [auditoría](AUDITORIA_MULTIAGENTE.md) · [config Forex](CONFIGURACION_FOREX.md) · [validation loop simulado](VALIDATION_LOOP.md) · [estado final](ESTADO_FINAL_CONFIGURACIONES.md).
 
 > **ESTADO DE LA EJECUCIÓN: `EN_VALIDACION` con dos carriles separados.** Validación estructural: `forex_v1.2`, OmniRoute, hash `feddf9d4…4cdc`. Validación analítica final: `forex_v1.1`, Claude/Codex, hash `64c35dc7…be9d135`, aplazada para preservar cuotas.
-> Hay 12 runs completados/evaluables (4 de `forex_v1`, 7 de `forex_v1.1` y 1 de `forex_v1.2`) más un intento R2 interrumpido deliberadamente, excluido de métricas y quórum. `forex_v1.2` conserva prompts, DAG y gates de v1.1 pero cambia los ocho modelos a OmniRoute; sus resultados validan contratos y orquestación, no la calidad analítica final ni habilitan MQL5. Su primer smoke estructural R5a terminó correctamente. El quórum analítico y MQL5/MetaEditor/smoke siguen pendientes antes de declarar un estado final.
+> Hay 12 runs completados/evaluables (4 de `forex_v1`, 7 de `forex_v1.1` y 1 de `forex_v1.2`) más dos intentos R2 interrumpidos deliberadamente, excluidos de métricas y quórum. `forex_v1.2` conserva prompts, DAG y gates de v1.1 pero cambia los ocho modelos a OmniRoute; sus resultados validan contratos y orquestación, no la calidad analítica final ni habilitan MQL5. Su primer smoke estructural R5a terminó correctamente. El quórum analítico y MQL5/MetaEditor/smoke siguen pendientes antes de declarar un estado final.
 
 ---
 
@@ -358,6 +358,12 @@ Guard de coste: el prefijo explícito `omniroute:` es resuelto por `llmRouter` �
 Primer smoke real: `real-forex-20260902204943-r5a-absent`, 8 s. Con `marketSnapshot=null`, `fx-session` fue el único agente ejecutado porque `session_clock` seguía disponible; devolvió el contrato estructurado esperado. `fx-structure`, `fx-momentum-volatility` y `fx-macro` se omitieron por `DATA_NOT_AVAILABLE`; estrategia, riesgo, crítico y juez se omitieron por dependencias. Resultado correcto: `status=done`, `finalState=insufficient_data`, 0 agentes en error, sin estrategia ni veredicto. `auditRealForex.ts`: **OK**, sin hallazgos. Esto valida el caso negativo y la ruta OmniRoute con una sola llamada; no hubo llamadas Claude/Codex.
 
 Acumulado evaluable: `forex_v1` 0/4 funcional, `forex_v1.1` 3/7 y `forex_v1.2` estructural 1/1; total 4/12 (33,3 %). El siguiente escenario estructural útil es R2, que cubre los tres tipos de salida y la transferencia completa de contexto.
+
+### C18 — R2 detenida al detectar reintento y guard fail-fast
+
+El primer intento R2 de v1.2, `real-forex-20260902205047-r2-trend`, completó `fx-structure` y `fx-momentum-volatility`; durante `fx-session`, OmniRoute agotó la primera petición de 180 s e inició automáticamente el intento 2/3. Se envió `Ctrl+C` en el primer aviso para respetar la política de coste. El artefacto quedó `status=running`, sin `finalState`, con sesión en curso y el resto esperando. Se clasifica **`USER_ABORTED_COST_GUARD`**, queda fuera de métricas/audit/quórum y no se interpreta como defecto analítico.
+
+Causa raíz: `omniClient` fijaba dos reintentos y la cadena de modelos fallback al importar el módulo, sin control por entorno. Corrección: `OMNIROUTE_MAX_RETRIES` y `OMNIROUTE_FALLBACK_MODELS` se resuelven en cada llamada; el runner fuerza para v1.2 `maxRetries=0`, fallback limitado a `auto/best-fast`, concurrencia 1 y cero rondas de revisión. Esto no debilita un rechazo ni busca GO: ante el primer fallo termina fail-closed y evita llamadas adicionales. `.env.example` documenta ambas variables. Regresión local: 2 archivos / 6 tests focales PASS; typecheck PASS. No se ejecutó suite completa ni build.
 
 ---
 

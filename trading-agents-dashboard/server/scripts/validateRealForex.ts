@@ -27,12 +27,20 @@ import { readJson, writeJson } from '../src/store/jsonStore.js';
 import { DATA_DIR } from '../src/paths.js';
 import type { AgentConfigPreset, Run } from '../src/types.js';
 
+const FOREX_ID = process.env.FOREX_VALIDATION_PRESET_ID || 'baseline-forex-forex-v1';
+const STRUCTURAL_ONLY = FOREX_ID === 'baseline-forex-forex-v1-2';
+
 // --- Ajustes de infraestructura para ejecución real (evidencia: run _rWt37-Ku2 timeout 180s) ---
 process.env.AGENT_CLI_TIMEOUT_MS = process.env.AGENT_CLI_TIMEOUT_MS || '600000';
-process.env.AGENT_MAX_CONCURRENCY = process.env.AGENT_MAX_CONCURRENCY || '2';
+process.env.AGENT_MAX_CONCURRENCY = STRUCTURAL_ONLY ? '1' : (process.env.AGENT_MAX_CONCURRENCY || '2');
 process.env.AGENT_CLI_RETRIES = process.env.AGENT_CLI_RETRIES || '2';
+if (STRUCTURAL_ONLY) {
+  // Smoke estructural deliberadamente fail-fast: una petición por agente, un único modelo y sin
+  // rondas de revisión. Nunca cambia un rechazo por GO ni altera el preset persistido.
+  process.env.OMNIROUTE_MAX_RETRIES = '0';
+  process.env.OMNIROUTE_FALLBACK_MODELS = 'auto/best-fast';
+}
 
-const FOREX_ID = process.env.FOREX_VALIDATION_PRESET_ID || 'baseline-forex-forex-v1';
 const EXPECTED_HASHES: Record<string, string> = {
   'baseline-forex-forex-v1': '504e6f2ac86fd05a321e99049b489654f48524f776b7bcf54e679fb70429bb8c',
   'baseline-forex-forex-v1-1': '64c35dc7e78d558c4329d58c1ba62f733c0dc28bef248db358527d2cabe9d135',
@@ -121,7 +129,7 @@ function makeRun(preset: AgentConfigPreset, spec: ScenarioSpec, snapshot: string
     marketSnapshot: snapshot, // pre-fijado (undefined dejaría al orquestador buscarlo en vivo)
     issues: [],
     retryCount: 0,
-    maxRetries: preset.consensus.maxRevisionRounds,
+    maxRetries: STRUCTURAL_ONLY ? 0 : preset.consensus.maxRevisionRounds,
   };
 }
 
@@ -200,6 +208,9 @@ async function main() {
       AGENT_CLI_TIMEOUT_MS: process.env.AGENT_CLI_TIMEOUT_MS,
       AGENT_MAX_CONCURRENCY: process.env.AGENT_MAX_CONCURRENCY,
       AGENT_CLI_RETRIES: process.env.AGENT_CLI_RETRIES,
+      OMNIROUTE_MAX_RETRIES: process.env.OMNIROUTE_MAX_RETRIES,
+      OMNIROUTE_FALLBACK_MODELS: process.env.OMNIROUTE_FALLBACK_MODELS,
+      maxRevisionRounds: STRUCTURAL_ONLY ? 0 : preset.consensus.maxRevisionRounds,
     },
     runs: [...((existing.runs as unknown[]) ?? [])],
   };
