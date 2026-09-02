@@ -3,9 +3,10 @@ import { BASELINE_PRESETS, cloneBaselinePresets } from '../src/config/baselinePr
 import { hashConfiguration, validatePreset } from '../src/config/configValidation.js';
 
 describe('baselines multiagente por mercado', () => {
-  it('publica forex_v1.1 sin sobrescribir la baseline forex_v1 reproducible', () => {
+  it('publica forex_v1.1 y v1.2 sin sobrescribir las baselines reproducibles', () => {
     const forexV1 = BASELINE_PRESETS.find((preset) => preset.version === 'forex_v1');
     const forexV11 = BASELINE_PRESETS.find((preset) => preset.version === 'forex_v1.1');
+    const forexV12 = BASELINE_PRESETS.find((preset) => preset.version === 'forex_v1.2');
 
     expect(forexV1).toBeDefined();
     expect(hashConfiguration(forexV1!)).toBe('504e6f2ac86fd05a321e99049b489654f48524f776b7bcf54e679fb70429bb8c');
@@ -14,6 +15,14 @@ describe('baselines multiagente por mercado', () => {
     expect(hashConfiguration(forexV11!)).toBe('64c35dc7e78d558c4329d58c1ba62f733c0dc28bef248db358527d2cabe9d135');
     expect(forexV11?.agents.map((agent) => agent.model)).toEqual(Array(8).fill('claude:sonnet'));
     expect(validatePreset(forexV11!)).toEqual({ valid: true, errors: [] });
+    expect(forexV12).toBeDefined();
+    expect(forexV12?.id).toBe('baseline-forex-forex-v1-2');
+    expect(hashConfiguration(forexV12!)).toBe('feddf9d404020de68e6884a519cb6b558292e98e846e1e77bd5bf35145434cdc');
+    expect(forexV12?.agents.map((agent) => agent.model)).toEqual(Array(8).fill('omniroute:auto/best-fast'));
+    expect(forexV12?.agents.map((agent) => agent.systemPrompt)).toEqual(
+      forexV11?.agents.map((agent) => agent.systemPrompt)
+    );
+    expect(validatePreset(forexV12!)).toEqual({ valid: true, errors: [] });
 
     const prompts = new Map(forexV11?.agents.map((agent) => [agent.id, agent.systemPrompt]));
     expect(prompts.get('fx-session')).toContain('HISTORICAL_AS_OF');
@@ -34,14 +43,14 @@ describe('baselines multiagente por mercado', () => {
   });
 
   it('define tres mercados independientes con baselines válidas y versionadas', () => {
-    expect(BASELINE_PRESETS.map((preset) => preset.key)).toEqual(['FOREX', 'FOREX', 'ACCIONES', 'CRIPTOMONEDAS']);
-    expect(BASELINE_PRESETS.map((preset) => preset.version)).toEqual(['forex_v1', 'forex_v1.1', 'stocks_v1', 'crypto_v1']);
-    expect(BASELINE_PRESETS.map((preset) => preset.referenceAsset)).toEqual(['EUR/USD', 'EUR/USD', 'TSLA', 'BTC/USD']);
+    expect(BASELINE_PRESETS.map((preset) => preset.key)).toEqual(['FOREX', 'FOREX', 'FOREX', 'ACCIONES', 'CRIPTOMONEDAS']);
+    expect(BASELINE_PRESETS.map((preset) => preset.version)).toEqual(['forex_v1', 'forex_v1.1', 'forex_v1.2', 'stocks_v1', 'crypto_v1']);
+    expect(BASELINE_PRESETS.map((preset) => preset.referenceAsset)).toEqual(['EUR/USD', 'EUR/USD', 'EUR/USD', 'TSLA', 'BTC/USD']);
     for (const preset of BASELINE_PRESETS) expect(validatePreset(preset)).toEqual({ valid: true, errors: [] });
   });
 
   it('no comparte IDs, prompts ni referencias entre mercados', () => {
-    const forex = BASELINE_PRESETS.find((preset) => preset.version === 'forex_v1.1')!;
+    const forex = BASELINE_PRESETS.find((preset) => preset.version === 'forex_v1.2')!;
     const stocks = BASELINE_PRESETS.find((preset) => preset.version === 'stocks_v1')!;
     const crypto = BASELINE_PRESETS.find((preset) => preset.version === 'crypto_v1')!;
     const ids = [forex, stocks, crypto].map((preset) => new Set(preset.agents.map((agent) => agent.id)));

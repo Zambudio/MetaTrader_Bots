@@ -6,8 +6,8 @@ Seguridad: **0 órdenes live, 0 capital, 0 llamadas de ejecución**. Solo análi
 
 Relacionados: [auditoría](AUDITORIA_MULTIAGENTE.md) · [config Forex](CONFIGURACION_FOREX.md) · [validation loop simulado](VALIDATION_LOOP.md) · [estado final](ESTADO_FINAL_CONFIGURACIONES.md).
 
-> **ESTADO DE LA EJECUCIÓN: `EN_VALIDACION`, pausada por petición del usuario para limitar cuota, sobre `forex_v1.1` hash activo `64c35dc7…be9d135`.**
-> Hay 11 runs completados/evaluables (4 de `forex_v1` y 7 de `forex_v1.1`) más un intento R2 interrumpido deliberadamente, excluido de métricas y quórum. El último R2 completo obtuvo `validated + go + 0 blockers`, pero no fue limpio: momentum y riesgo compararon indebidamente la ventana histórica con la fecha del sistema. C16 corrigió el auditor y reforzó el prompt; aún no existe una corrida completa sobre el hash activo. El quórum exige un R2 limpio más dos corridas limpias consecutivas del mismo hash. Siguen pendientes la matriz completa y MQL5/MetaEditor/smoke antes de declarar un estado final.
+> **ESTADO DE LA EJECUCIÓN: `EN_VALIDACION` con dos carriles separados.** Validación estructural: `forex_v1.2`, OmniRoute, hash `feddf9d4…4cdc`. Validación analítica final: `forex_v1.1`, Claude/Codex, hash `64c35dc7…be9d135`, aplazada para preservar cuotas.
+> Hay 11 runs completados/evaluables (4 de `forex_v1` y 7 de `forex_v1.1`) más un intento R2 interrumpido deliberadamente, excluido de métricas y quórum. `forex_v1.2` conserva prompts, DAG y gates de v1.1 pero cambia los ocho modelos a OmniRoute; sus resultados validan contratos y orquestación, no la calidad analítica final ni habilitan MQL5. El quórum analítico y MQL5/MetaEditor/smoke siguen pendientes antes de declarar un estado final.
 
 ---
 
@@ -346,6 +346,14 @@ Política de consumo para la reanudación:
 - Auditoría determinista, lectura de artefactos, redacción y commits se hacen localmente con Codex; no se delegan a otro modelo ni consumen llamadas Claude.
 - Actualizaciones al usuario solo en hitos (run terminada, defecto real o bloqueo), evitando mensajes y ciclos de inspección redundantes.
 - El presupuesto estimado observado sigue siendo 15–30 minutos por run completo, con varias llamadas `claude:sonnet`; antes de cada nueva corrida se priorizará preservar cuota sobre completar rápidamente la matriz.
+
+### C17 — carril estructural `forex_v1.2` por OmniRoute
+
+Para evitar que la validación repetitiva consuma las suscripciones destinadas a otros proyectos, se publica `baseline-forex-forex-v1-2`, hash `feddf9d404020de68e6884a519cb6b558292e98e846e1e77bd5bf35145434cdc`. Es una copia independiente de `forex_v1.1`: mismos ocho agentes, prompts, dependencias, activación, contratos, capacidades, consenso y risk gate; la única diferencia funcional es `model=omniroute:auto/best-fast` en todos los agentes. `forex_v1` y `forex_v1.1` mantienen sus hashes y modelos.
+
+Alcance deliberado: v1.2 sirve para probar serialización, selección/omisión de agentes, transferencia de contexto, schemas de análisis/estrategia/veredicto, revisiones, persistencia y auditoría determinista. No sustituye una validación representativa con los modelos Claude/Codex que harán los análisis finales. `generateValidatedForexMql5.ts` continúa exigiendo explícitamente `baseline-forex-forex-v1-1`, por lo que un GO estructural de v1.2 no puede saltarse el gate de MQL5.
+
+Guard de coste: el prefijo explícito `omniroute:` es resuelto por `llmRouter` únicamente hacia `omniClient`; su fallback permanece dentro de modelos OmniRoute y nunca cae en Claude o Codex. Comprobación local, sin llamadas LLM: `npx vitest run test/baselinePresets.test.ts` 4/4 PASS y `npm run typecheck` PASS. La matriz estructural se ejecutará con `FOREX_VALIDATION_PRESET_ID=baseline-forex-forex-v1-2`, un escenario por vez y sin reintentos destinados a perseguir GO.
 
 ---
 
