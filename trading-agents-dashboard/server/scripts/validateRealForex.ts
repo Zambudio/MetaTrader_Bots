@@ -41,7 +41,7 @@ if (STRUCTURAL_ONLY) {
   // Smoke estructural deliberadamente fail-fast: una petición por agente, un único modelo y sin
   // rondas de revisión. Nunca cambia un rechazo por GO ni altera el preset persistido.
   process.env.OMNIROUTE_MAX_RETRIES = '0';
-  process.env.OMNIROUTE_FALLBACK_MODELS = 'auto/best-fast';
+  process.env.OMNIROUTE_FALLBACK_MODELS = '';
   process.env.STRATEGY_VALIDATION_RETRIES = '0';
 }
 

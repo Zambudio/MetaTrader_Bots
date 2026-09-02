@@ -381,7 +381,7 @@ El audit conserva cuatro hallazgos: `RUN_NOT_FUNCTIONAL`, contaminación tempora
 
 ### C21 — `forex_v1.2.1`, routing OmniRoute por complejidad
 
-Para cubrir las estructuras restantes sin gastar Claude/Codex ni repetir los escenarios fallidos, se publica `baseline-forex-forex-v1-2-1`, hash `e84b3d40062a9dc84f86f45b550f165bbb68341f4695b8d2c0c83a2bc50ad9a2`. Conserva exactamente prompts, DAG, activación, contratos y gates de v1.1/v1.2. Routing: los cuatro especialistas usan `omniroute:auto/best-fast`; estrategia, riesgo, crítico y juez usan `omniroute:auto/best-reasoning`. Todos mantienen una llamada máxima, un único modelo, concurrencia 1 y cero rondas de revisión.
+Para cubrir las estructuras restantes sin gastar Claude/Codex ni repetir los escenarios fallidos, se publica `baseline-forex-forex-v1-2-1`, hash `e84b3d40062a9dc84f86f45b550f165bbb68341f4695b8d2c0c83a2bc50ad9a2`. Conserva exactamente prompts, DAG, activación, contratos y gates de v1.1/v1.2. Routing: los cuatro especialistas usan `omniroute:auto/best-fast`; estrategia, riesgo, crítico y juez usan `omniroute:auto/best-reasoning`. Todos mantienen una llamada máxima, fallback desactivado, concurrencia 1 y cero rondas de revisión.
 
 `forex_v1.2` queda inmutable con sus tres runs. v1.2.1 continúa marcado `structural_only`; no es elegible para MQL5 ni certificación analítica. Hash y distribución 4+4 anclados en `baselinePresets.test.ts`: 4/4 PASS; typecheck PASS. Esta separación aplica routing por complejidad: modelo rápido para extracción/contrato y razonamiento solo donde se necesita aritmética y consenso.
 
