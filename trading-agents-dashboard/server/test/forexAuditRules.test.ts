@@ -7,6 +7,7 @@ import {
   hasUnsupportedLiquidityClaim,
   hasPredictedFutureFill,
   findWeekdayMismatch,
+  findForexPipArithmeticMismatch,
 } from '../src/validation/forexAuditRules.js';
 
 describe('reglas puras del audit FOREX real', () => {
@@ -96,6 +97,41 @@ describe('reglas puras del audit FOREX real', () => {
     )).toBeNull();
     expect(findWeekdayMismatch(
       '{"claim":"2026-08-24 es lunes (calculado)."},{"claim":"Modo HISTORICAL_AS_OF as_of 2026-08-25T00:00:00Z."}',
+    )).toBeNull();
+  });
+
+  it('recalcula distancias EUR/USD declaradas en pips sin cruzar afirmaciones', () => {
+    expect(findForexPipArithmeticMismatch(
+      'Estructura mixta: precio 1.16684 por encima de SMA200 (1.16462, ~+222 pips) → fondo alcista; por debajo de EMA50 1.16726 y SMA50 1.16761.',
+    )).toEqual({
+      firstPrice: 1.16684,
+      secondPrice: 1.16462,
+      statedPips: 222,
+      expectedPips: 22.2,
+    });
+    expect(findForexPipArithmeticMismatch(
+      'El precio 1.16684 está por encima de SMA200 (1.16462, ~22 pips).',
+    )).toBeNull();
+    expect(findForexPipArithmeticMismatch(
+      '{"claim":"ATR 0.00073 (~7.3 pips)."},{"claim":"Precio 1.16684 y SMA200 1.16462."}',
+    )).toBeNull();
+    expect(findForexPipArithmeticMismatch(
+      'Niveles 1.16674, 1.16726 y 1.16761 dentro de un clúster de ~9 pips.',
+    )).toBeNull();
+    expect(findForexPipArithmeticMismatch(
+      'MACD 1.16176 sobre su referencia 1.16253; ATR 0.00188 (~18.8 pips).',
+    )).toBeNull();
+    expect(findForexPipArithmeticMismatch(
+      'TP 1.15768 (+0.00395 = 39.5 pips).',
+    )).toBeNull();
+    expect(findForexPipArithmeticMismatch(
+      'Cierre 1.16684 ~0.7 pips por encima de EMA20 1.16677 y ~1 pip por encima de SMA20 1.16674.',
+    )).toBeNull();
+    expect(findForexPipArithmeticMismatch(
+      'SL 1.16574 (riesgo ~11 pips), calculado desde E 1.16684; TP 1.16870.',
+    )).toBeNull();
+    expect(findForexPipArithmeticMismatch(
+      'El precio 1.16684 está por encima de EMA20 1.16677, SMA20 1.16674, pero por debajo de EMA50 1.16726 (~4.2 pips).',
     )).toBeNull();
   });
 

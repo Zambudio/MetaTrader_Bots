@@ -6,8 +6,8 @@ Seguridad: **0 órdenes live, 0 capital, 0 llamadas de ejecución**. Solo análi
 
 Relacionados: [auditoría](AUDITORIA_MULTIAGENTE.md) · [config Forex](CONFIGURACION_FOREX.md) · [validation loop simulado](VALIDATION_LOOP.md) · [estado final](ESTADO_FINAL_CONFIGURACIONES.md).
 
-> **ESTADO DE LA EJECUCIÓN: `EN_VALIDACION` sobre `forex_v1.1` hash `c3d6b2b0…09a77`.**
-> Hay 9 runs persistidos: 4 de `forex_v1` y 5 de `forex_v1.1`. El nuevo R2 posterior a C7/C8 es funcional, `validated + go + 0 blockers` y pasa auditoría automática y manual; es la primera corrida limpia elegible. El siguiente R3 fue cortado por cuota en el juez y no cuenta. Todavía faltan dos corridas limpias consecutivas, completar la matriz y las fases MQL5/MetaEditor/smoke antes de declarar un estado final.
+> **ESTADO DE LA EJECUCIÓN: `EN_VALIDACION` sobre `forex_v1.1` hash activo `2d0f2986…55159b6`.**
+> Hay 10 runs persistidos: 4 de `forex_v1` y 6 de `forex_v1.1`. R2 fue limpio sobre el hash anterior `c3d6b2b0…09a77`; dos intentos posteriores de R3 terminaron fail-closed por cuota y el segundo reveló un error aritmético de pips. C15 corrige auditor y prompt, por lo que el quórum del hash nuevo exige repetir R2 más dos corridas limpias consecutivas. Siguen pendientes la matriz completa y MQL5/MetaEditor/smoke antes de declarar un estado final.
 
 ---
 
@@ -291,7 +291,19 @@ C13 hace verificable el requisito de velas cerradas: el revisor bloquea `CopyBuf
 
 C14 cierra el gate agentes→MQL5 de esta validación. `auditRealForex.ts` persiste ahora el hash exacto por run; `generateValidatedForexMql5.ts` exige audit posterior al informe, R2 limpio, al menos tres runs `ok` del mismo id/hash y que los dos últimos sean consecutivamente limpios. El run fuente debe tener ejecución real terminada, configuración FOREX completa, hash recalculado idéntico, par/timeframe coherentes, roster exacto, solo `fx-macro` omitible por `DATA_NOT_AVAILABLE`, estrategia exacta, GO y cero blockers. Prueba real en el estado de un solo run limpio: el comando oficial abortó antes de OmniRoute/MetaEditor con exit 1 y `MQL5_BLOCKED: Faltan dos corridas consecutivas limpias al final de la secuencia auditada.` Dos regresiones del gate pasan; suite: 19 archivos / **98 tests**, typecheck y build PASS.
 
-Acumulado tras este checkpoint: `forex_v1` 0/4 funcional; `forex_v1.1` 2/5 funcional; total 2/9 (22,2%). Estrategias persistidas: 7; GO del modelo: 2; aceptadas manualmente: 1. Aún no se genera MQL5 porque falta satisfacer R2 + dos corridas limpias consecutivas y completar la matriz. Seguridad: cero órdenes/capital/cuenta live, cero procesos MetaTrader cerrados, cero push/deploy.
+### C15 — segundo R3 parcial, aritmética de pips y hash sucesor
+
+Tras el reset, `claude -p "ping"` respondió `pong` y se ejecutó `real-forex-20260902145439-r3-range` sobre el hash entonces vigente `c3d6b2b00627115ddaf10d740db8bdbf8e1b65f93ab6fb6edefe08fbe1809a77`. Snapshot Twelve Data reproducible: 4.999 velas H1 cerradas, aperturas `2026-01-27T19:00:00Z → 2026-08-24T23:00:00Z`, cierre derivado igual a `as_of=2026-08-25T00:00:00Z`, calidad `good`. Duración: 1.996,7 s.
+
+`fx-structure`, `fx-momentum-volatility` y `fx-session` completaron; `fx-macro` se omitió correctamente con `DATA_NOT_AVAILABLE`. El panel recorrió tres propuestas: riesgo/crítico terminaron las dos primeras y el juez devolvió `AJUSTAR` dos veces; en la tercera, `fx-risk` y `fx-critic` fallaron en 7,4 s por el nuevo límite externo (`resets 6:20pm Europe/Madrid`) y el juez final se omitió por `MISSING_REQUIRED_DEPENDENCY`. Resultado fail-closed: `status=error`, sin `finalState` ni veredicto final; no cuenta como corrida funcional o limpia.
+
+La estrategia parcial final pasa el gate determinista: BUY, evento = histograma MACD(12,26,9) cruza de `<=0` a `>0` sobre velas H1 cerradas; filtro único = cierre `> SMA(200)`; fill en la apertura siguiente; SL `E - 1,5×ATR(14)` y TP `E + 2,55×ATR(14)` desde el mismo fill. Ejemplo no hardcodeable: `E=1.16684`, `SL=1.16574`, `TP=1.16870`, riesgo `0,5%`. Recálculo independiente: riesgo `0,00110` = 11 pips = `1,507×ATR`; recompensa `0,00186` = 18,6 pips = `2,548×ATR`; R:R `1,6909`. Geometría, dimensionamiento, condición y ausencia de look-ahead: PASS.
+
+La auditoría manual detectó un `MODEL_ERROR` no cubierto: `fx-session` afirmó que `1.16684 - 1.16462` eran `~222 pips`; en EUR/USD son `22,2 pips`. El auditor se amplió con una regla conservadora que recalcula relaciones explícitas entre dos precios sin cruzar campos ni objetos de enumeraciones. El loop rojo descubrió y eliminó capturas parciales y emparejamientos ambiguos; la regresión final cubre el error real y sus falsos positivos. El audit de esta R3 conserva exactamente cuatro errores: `RUN_NOT_FUNCTIONAL`, el `MODEL_ERROR` 222→22,2 y los dos `TOOL_ERROR` de cuota.
+
+La causa raíz se refuerza sólo en `forex_v1.1`: todos los agentes deben usar `1 pip = 0.0001`, recalcular toda distancia entre precios o abstenerse de cuantificarla. `forex_v1` no cambia y conserva hash `504e6f2a…29bb8c`; el hash activo de `forex_v1.1` se actualiza y queda anclado en código/test. Verificación: tests focales 12/12, `npm run typecheck` PASS, suite **19 archivos / 99 tests PASS**, `npm run build` PASS (sólo warning conocido de chunk 584,14 kB). `npm run lint` continúa bloqueado por WDAC.
+
+Acumulado tras C15: `forex_v1` 0/4 funcional; `forex_v1.1` 2/6 funcional; total 2/10 (20%). Estrategias persistidas: 8; GO del modelo: 2; aceptadas manualmente: 1. El R2 limpio pertenece al hash anterior y queda como evidencia histórica, pero no satisface el quórum estricto del hash `2d0f2986…55159b6`: tras el reset se repetirá R2 y se exigirán dos corridas limpias consecutivas adicionales. Aún no se genera MQL5. Seguridad: cero órdenes/capital/cuenta live, cero procesos MetaTrader cerrados, cero push/deploy.
 
 ---
 

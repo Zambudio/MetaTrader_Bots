@@ -100,6 +100,57 @@ export function findWeekdayMismatch(text: string): { date: string; stated: strin
   return null;
 }
 
+export interface ForexPipArithmeticMismatch {
+  firstPrice: number;
+  secondPrice: number;
+  statedPips: number;
+  expectedPips: number;
+}
+
+/**
+ * Recalcula una distancia EUR/USD expresada dentro de una misma afirmación.
+ *
+ * La regla es deliberadamente conservadora: exige una relación explícita entre un sujeto de
+ * precio y otro nivel, o una distancia/diferencia declarada. Así no empareja accidentalmente
+ * cifras pertenecientes a hechos JSON vecinos ni objetos intermedios de una enumeración.
+ */
+export function findForexPipArithmeticMismatch(text: string): ForexPipArithmeticMismatch | null {
+  const jsonStrings = [...text.matchAll(/"(?:\\.|[^"\\])*"/g)].map((match) => match[0].slice(1, -1));
+  const segments = jsonStrings.length > 0 ? jsonStrings : [text];
+
+  for (const segment of segments) {
+    const normalized = fold(segment);
+    const price = '([0-2]\\.[0-9]{4,5})';
+    const pips = '(?<![\\d.,])[~≈]?\\s*([+-]?\\d+(?:[.,]\\d+)?)\\s*pips?\\b';
+    const between = '[^.;"\\n]{0,70}?';
+    const adjacentToPips = '[^.;"\\n\\d]{0,25}?';
+    const relation = '(?:por encima(?: de)?|por debajo(?: de)?)';
+    const subject = '(?:precio|cierre|entrada|entry|fill|sl|stop\\s*loss|tp|take\\s*profit)\\s*[:=~]?\\s*';
+    const patterns: Array<{ regex: RegExp; order: [number, number, number] }> = [
+      { regex: new RegExp(`${subject}${price}${between}${relation}${between}${price}${adjacentToPips}${pips}`, 'gi'), order: [1, 2, 3] },
+      { regex: new RegExp(`(?:distancia|diferencia)[^.;"\\n]{0,40}?${price}${between}${price}${adjacentToPips}${pips}`, 'gi'), order: [1, 2, 3] },
+    ];
+
+    for (const { regex, order } of patterns) {
+      for (const match of normalized.matchAll(regex)) {
+        const firstPrice = Number(match[order[0]]);
+        const secondPrice = Number(match[order[1]]);
+        const statedPips = Math.abs(Number(match[order[2]].replace(',', '.')));
+        // Excluye ATR/distancias decimales (0.00073, 0.00395): los dos operandos deben parecer
+        // cotizaciones del par, no magnitudes auxiliares expresadas en unidades de precio.
+        if (firstPrice < 0.5 || secondPrice < 0.5 || !Number.isFinite(statedPips)) continue;
+        const expectedPipsRaw = Math.abs(firstPrice - secondPrice) * 10_000;
+        const expectedPips = Math.round(expectedPipsRaw * 10) / 10;
+        const tolerance = Math.max(0.51, expectedPips * 0.02);
+        if (Math.abs(statedPips - expectedPips) <= tolerance) continue;
+
+        return { firstPrice, secondPrice, statedPips, expectedPips };
+      }
+    }
+  }
+  return null;
+}
+
 /**
  * Si el fill se produce en la apertura siguiente, anclar SL/TP al cierre anterior rompe el R:R
  * efectivo. Los tres precios deben compartir la referencia ejecutable.

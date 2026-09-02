@@ -26,6 +26,7 @@ import {
   hasUnsupportedLiquidityClaim,
   hasPredictedFutureFill,
   findWeekdayMismatch,
+  findForexPipArithmeticMismatch,
 } from '../src/validation/forexAuditRules.js';
 import type { AgentAnalysis, StrategyProposalLite, VerdictResult } from '../src/types.js';
 
@@ -235,6 +236,14 @@ function auditRun(run: RunEntry) {
           push('error', 'MODEL_ERROR', `${a.agentId} dice ${mismatch.stated} para ${mismatch.date}; el calendario UTC da ${mismatch.expected}`);
         }
       }
+      const pipMismatch = findForexPipArithmeticMismatch(txt);
+      if (pipMismatch) {
+        push(
+          'error',
+          'MODEL_ERROR',
+          `${a.agentId} declara ${pipMismatch.statedPips} pips entre ${pipMismatch.firstPrice} y ${pipMismatch.secondPrice}; el recálculo EUR/USD da ${pipMismatch.expectedPips} pips`,
+        );
+      }
     }
 
     if (a.strategy) {
@@ -265,6 +274,14 @@ function auditRun(run: RunEntry) {
       }
       if (hasPredictedFutureFill(`${a.strategy.resumen} ${a.strategy.puntoEntrada} ${(a.strategy.evidence ?? []).map((e) => e.claim).join(' ')}`)) {
         push('error', 'STRATEGY_ERROR', `${a.agentId} usa un gap pasado para predecir la apertura/fill futuro`);
+      }
+      const pipMismatch = findForexPipArithmeticMismatch(JSON.stringify(a.strategy));
+      if (pipMismatch) {
+        push(
+          'error',
+          'MODEL_ERROR',
+          `${a.agentId} declara ${pipMismatch.statedPips} pips entre ${pipMismatch.firstPrice} y ${pipMismatch.secondPrice}; el recálculo EUR/USD da ${pipMismatch.expectedPips} pips`,
+        );
       }
       if (/^\s*-?\d+\.\d+\s*$/.test(cond) || (/\d+\.\d{3,}/.test(cond) && !/(EMA|SMA|RSI|MACD|Bollinger|ATR|cruz|cross|banda|media)/i.test(cond))) {
         push('warn', 'STRATEGY_ERROR', `${a.agentId} condicionEntrada parece un nivel de precio anecdótico: "${cond}"`);
@@ -297,6 +314,14 @@ function auditRun(run: RunEntry) {
       }
       if (hasUnsupportedLiquidityClaim(JSON.stringify(vd))) {
         push('error', 'HALLUCINATION', `${a.agentId} afirma un nivel de liquidez sin metrica aportada`);
+      }
+      const pipMismatch = findForexPipArithmeticMismatch(JSON.stringify(vd));
+      if (pipMismatch) {
+        push(
+          'error',
+          'MODEL_ERROR',
+          `${a.agentId} declara ${pipMismatch.statedPips} pips entre ${pipMismatch.firstPrice} y ${pipMismatch.secondPrice}; el recálculo EUR/USD da ${pipMismatch.expectedPips} pips`,
+        );
       }
     }
   }
