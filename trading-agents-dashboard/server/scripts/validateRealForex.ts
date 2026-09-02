@@ -39,6 +39,7 @@ if (STRUCTURAL_ONLY) {
   // rondas de revisión. Nunca cambia un rechazo por GO ni altera el preset persistido.
   process.env.OMNIROUTE_MAX_RETRIES = '0';
   process.env.OMNIROUTE_FALLBACK_MODELS = 'auto/best-fast';
+  process.env.STRATEGY_VALIDATION_RETRIES = '0';
 }
 
 const EXPECTED_HASHES: Record<string, string> = {
@@ -210,6 +211,7 @@ async function main() {
       AGENT_CLI_RETRIES: process.env.AGENT_CLI_RETRIES,
       OMNIROUTE_MAX_RETRIES: process.env.OMNIROUTE_MAX_RETRIES,
       OMNIROUTE_FALLBACK_MODELS: process.env.OMNIROUTE_FALLBACK_MODELS,
+      STRATEGY_VALIDATION_RETRIES: process.env.STRATEGY_VALIDATION_RETRIES,
       maxRevisionRounds: STRUCTURAL_ONLY ? 0 : preset.consensus.maxRevisionRounds,
     },
     runs: [...((existing.runs as unknown[]) ?? [])],

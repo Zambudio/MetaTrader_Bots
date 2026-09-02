@@ -15,7 +15,13 @@ export const MAX_RETRIES_CAP = 3;
  * reenviando el error exacto al mismo agente, igual que ya hace mql5Generator con los errores
  * de compilación.
  */
-const MAX_STRATEGY_VALIDATION_RETRIES = 2;
+const DEFAULT_STRATEGY_VALIDATION_RETRIES = 2;
+
+export function resolveStrategyValidationRetries(raw: string | undefined): number {
+  if (raw === undefined || raw.trim() === '') return DEFAULT_STRATEGY_VALIDATION_RETRIES;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed >= 0 && parsed <= 2 ? parsed : DEFAULT_STRATEGY_VALIDATION_RETRIES;
+}
 
 export function detectCycle(agents: Agent[], agentId: string, candidateParentId: string): boolean {
   if (candidateParentId === agentId) return true;
@@ -310,7 +316,8 @@ async function executeAgentInPass(
     let verdict: typeof result.verdict;
     let lastValidationError: string | undefined;
 
-    for (let validationAttempt = 0; validationAttempt <= MAX_STRATEGY_VALIDATION_RETRIES; validationAttempt++) {
+    const maxStrategyValidationRetries = resolveStrategyValidationRetries(process.env.STRATEGY_VALIDATION_RETRIES);
+    for (let validationAttempt = 0; validationAttempt <= maxStrategyValidationRetries; validationAttempt++) {
       const attemptContext = lastValidationError
         ? `${context}\n\nTu propuesta anterior fue rechazada por incoherencia numérica: ${lastValidationError}\nCorrige los precios de entrada/stop loss/take profit para que sean matemáticamente coherentes con la dirección y cumplan el R:R mínimo exigido.`
         : context;
@@ -342,8 +349,8 @@ async function executeAgentInPass(
       }
 
       lastValidationError = valResult.error;
-      if (validationAttempt === MAX_STRATEGY_VALIDATION_RETRIES) {
-        throw new Error(`Incoherencia numérica en estrategia tras ${MAX_STRATEGY_VALIDATION_RETRIES + 1} intentos: ${valResult.error}`);
+      if (validationAttempt === maxStrategyValidationRetries) {
+        throw new Error(`Incoherencia numérica en estrategia tras ${maxStrategyValidationRetries + 1} intentos: ${valResult.error}`);
       }
     }
 

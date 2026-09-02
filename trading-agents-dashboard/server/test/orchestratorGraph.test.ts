@@ -5,6 +5,7 @@ import {
   validateGraphIntegrity,
   computeRetrySubgraph,
   filterEnabledAgents,
+  resolveStrategyValidationRetries,
 } from '../src/engine/orchestrator.js';
 import type { Agent } from '../src/types.js';
 
@@ -76,5 +77,12 @@ describe('3.4 Tests automatizados: Orquestador y Grafo de Agentes', () => {
 
   it('filterEnabledAgents trata enabled undefined como activo', () => {
     expect(filterEnabledAgents(baseAgents).map((a) => a.id)).toEqual(baseAgents.map((a) => a.id));
+  });
+
+  it('permite desactivar los reintentos LLM de estrategia sin ampliar el límite', () => {
+    expect(resolveStrategyValidationRetries('0')).toBe(0);
+    expect(resolveStrategyValidationRetries('2')).toBe(2);
+    expect(resolveStrategyValidationRetries('3')).toBe(2);
+    expect(resolveStrategyValidationRetries('invalido')).toBe(2);
   });
 });

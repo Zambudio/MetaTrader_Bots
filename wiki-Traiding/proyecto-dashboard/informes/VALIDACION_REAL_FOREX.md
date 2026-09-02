@@ -7,7 +7,7 @@ Seguridad: **0 órdenes live, 0 capital, 0 llamadas de ejecución**. Solo análi
 Relacionados: [auditoría](AUDITORIA_MULTIAGENTE.md) · [config Forex](CONFIGURACION_FOREX.md) · [validation loop simulado](VALIDATION_LOOP.md) · [estado final](ESTADO_FINAL_CONFIGURACIONES.md).
 
 > **ESTADO DE LA EJECUCIÓN: `EN_VALIDACION` con dos carriles separados.** Validación estructural: `forex_v1.2`, OmniRoute, hash `feddf9d4…4cdc`. Validación analítica final: `forex_v1.1`, Claude/Codex, hash `64c35dc7…be9d135`, aplazada para preservar cuotas.
-> Hay 12 runs completados/evaluables (4 de `forex_v1`, 7 de `forex_v1.1` y 1 de `forex_v1.2`) más dos intentos R2 interrumpidos deliberadamente, excluidos de métricas y quórum. `forex_v1.2` conserva prompts, DAG y gates de v1.1 pero cambia los ocho modelos a OmniRoute; sus resultados validan contratos y orquestación, no la calidad analítica final ni habilitan MQL5. Su primer smoke estructural R5a terminó correctamente. El quórum analítico y MQL5/MetaEditor/smoke siguen pendientes antes de declarar un estado final.
+> Hay 13 runs completados/evaluables (4 de `forex_v1`, 7 de `forex_v1.1` y 2 de `forex_v1.2`) más dos intentos R2 interrumpidos deliberadamente, excluidos de métricas y quórum. `forex_v1.2` conserva prompts, DAG y gates de v1.1 pero cambia los ocho modelos a OmniRoute; sus resultados validan contratos y orquestación, no la calidad analítica final ni habilitan MQL5. R5a terminó correctamente y R2 rechazó una estrategia bajo el gate sin ejecutar dependientes. El quórum analítico y MQL5/MetaEditor/smoke siguen pendientes antes de declarar un estado final.
 
 ---
 
@@ -364,6 +364,14 @@ Acumulado evaluable: `forex_v1` 0/4 funcional, `forex_v1.1` 3/7 y `forex_v1.2` e
 El primer intento R2 de v1.2, `real-forex-20260902205047-r2-trend`, completó `fx-structure` y `fx-momentum-volatility`; durante `fx-session`, OmniRoute agotó la primera petición de 180 s e inició automáticamente el intento 2/3. Se envió `Ctrl+C` en el primer aviso para respetar la política de coste. El artefacto quedó `status=running`, sin `finalState`, con sesión en curso y el resto esperando. Se clasifica **`USER_ABORTED_COST_GUARD`**, queda fuera de métricas/audit/quórum y no se interpreta como defecto analítico.
 
 Causa raíz: `omniClient` fijaba dos reintentos y la cadena de modelos fallback al importar el módulo, sin control por entorno. Corrección: `OMNIROUTE_MAX_RETRIES` y `OMNIROUTE_FALLBACK_MODELS` se resuelven en cada llamada; el runner fuerza para v1.2 `maxRetries=0`, fallback limitado a `auto/best-fast`, concurrencia 1 y cero rondas de revisión. Esto no debilita un rechazo ni busca GO: ante el primer fallo termina fail-closed y evita llamadas adicionales. `.env.example` documenta ambas variables. Regresión local: 2 archivos / 6 tests focales PASS; typecheck PASS. No se ejecutó suite completa ni build.
+
+### C19 — R2 estructural rechazada y tercer retry oculto eliminado
+
+Run `real-forex-20260902205934-r2-trend`, 282 s, hash v1.2 correcto y 4.999 velas H1 cerradas. Completaron `fx-structure`, `fx-momentum-volatility` y `fx-session`; macro se omitió. `fx-strategy` devolvió una propuesta cuyo riesgo era `0,00282` y recompensa `0,00451`: R:R exacto `1,59929`, inferior a 1,6 aunque el mensaje redondeado mostrase `1.60`. El gate la rechazó correctamente. Riesgo, crítico y juez se omitieron por dependencia; `status=error`, `finalState=error`. Audit: `RUN_NOT_FUNCTIONAL` + `MODEL_ERROR`, sin hallazgos en los especialistas. No se relaja tolerancia ni se repite R2 para perseguir GO.
+
+La salida reveló que el orquestador consultaba de nuevo al agente de estrategia hasta dos veces tras un fallo numérico, independientemente de los retries OmniRoute y de las rondas del juez. `STRATEGY_VALIDATION_RETRIES` hace ahora configurable ese tercer nivel y v1.2 lo fuerza a `0`; una estrategia inválida consume una única llamada y termina fail-closed. La configuración se registra en el informe máquina y `.env.example`. Regresión: `omniClient.test.ts` + `orchestratorGraph.test.ts`, 10/10 PASS; typecheck PASS. Suite completa y build quedan reservados para el cierre.
+
+Acumulado evaluable: `forex_v1` 0/4 funcional, `forex_v1.1` 3/7 y `forex_v1.2` 1/2; total 4/13 (30,8 %). Estructuras verificadas hasta aquí: `AgentAnalysis`, omisión por datos/dependencias, persistencia, error fail-closed y gate numérico. Faltan una estrategia válida, las dos revisiones, el veredicto y su transferencia de contexto.
 
 ---
 
