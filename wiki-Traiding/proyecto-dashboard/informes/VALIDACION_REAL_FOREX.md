@@ -7,7 +7,7 @@ Seguridad: **0 órdenes live, 0 capital, 0 llamadas de ejecución**. Solo análi
 Relacionados: [auditoría](AUDITORIA_MULTIAGENTE.md) · [config Forex](CONFIGURACION_FOREX.md) · [validation loop simulado](VALIDATION_LOOP.md) · [estado final](ESTADO_FINAL_CONFIGURACIONES.md).
 
 > **ESTADO DE LA EJECUCIÓN: `EN_VALIDACION` con dos carriles separados.** Validación estructural activa: `forex_v1.2.1`, OmniRoute por niveles, hash `e84b3d40…d9a2`. Validación analítica final: `forex_v1.1`, Claude/Codex, hash `64c35dc7…be9d135`, aplazada para preservar cuotas.
-> Hay 14 runs completados/evaluables (4 de `forex_v1`, 7 de `forex_v1.1` y 3 de `forex_v1.2`) más dos intentos R2 interrumpidos deliberadamente, excluidos de métricas y quórum. `forex_v1.2` conserva prompts, DAG y gates de v1.1 pero cambia los ocho modelos a OmniRoute; sus resultados validan contratos y orquestación, no la calidad analítica final ni habilitan MQL5. R5a terminó correctamente; R2 y R3 rechazaron estrategias bajo el gate sin ejecutar dependientes. El quórum analítico y MQL5/MetaEditor/smoke siguen pendientes antes de declarar un estado final.
+> Hay 15 runs completados/evaluables (4 de `forex_v1`, 7 de `forex_v1.1`, 3 de `forex_v1.2` y 1 de `forex_v1.2.1`) más dos intentos R2 interrumpidos deliberadamente, excluidos de métricas y quórum. La validación estructural OmniRoute queda completada: R5a cubre abstención y R4 cubre la cadena completa hasta juez con audit OK. Estos resultados no validan la calidad analítica final ni habilitan MQL5. El quórum analítico y MQL5/MetaEditor/smoke siguen pendientes antes de declarar un estado final.
 
 ---
 
@@ -384,6 +384,16 @@ El audit conserva cuatro hallazgos: `RUN_NOT_FUNCTIONAL`, contaminación tempora
 Para cubrir las estructuras restantes sin gastar Claude/Codex ni repetir los escenarios fallidos, se publica `baseline-forex-forex-v1-2-1`, hash `e84b3d40062a9dc84f86f45b550f165bbb68341f4695b8d2c0c83a2bc50ad9a2`. Conserva exactamente prompts, DAG, activación, contratos y gates de v1.1/v1.2. Routing: los cuatro especialistas usan `omniroute:auto/best-fast`; estrategia, riesgo, crítico y juez usan `omniroute:auto/best-reasoning`. Todos mantienen una llamada máxima, fallback desactivado, concurrencia 1 y cero rondas de revisión.
 
 `forex_v1.2` queda inmutable con sus tres runs. v1.2.1 continúa marcado `structural_only`; no es elegible para MQL5 ni certificación analítica. Hash y distribución 4+4 anclados en `baselinePresets.test.ts`: 4/4 PASS; typecheck PASS. Esta separación aplica routing por complejidad: modelo rápido para extracción/contrato y razonamiento solo donde se necesita aritmética y consenso.
+
+### C22 — R4 completa la validación estructural OmniRoute
+
+Run `real-forex-20260902211238-r4-highvol`, hash `e84b3d40…d9a2`, 4.999 velas H1 cerradas y 434 s. Ejecutados: `fx-structure`, `fx-momentum-volatility`, `fx-session`, `fx-strategy`, `fx-risk`, `fx-critic`, `fx-judge`; `fx-macro` omitido por capacidades ausentes. Los cinco contratos `AgentAnalysis`, `StrategyProposalLite` y `VerdictResult` se parsearon y persistieron; riesgo/crítico recibieron la propuesta y el juez recibió ambas revisiones. Resultado `status=done`, `finalState=validated`, veredicto `go`, 0 blockers del veredicto y 0 agentes error. No hubo retries, fallbacks ni rondas `AJUSTAR`; cero llamadas Claude/Codex.
+
+Gate determinista de la propuesta: SELL, evento cierre bajo `Lowest Low(20)` + filtro histograma MACD `< 0`; ejemplo `entry=1.09240`, `SL=1.09737`, `TP=1.08413`, riesgo 1 %. Recalculo: riesgo `0,00497` = 49,7 pips = `1,5015×ATR`; recompensa `0,00827` = 82,7 pips = `2,4985×ATR`; R:R `1,664`. Geometría y límites numéricos PASS. `auditRealForex.ts`: **OK**, solo `STRATEGY_OK`.
+
+Decisión de alcance: R4 valida la estructura completa y R5a la abstención; R2/R3 ya validaron el corte fail-closed. Por tanto se detienen aquí las pruebas OmniRoute: ejecutar R1/R5b no añadiría un tipo de contrato nuevo y consumiría más llamadas. El GO de R4 no es una estrategia aceptada para producción ni MQL5; el modelo rápido ya mostró errores temporales/liquidez y la condición `Lowest Low(20)` requeriría precisar que excluye la vela señal antes de cualquier implementación. No se corrige para perseguir GO porque el objetivo de este carril era estructural.
+
+Métrica final de este carril: v1.2 rápido 1/3 funcional; v1.2.1 por niveles 1/1 funcional; conjunto estructural 2/4 (50 %), con los tres tipos de salida y todas las rutas relevantes ejercitadas. Acumulado global evaluable: v1 0/4, v1.1 3/7, v1.2 1/3, v1.2.1 1/1; total 5/15 (33,3 %). Evidencia aceptada: 1 estrategia histórica de v1.1 y 1 estrategia exclusivamente estructural de v1.2.1; ninguna cumple todavía el quórum analítico del modelo final.
 
 ---
 
