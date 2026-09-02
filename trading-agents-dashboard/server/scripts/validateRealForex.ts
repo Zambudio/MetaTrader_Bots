@@ -28,7 +28,10 @@ import { DATA_DIR } from '../src/paths.js';
 import type { AgentConfigPreset, Run } from '../src/types.js';
 
 const FOREX_ID = process.env.FOREX_VALIDATION_PRESET_ID || 'baseline-forex-forex-v1';
-const STRUCTURAL_ONLY = FOREX_ID === 'baseline-forex-forex-v1-2';
+const STRUCTURAL_ONLY = new Set([
+  'baseline-forex-forex-v1-2',
+  'baseline-forex-forex-v1-2-1',
+]).has(FOREX_ID);
 
 // --- Ajustes de infraestructura para ejecución real (evidencia: run _rWt37-Ku2 timeout 180s) ---
 process.env.AGENT_CLI_TIMEOUT_MS = process.env.AGENT_CLI_TIMEOUT_MS || '600000';
@@ -46,6 +49,7 @@ const EXPECTED_HASHES: Record<string, string> = {
   'baseline-forex-forex-v1': '504e6f2ac86fd05a321e99049b489654f48524f776b7bcf54e679fb70429bb8c',
   'baseline-forex-forex-v1-1': '64c35dc7e78d558c4329d58c1ba62f733c0dc28bef248db358527d2cabe9d135',
   'baseline-forex-forex-v1-2': 'feddf9d404020de68e6884a519cb6b558292e98e846e1e77bd5bf35145434cdc',
+  'baseline-forex-forex-v1-2-1': 'e84b3d40062a9dc84f86f45b550f165bbb68341f4695b8d2c0c83a2bc50ad9a2',
 };
 const EXPECTED_HASH = EXPECTED_HASHES[FOREX_ID];
 const PAIR = 'EUR/USD';
@@ -203,7 +207,7 @@ async function main() {
     executionMode: 'real',
     liveOrdersExecuted: false,
     capitalUsed: false,
-    validationScope: FOREX_ID === 'baseline-forex-forex-v1-2' ? 'structural_only' : 'analysis_and_strategy',
+    validationScope: STRUCTURAL_ONLY ? 'structural_only' : 'analysis_and_strategy',
     preset: { id: preset.id, version: preset.version, hash: presetHash, expectedHash: EXPECTED_HASH, hashMatches: presetHash === EXPECTED_HASH },
     infra: {
       AGENT_CLI_TIMEOUT_MS: process.env.AGENT_CLI_TIMEOUT_MS,

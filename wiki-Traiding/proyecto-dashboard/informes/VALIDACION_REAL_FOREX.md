@@ -6,7 +6,7 @@ Seguridad: **0 órdenes live, 0 capital, 0 llamadas de ejecución**. Solo análi
 
 Relacionados: [auditoría](AUDITORIA_MULTIAGENTE.md) · [config Forex](CONFIGURACION_FOREX.md) · [validation loop simulado](VALIDATION_LOOP.md) · [estado final](ESTADO_FINAL_CONFIGURACIONES.md).
 
-> **ESTADO DE LA EJECUCIÓN: `EN_VALIDACION` con dos carriles separados.** Validación estructural: `forex_v1.2`, OmniRoute, hash `feddf9d4…4cdc`. Validación analítica final: `forex_v1.1`, Claude/Codex, hash `64c35dc7…be9d135`, aplazada para preservar cuotas.
+> **ESTADO DE LA EJECUCIÓN: `EN_VALIDACION` con dos carriles separados.** Validación estructural activa: `forex_v1.2.1`, OmniRoute por niveles, hash `e84b3d40…d9a2`. Validación analítica final: `forex_v1.1`, Claude/Codex, hash `64c35dc7…be9d135`, aplazada para preservar cuotas.
 > Hay 14 runs completados/evaluables (4 de `forex_v1`, 7 de `forex_v1.1` y 3 de `forex_v1.2`) más dos intentos R2 interrumpidos deliberadamente, excluidos de métricas y quórum. `forex_v1.2` conserva prompts, DAG y gates de v1.1 pero cambia los ocho modelos a OmniRoute; sus resultados validan contratos y orquestación, no la calidad analítica final ni habilitan MQL5. R5a terminó correctamente; R2 y R3 rechazaron estrategias bajo el gate sin ejecutar dependientes. El quórum analítico y MQL5/MetaEditor/smoke siguen pendientes antes de declarar un estado final.
 
 ---
@@ -378,6 +378,12 @@ Acumulado evaluable: `forex_v1` 0/4 funcional, `forex_v1.1` 3/7 y `forex_v1.2` 1
 Run `real-forex-20260902210641-r3-range`, 143 s, 4.999 velas H1 cerradas. Los tres especialistas completaron y macro se omitió. La única respuesta de estrategia produjo R:R `1,53`, por debajo de 1,6; el gate la rechazó y omitió correctamente riesgo/crítico/juez. Resultado `status=error`, `finalState=error`. No hubo retry de proveedor, fallback, reintento de estrategia ni ronda `AJUSTAR`: C18/C19 quedan verificados en real.
 
 El audit conserva cuatro hallazgos: `RUN_NOT_FUNCTIONAL`, contaminación temporal y liquidez no sustentada en `fx-session`, más el `MODEL_ERROR` numérico de estrategia. No se corrigen prompts ni se relaja el gate por errores del modelo rápido: v1.2 es una sonda estructural y estos resultados demuestran que `auto/best-fast` no debe tomarse como analista final. Acumulado evaluable: v1 0/4, v1.1 3/7, v1.2 1/3; total 4/14 (28,6 %). Contratos de especialista y estrategia, activación, omisión, persistencia y fail-closed están cubiertos; siguen sin ejercitarse por OmniRoute las salidas de riesgo, crítico y juez.
+
+### C21 — `forex_v1.2.1`, routing OmniRoute por complejidad
+
+Para cubrir las estructuras restantes sin gastar Claude/Codex ni repetir los escenarios fallidos, se publica `baseline-forex-forex-v1-2-1`, hash `e84b3d40062a9dc84f86f45b550f165bbb68341f4695b8d2c0c83a2bc50ad9a2`. Conserva exactamente prompts, DAG, activación, contratos y gates de v1.1/v1.2. Routing: los cuatro especialistas usan `omniroute:auto/best-fast`; estrategia, riesgo, crítico y juez usan `omniroute:auto/best-reasoning`. Todos mantienen una llamada máxima, un único modelo, concurrencia 1 y cero rondas de revisión.
+
+`forex_v1.2` queda inmutable con sus tres runs. v1.2.1 continúa marcado `structural_only`; no es elegible para MQL5 ni certificación analítica. Hash y distribución 4+4 anclados en `baselinePresets.test.ts`: 4/4 PASS; typecheck PASS. Esta separación aplica routing por complejidad: modelo rápido para extracción/contrato y razonamiento solo donde se necesita aritmética y consenso.
 
 ---
 

@@ -3,6 +3,7 @@ import type { Agent, AgentConfigPreset, DataCapability, MarketType } from '../ty
 const CREATED_AT = '2026-08-30T00:00:00.000Z';
 const MODEL = 'claude:sonnet';
 const FOREX_STRUCTURAL_VALIDATION_MODEL = 'omniroute:auto/best-fast';
+const FOREX_STRUCTURAL_REASONING_MODEL = 'omniroute:auto/best-reasoning';
 
 const CONTRACT = `Devuelve exclusivamente el contrato estructurado solicitado. Separa DATO (con source exacto), INFERENCIA, HIPOTESIS y CONCLUSION. No inventes precios, noticias, fundamentales ni métricas. Si un dato necesario no está en el contexto, usa status=data_not_available y DATA_NOT_AVAILABLE en la conclusión. Confianza entre 0 y 1; reduce la confianza cuando el snapshot esté obsoleto.`;
 
@@ -197,6 +198,15 @@ const forexAgentsV12: Agent[] = forexAgentsV11.map((agent) => ({
   model: FOREX_STRUCTURAL_VALIDATION_MODEL,
 }));
 
+// v1.2.1 mantiene especialistas baratos y reserva razonamiento OmniRoute para las salidas que
+// deben superar aritmetica y consenso. Sigue siendo structural_only y nunca usa suscripciones.
+const forexAgentsV121: Agent[] = forexAgentsV12.map((agent) => ({
+  ...structuredClone(agent),
+  model: ['fx-strategy', 'fx-risk', 'fx-critic', 'fx-judge'].includes(agent.id)
+    ? FOREX_STRUCTURAL_REASONING_MODEL
+    : FOREX_STRUCTURAL_VALIDATION_MODEL,
+}));
+
 const stockAgents: Agent[] = [
   specialist('stock-structure', 'Estructura de Precio Acciones', 'Clasificar tendencia, niveles y riesgo de gap.', 'Usa OHLC, medias, ATR, rango y métricas de gap provistas. No traslades reglas de sesiones Forex.', ['market_snapshot', 'ohlcv']),
   specialist('stock-volume-gap', 'Volumen y Gaps', 'Evaluar volumen relativo y gaps con OHLCV.', 'Usa únicamente volumen relativo, gap y rango calculados. No inventes order flow, short interest ni volumen fuera del feed.', ['ohlcv']),
@@ -224,6 +234,7 @@ export const BASELINE_PRESETS: AgentConfigPreset[] = [
   preset('FOREX', 'forex_v1', 'forex', 'EUR/USD', ['market_snapshot', 'ohlcv', 'session_clock'], forexAgents),
   preset('FOREX', 'forex_v1.1', 'forex', 'EUR/USD', ['market_snapshot', 'ohlcv', 'session_clock'], forexAgentsV11),
   preset('FOREX', 'forex_v1.2', 'forex', 'EUR/USD', ['market_snapshot', 'ohlcv', 'session_clock'], forexAgentsV12),
+  preset('FOREX', 'forex_v1.2.1', 'forex', 'EUR/USD', ['market_snapshot', 'ohlcv', 'session_clock'], forexAgentsV121),
   preset('ACCIONES', 'stocks_v1', 'stocks', 'TSLA', ['market_snapshot', 'ohlcv', 'session_clock'], stockAgents),
   preset('CRIPTOMONEDAS', 'crypto_v1', 'crypto', 'BTC/USD', ['market_snapshot', 'ohlcv', 'session_clock'], cryptoAgents),
 ];
