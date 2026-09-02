@@ -66,6 +66,9 @@ describe('reglas puras del audit FOREX real', () => {
     expect(hasUnsupportedNumericExecutionCosts(
       'Spread DATA_NOT_AVAILABLE; volumen último 0 y ratio 0x.',
     )).toBe(false);
+    expect(hasUnsupportedNumericExecutionCosts(
+      'Spread y slippage DATA_NOT_AVAILABLE: con SL ~10.9 pips los costes pueden ser materiales.',
+    )).toBe(false);
   });
 
   it('detecta SL/TP anclados al cierre cuando la entrada real es la apertura siguiente', () => {
@@ -88,11 +91,21 @@ describe('reglas puras del audit FOREX real', () => {
       date: '2026-03-25', stated: 'martes', expected: 'miércoles',
     });
     expect(findWeekdayMismatch('Corte 2026-03-25 00:00 UTC (miércoles).')).toBeNull();
+    expect(findWeekdayMismatch(
+      'Modo HISTORICAL_AS_OF (as_of 2026-08-25T00:00:00Z). La vela abre a las 23:00 UTC del lunes 2026-08-24.',
+    )).toBeNull();
+    expect(findWeekdayMismatch(
+      '{"claim":"2026-08-24 es lunes (calculado)."},{"claim":"Modo HISTORICAL_AS_OF as_of 2026-08-25T00:00:00Z."}',
+    )).toBeNull();
   });
 
   it('detecta liquidez afirmada sin métrica y no la ausencia declarada', () => {
     expect(hasUnsupportedLiquidityClaim('00:00 UTC es una franja típicamente de baja liquidez.')).toBe(true);
     expect(hasUnsupportedLiquidityClaim('Liquidez DATA_NOT_AVAILABLE; no se infiere desde la hora.')).toBe(false);
+    expect(hasUnsupportedLiquidityClaim('No se infiere liquidez baja desde la hora.')).toBe(false);
+    expect(hasUnsupportedLiquidityClaim(
+      'Entradas próximas a Asia: liquidez potencialmente más fina; no hay métrica aportada y no se infiere desde la hora.',
+    )).toBe(true);
   });
 
   it('detecta el gap anterior usado para predecir una apertura futura', () => {

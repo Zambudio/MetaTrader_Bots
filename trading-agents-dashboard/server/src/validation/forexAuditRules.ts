@@ -42,14 +42,25 @@ export function hasOverloadedEntryCondition(condition: string): boolean {
 
 /** Un coste de ejecución ausente puede mencionarse, pero no recibir una cifra inventada. */
 export function hasUnsupportedNumericExecutionCosts(text: string): boolean {
-  return /(?:spread|slippage|deslizamiento)[^.;\n]{0,100}\d+(?:[.,]\d+)?(?:\s*[–-]\s*\d+(?:[.,]\d+)?)?\s*(?:pip(?:s)?|puntos?|%)/i.test(text);
+  return /(?:spread|slippage|deslizamiento)(?:\s+(?:t[ií]pic[oa]|estimad[oa]|modelad[oa]|supuest[oa]))?\s*(?:(?:=|:|de|entre|aprox(?:imadamente)?|~)\s*)?\d+(?:[.,]\d+)?(?:\s*[–-]\s*\d+(?:[.,]\d+)?)?\s*(?:pip(?:s)?|puntos?|%)/i.test(text);
 }
 
 /** No hay métrica de liquidez en el snapshot; hora/sesión no permite asignarle intensidad. */
 export function hasUnsupportedLiquidityClaim(text: string): boolean {
   const normalized = fold(text);
-  if (/no (?:se )?(?:afirma|infiere|deduce)[^.]{0,80}liquidez/.test(normalized)) return false;
-  return /(?:baja|alta|menor|mayor|reducida|escasa|fina) liquidez|liquidez (?:baja|alta|menor|mayor|reducida|escasa|fina)/.test(normalized);
+  const intensityPattern = /(?:baja|alta|menor|mayor|reducida|escasa|fina) liquidez|liquidez[^.;\n]{0,40}(?:baja|alta|menor|mayor|reducida|escasa|fina)/g;
+  for (const match of normalized.matchAll(intensityPattern)) {
+    const index = match.index ?? 0;
+    const clauseStart = Math.max(
+      normalized.lastIndexOf('.', index - 1),
+      normalized.lastIndexOf(';', index - 1),
+      normalized.lastIndexOf('\n', index - 1),
+    );
+    const prefix = normalized.slice(clauseStart + 1, index);
+    if (/no (?:se )?(?:afirma|infiere|deduce)[^.;\n]{0,80}$/.test(prefix)) continue;
+    return true;
+  }
+  return false;
 }
 
 /** Un gap observado antes del as_of no predice la apertura de una vela futura. */
@@ -75,8 +86,14 @@ export function findWeekdayMismatch(text: string): { date: string; stated: strin
     const date = match[1];
     const parsed = new Date(`${date}T00:00:00Z`);
     if (!Number.isFinite(parsed.getTime())) continue;
-    const context = fold(text.slice(Math.max(0, (match.index ?? 0) - 80), (match.index ?? 0) + 140));
-    const statedIndex = WEEKDAYS_ES.map((day) => fold(day)).findIndex((day) => new RegExp(`\\b${day}\\b`).test(context));
+    const index = match.index ?? 0;
+    const before = fold(text.slice(Math.max(0, index - 60), index));
+    const after = fold(text.slice(index + date.length, Math.min(text.length, index + date.length + 60)));
+    const weekdayPattern = WEEKDAYS_ES.map((day) => fold(day)).join('|');
+    const beforeMatch = before.match(new RegExp(`\\b(${weekdayPattern})\\b[^.;"}\\n]{0,45}$`));
+    const afterMatch = after.match(new RegExp(`^[^.;"{\\n]{0,45}\\b(${weekdayPattern})\\b`));
+    const stated = afterMatch?.[1] ?? beforeMatch?.[1];
+    const statedIndex = stated ? WEEKDAYS_ES.map((day) => fold(day)).indexOf(stated) : -1;
     if (statedIndex < 0 || statedIndex === parsed.getUTCDay()) continue;
     return { date, stated: WEEKDAYS_ES[statedIndex], expected: WEEKDAYS_ES[parsed.getUTCDay()] };
   }

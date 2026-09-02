@@ -7,7 +7,7 @@ Seguridad: **0 órdenes live, 0 capital, 0 llamadas de ejecución**. Solo análi
 Relacionados: [auditoría](AUDITORIA_MULTIAGENTE.md) · [config Forex](CONFIGURACION_FOREX.md) · [validation loop simulado](VALIDATION_LOOP.md) · [estado final](ESTADO_FINAL_CONFIGURACIONES.md).
 
 > **ESTADO DE LA EJECUCIÓN: `EN_VALIDACION` sobre `forex_v1.1` hash `c3d6b2b0…09a77`.**
-> Hay 8 runs persistidos: 4 de `forex_v1` y 4 de `forex_v1.1`. El nuevo R2 posterior a C7/C8 es funcional, `validated + go + 0 blockers` y pasa auditoría automática y manual; es la primera corrida limpia elegible. Todavía faltan dos corridas limpias consecutivas, completar la matriz y las fases MQL5/MetaEditor/smoke antes de declarar un estado final.
+> Hay 9 runs persistidos: 4 de `forex_v1` y 5 de `forex_v1.1`. El nuevo R2 posterior a C7/C8 es funcional, `validated + go + 0 blockers` y pasa auditoría automática y manual; es la primera corrida limpia elegible. El siguiente R3 fue cortado por cuota en el juez y no cuenta. Todavía faltan dos corridas limpias consecutivas, completar la matriz y las fases MQL5/MetaEditor/smoke antes de declarar un estado final.
 
 ---
 
@@ -275,7 +275,15 @@ Estrategia final aceptada manualmente: BUY; EVENTO = histograma MACD(12,26,9) cr
 
 El audit inicialmente dio dos falsos positivos sobre esta salida: contó como restricción la declaración negativa tras punto y coma `no incluye calendario...`, y tomó `un gap pasado no se asume como proxy` como una predicción positiva. Clasificación **`VALIDATION_TOOL_ERROR`**, no defecto del preset. Loop rojo reproducible: `npx vitest run test/forexAuditRules.test.ts` → 2 fallos. C9 amplía el reconocimiento de declaraciones negativas tras `;` y excluye aserciones de gap explícitamente negadas sin cortar números decimales como `0.00002`. Regresión final: 7/7 PASS; `auditRealForex.ts` clasifica el nuevo R2 como **OK** y conserva los hallazgos históricos de runs anteriores.
 
-Acumulado tras este checkpoint: `forex_v1` 0/4 funcional; `forex_v1.1` 2/4 funcional; total 2/8 (25%). Estrategias persistidas: 6; GO del modelo: 2; aceptadas manualmente: 1. Aún no se genera MQL5 porque falta satisfacer R2 + dos corridas limpias consecutivas y completar la matriz. Seguridad: cero órdenes/capital/cuenta live, cero procesos MetaTrader cerrados, cero push/deploy.
+### R3 parcial `real-forex-20260902070322-r3-range`
+
+Snapshot Twelve Data reproducible de 4.999 velas H1 cerradas, última apertura `2026-08-24T23:00:00Z` y cierre derivado igual al `as_of=2026-08-25T00:00:00Z`. Completaron `fx-structure`, `fx-momentum-volatility`, `fx-session`, la estrategia ajustada en una ronda, `fx-risk` y `fx-critic`; `fx-macro` se omitió correctamente. El juez del segundo intento falló en 6,1 s con límite externo `resets 1:20pm (Europe/Madrid)`. Resultado fail-closed: `status=error`, sin `finalState`, 1.328 s; no funcional y no cuenta como corrida limpia.
+
+La estrategia parcial pasa el gate determinista: BUY, evento cruce alcista MACD/señal + filtro único cierre > SMA200, fill en apertura posterior, SL `1,5×ATR`, TP `2,625×ATR`, riesgo `0,5%`; ejemplo `1.16684 / 1.16575 / 1.16876`, R:R recalculado `1,761`. No obstante, el crítico introdujo un hallazgo real incompatible con C8: `liquidez potencialmente más fina` inferida desde la transición horaria, aunque a continuación declarara que no había métrica y que no la infería. Se rechaza la corrida parcial además de por cuota.
+
+C10 corrige tres fallos del auditor demostrados con regresiones rojas: (a) ya no asocia el lunes de `2026-08-24` con el `as_of 2026-08-25` a través de campos JSON vecinos; ambos días estaban correctamente expresados; (b) no confunde `spread/slippage=DATA_NOT_AVAILABLE` seguido de una distancia de SL de 10,9 pips con un coste numérico inventado; (c) una declaración negativa en otra parte del texto ya no oculta una afirmación positiva de liquidez. Regresión 7/7 PASS. Audit final de R3 conserva exactamente `RUN_NOT_FUNCTIONAL`, la inferencia real de liquidez y el `TOOL_ERROR` de cuota.
+
+Acumulado tras este checkpoint: `forex_v1` 0/4 funcional; `forex_v1.1` 2/5 funcional; total 2/9 (22,2%). Estrategias persistidas: 7; GO del modelo: 2; aceptadas manualmente: 1. Aún no se genera MQL5 porque falta satisfacer R2 + dos corridas limpias consecutivas y completar la matriz. Seguridad: cero órdenes/capital/cuenta live, cero procesos MetaTrader cerrados, cero push/deploy.
 
 ---
 
