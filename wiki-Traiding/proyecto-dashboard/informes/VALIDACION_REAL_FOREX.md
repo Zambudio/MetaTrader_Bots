@@ -7,7 +7,7 @@ Seguridad: **0 órdenes live, 0 capital, 0 llamadas de ejecución**. Solo análi
 Relacionados: [auditoría](AUDITORIA_MULTIAGENTE.md) · [config Forex](CONFIGURACION_FOREX.md) · [validation loop simulado](VALIDATION_LOOP.md) · [estado final](ESTADO_FINAL_CONFIGURACIONES.md).
 
 > **ESTADO DE LA EJECUCIÓN: `EN_VALIDACION` con dos carriles separados.** Validación estructural: `forex_v1.2`, OmniRoute, hash `feddf9d4…4cdc`. Validación analítica final: `forex_v1.1`, Claude/Codex, hash `64c35dc7…be9d135`, aplazada para preservar cuotas.
-> Hay 11 runs completados/evaluables (4 de `forex_v1` y 7 de `forex_v1.1`) más un intento R2 interrumpido deliberadamente, excluido de métricas y quórum. `forex_v1.2` conserva prompts, DAG y gates de v1.1 pero cambia los ocho modelos a OmniRoute; sus resultados validan contratos y orquestación, no la calidad analítica final ni habilitan MQL5. El quórum analítico y MQL5/MetaEditor/smoke siguen pendientes antes de declarar un estado final.
+> Hay 12 runs completados/evaluables (4 de `forex_v1`, 7 de `forex_v1.1` y 1 de `forex_v1.2`) más un intento R2 interrumpido deliberadamente, excluido de métricas y quórum. `forex_v1.2` conserva prompts, DAG y gates de v1.1 pero cambia los ocho modelos a OmniRoute; sus resultados validan contratos y orquestación, no la calidad analítica final ni habilitan MQL5. Su primer smoke estructural R5a terminó correctamente. El quórum analítico y MQL5/MetaEditor/smoke siguen pendientes antes de declarar un estado final.
 
 ---
 
@@ -354,6 +354,10 @@ Para evitar que la validación repetitiva consuma las suscripciones destinadas a
 Alcance deliberado: v1.2 sirve para probar serialización, selección/omisión de agentes, transferencia de contexto, schemas de análisis/estrategia/veredicto, revisiones, persistencia y auditoría determinista. No sustituye una validación representativa con los modelos Claude/Codex que harán los análisis finales. `generateValidatedForexMql5.ts` continúa exigiendo explícitamente `baseline-forex-forex-v1-1`, por lo que un GO estructural de v1.2 no puede saltarse el gate de MQL5.
 
 Guard de coste: el prefijo explícito `omniroute:` es resuelto por `llmRouter` únicamente hacia `omniClient`; su fallback permanece dentro de modelos OmniRoute y nunca cae en Claude o Codex. Comprobación local, sin llamadas LLM: `npx vitest run test/baselinePresets.test.ts` 4/4 PASS y `npm run typecheck` PASS. La matriz estructural se ejecutará con `FOREX_VALIDATION_PRESET_ID=baseline-forex-forex-v1-2`, un escenario por vez y sin reintentos destinados a perseguir GO.
+
+Primer smoke real: `real-forex-20260902204943-r5a-absent`, 8 s. Con `marketSnapshot=null`, `fx-session` fue el único agente ejecutado porque `session_clock` seguía disponible; devolvió el contrato estructurado esperado. `fx-structure`, `fx-momentum-volatility` y `fx-macro` se omitieron por `DATA_NOT_AVAILABLE`; estrategia, riesgo, crítico y juez se omitieron por dependencias. Resultado correcto: `status=done`, `finalState=insufficient_data`, 0 agentes en error, sin estrategia ni veredicto. `auditRealForex.ts`: **OK**, sin hallazgos. Esto valida el caso negativo y la ruta OmniRoute con una sola llamada; no hubo llamadas Claude/Codex.
+
+Acumulado evaluable: `forex_v1` 0/4 funcional, `forex_v1.1` 3/7 y `forex_v1.2` estructural 1/1; total 4/12 (33,3 %). El siguiente escenario estructural útil es R2, que cubre los tres tipos de salida y la transferencia completa de contexto.
 
 ---
 
