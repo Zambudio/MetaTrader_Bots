@@ -395,6 +395,18 @@ Decisión de alcance: R4 valida la estructura completa y R5a la abstención; R2/
 
 Métrica final de este carril: v1.2 rápido 1/3 funcional; v1.2.1 por niveles 1/1 funcional; conjunto estructural 2/4 (50 %), con los tres tipos de salida y todas las rutas relevantes ejercitadas. Acumulado global evaluable: v1 0/4, v1.1 3/7, v1.2 1/3, v1.2.1 1/1; total 5/15 (33,3 %). Evidencia aceptada: 1 estrategia histórica de v1.1 y 1 estrategia exclusivamente estructural de v1.2.1; ninguna cumple todavía el quórum analítico del modelo final.
 
+### C23 — cierre documental y handoff analítico a Claude
+
+La validación estructural se considera terminada y no requiere más llamadas OmniRoute. Progreso global estimado: **70 % completado / 30 % pendiente**. Lo pendiente no es infraestructura de contratos, sino certificación analítica y entrega MQL5:
+
+1. Añadir al runner un cap por entorno de rondas de revisión y usar todos los retries en 0, sin cambiar el hash/preset.
+2. Obtener sobre `forex_v1.1` hash `64c35dc7…be9d135` un R2 limpio y dos runs consecutivos limpios adicionales, auditados manual y automáticamente. Para completar literalmente la matriz original quedan además R1/R5a/R5b del modelo final, una vez cada uno.
+3. Corregir antes de FASE 5 el pin obsoleto de `generateValidatedForexMql5.ts`: todavía exige `c3d6b2b0…09a77`, pero debe exigir el hash final `64c35dc7…be9d135`. Debe mantenerse fail-closed y cubrirse con regresión.
+4. Solo desde un run elegible: generar el EA, revisar fidelidad/seguridad, compilar con 0 errores y realizar un smoke headless si MT5 está cerrado. No hay artefacto final todavía.
+5. Ejecutar suite completa/typecheck/build una única vez al cierre; completar matriz, métricas y estado final.
+
+Se crea el handoff autocontenido [`HANDOFF_CLAUDE_FOREX_FINAL.md`](../../../trading-agents-dashboard/server/scripts/HANDOFF_CLAUDE_FOREX_FINAL.md), con comandos, controles de cuota, gates, blocker del hash MQL5, criterios de parada y formato de entrega. No autoriza cambios en ACCIONES/CRIPTO, operaciones live, cierre de MetaTrader, push o deploy.
+
 ---
 
 ## Handoff original — recibido por Codex
