@@ -5,9 +5,44 @@ import { executeRun, DEFAULT_MAX_RETRIES } from '../engine/orchestrator.js';
 import { getActivePreset, getPreset } from '../store/agentConfigsStore.js';
 import { hashConfiguration, validatePreset } from '../config/configValidation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import type { Run } from '../types.js';
+import type { Agent, Run } from '../types.js';
 
 export const runsRouter = Router();
+
+export interface ModelOverride {
+  agentId: string;
+  from: string;
+  to: string;
+}
+
+/**
+ * Un run congela su `configuration` al crearse (para que el hash de integridad sea reproducible),
+ * pero eso significa que editar el modelo de un agente DESPUÉS de crear el run y pulsar
+ * "Reintentar" reejecutaba silenciosamente con el modelo antiguo — el usuario veía el selector
+ * mostrando p. ej. `openai:gpt-5.6-sol:medium` en la tarjeta del agente mientras el reintento
+ * seguía llamando a `claudeCli` y agotando cuota de Claude. Sincroniza en sitio el campo `model`
+ * (única fuente/motor, no el DAG/prompts) de los agentes que van a reejecutarse con lo que esté
+ * configurado AHORA en el preset vivo; deja constancia del cambio en `overrides` para que la ruta
+ * lo registre como `RunIssue` y no quede un cambio de motor sin rastro.
+ */
+export function syncLiveModelsForRetry(
+  configAgents: Agent[],
+  liveAgents: Agent[] | undefined,
+  retryTargets: ReadonlySet<string>
+): ModelOverride[] {
+  if (!liveAgents || retryTargets.size === 0) return [];
+  const liveModelById = new Map(liveAgents.map((a) => [a.id, a.model]));
+  const overrides: ModelOverride[] = [];
+  for (const agent of configAgents) {
+    if (!retryTargets.has(agent.id)) continue;
+    const liveModel = liveModelById.get(agent.id);
+    if (liveModel && liveModel !== agent.model) {
+      overrides.push({ agentId: agent.id, from: agent.model ?? '', to: liveModel });
+      agent.model = liveModel;
+    }
+  }
+  return overrides;
+}
 
 runsRouter.get(
   '/',
@@ -92,11 +127,33 @@ runsRouter.post(
       res.status(409).json({ error: 'El snapshot de configuración del run no supera la verificación de integridad.' });
       return;
     }
-    const agents = structuredClone(run.configuration.agents);
     const { agentId } = req.body ?? {};
+    const targetAgentId = typeof agentId === 'string' ? agentId : undefined;
+
+    const retryTargets = new Set(
+      run.results
+        .filter((r) => r.status === 'error' || (targetAgentId !== undefined && r.agentId === targetAgentId))
+        .map((r) => r.agentId)
+    );
+    const livePreset = await getPreset(run.configuration.id);
+    const overrides = syncLiveModelsForRetry(run.configuration.agents, livePreset?.agents, retryTargets);
+    if (overrides.length > 0) {
+      run.issues = run.issues ?? [];
+      for (const o of overrides) {
+        run.issues.push({
+          code: 'MODEL_OVERRIDE_ON_RESUME',
+          severity: 'warning',
+          message: `${o.agentId}: modelo actualizado de "${o.from}" a "${o.to}" al reintentar (sincronizado con la configuración vigente).`,
+          agentId: o.agentId,
+        });
+      }
+      run.configurationHash = hashConfiguration(run.configuration);
+    }
+
+    const agents = structuredClone(run.configuration.agents);
 
     const { resumeRun } = await import('../engine/orchestrator.js');
-    resumeRun(run, agents, typeof agentId === 'string' ? agentId : undefined).catch(async (err) => {
+    resumeRun(run, agents, targetAgentId).catch(async (err) => {
       console.error('[runs] resume failed', err);
       run.status = 'error';
       await saveRun(run).catch(() => {});
