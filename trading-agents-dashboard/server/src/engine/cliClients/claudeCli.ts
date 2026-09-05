@@ -62,12 +62,15 @@ export async function claudeCliChatCompletion(
   console.log(`[claudeCli] spawn: ${CLAUDE_BIN} -p --model ${model || 'sonnet'}${tool ? ` (JSON tool=${tool.function.name})` : ''} — suscripción`);
   let run;
   try {
-    run = await spawnCli(CLAUDE_BIN, args, { input: userPrompt, timeoutMs });
+    run = await spawnCli(CLAUDE_BIN, args, { input: userPrompt, timeoutMs, signal: options.signal });
   } catch (err: any) {
     throw new Error(`[claudeCli] no se pudo lanzar '${CLAUDE_BIN}': ${err?.message ?? err}`);
   }
   console.log(`[claudeCli] claude terminó en ${((Date.now() - startedAt) / 1000).toFixed(1)}s (código ${run.code})`);
 
+  if (run.aborted) {
+    throw new Error('[claudeCli] detenido por el usuario');
+  }
   if (run.timedOut) {
     throw new Error(`[claudeCli] timeout (${Math.round(timeoutMs / 1000)}s) esperando a claude`);
   }

@@ -84,12 +84,15 @@ export async function codexCliChatCompletion(
     );
     let run;
     try {
-      run = await spawnCli(process.execPath, args, { input: prompt, cwd: workDir, timeoutMs });
+      run = await spawnCli(process.execPath, args, { input: prompt, cwd: workDir, timeoutMs, signal: options.signal });
     } catch (err: any) {
       throw new Error(`[codexCli] no se pudo lanzar codex: ${err?.message ?? err}`);
     }
     console.log(`[codexCli] codex terminó en ${((Date.now() - startedAt) / 1000).toFixed(1)}s (código ${run.code})`);
 
+    if (run.aborted) {
+      throw new Error('[codexCli] detenido por el usuario');
+    }
     if (run.timedOut) {
       throw new Error(`[codexCli] timeout (${Math.round(timeoutMs / 1000)}s) esperando a codex`);
     }

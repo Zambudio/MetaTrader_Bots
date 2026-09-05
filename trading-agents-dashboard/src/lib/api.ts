@@ -53,6 +53,7 @@ export const api = {
     request<Run>('/runs', { method: 'POST', body: JSON.stringify({ pair, timeframe, maxRetries, configurationId, executionMode }) }),
   resumeRun: (id: string, agentId?: string) =>
     request<Run>(`/runs/${id}/resume`, { method: 'POST', body: JSON.stringify({ agentId }) }),
+  stopRun: (id: string) => request<Run>(`/runs/${id}/stop`, { method: 'POST' }),
   getRun: (id: string) => request<Run>(`/runs/${id}`),
   listRuns: () => request<RunSummary[]>('/runs'),
   deleteRun: (id: string) => request<{ ok: boolean }>(`/runs/${id}`, { method: 'DELETE' }),

@@ -16,6 +16,8 @@ export interface OmniClientOptions {
   timeoutMs?: number;
   maxRetries?: number;
   retryDelayMs?: number;
+  /** Aborta la llamada en curso (botón "Detener análisis") — también respetado por los CLIs. */
+  signal?: AbortSignal;
 }
 
 const DEFAULT_TIMEOUT_MS = Number(process.env.OMNIROUTE_TIMEOUT_MS) || 180_000;
@@ -91,13 +93,24 @@ export function buildJsonSchemaSystemMessage(tool: ToolDefinition): string {
   ].join('\n');
 }
 
-export async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
+export async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number,
+  externalSignal?: AbortSignal
+): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const onExternalAbort = () => controller.abort();
+  if (externalSignal) {
+    if (externalSignal.aborted) controller.abort();
+    else externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+  }
   try {
     return await fetch(url, { ...options, signal: controller.signal });
   } finally {
     clearTimeout(timeoutId);
+    externalSignal?.removeEventListener('abort', onExternalAbort);
   }
 }
 
@@ -155,6 +168,9 @@ async function chatCompletionOnce(
 
   let lastError: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (options.signal?.aborted) {
+      throw new Error('[omniClient] detenido por el usuario');
+    }
     if (attempt > 0) {
       console.warn(`[omniClient] Reintentando llamada a ${model} tras error previo (intento ${attempt + 1}/${maxRetries + 1})...`);
       await delay(retryDelayMs * attempt);
@@ -182,7 +198,8 @@ async function chatCompletionOnce(
           },
           body: JSON.stringify(payload),
         },
-        timeoutMs
+        timeoutMs,
+        options.signal
       );
 
       if (!response.ok) {
@@ -190,7 +207,7 @@ async function chatCompletionOnce(
         // Fallback ante 400 por incompatibilidad de function calling / tool_choice
         if (response.status === 400 && tool) {
           console.warn(`[omniClient] Proveedor upstream falló con 400 ante tool_choice en ${model}. Activando fallback a JSON prompt...`);
-          const fallbackRes = await chatCompletionJsonFallback(baseUrl, apiKey, model, messages, tool, timeoutMs);
+          const fallbackRes = await chatCompletionJsonFallback(baseUrl, apiKey, model, messages, tool, timeoutMs, options.signal);
           globalCircuitBreaker.recordSuccess();
           return fallbackRes;
         }
@@ -207,6 +224,9 @@ async function chatCompletionOnce(
       }
     } catch (err: any) {
       globalCircuitBreaker.recordFailure();
+      if (options.signal?.aborted) {
+        throw new Error('[omniClient] detenido por el usuario');
+      }
       if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
         lastError = new Error(`Tiempo de espera agotado (${Math.round(timeoutMs / 1000)}s) al consultar modelo ${model}`);
       } else {
@@ -224,7 +244,8 @@ async function chatCompletionJsonFallback(
   model: string,
   messages: ChatMessage[],
   tool: ToolDefinition,
-  timeoutMs: number
+  timeoutMs: number,
+  signal?: AbortSignal
 ): Promise<any> {
   const fallbackMessages: ChatMessage[] = [
     ...messages,
@@ -248,7 +269,8 @@ async function chatCompletionJsonFallback(
         stream: false,
       }),
     },
-    timeoutMs
+    timeoutMs,
+    signal
   );
 
   if (!response.ok) {

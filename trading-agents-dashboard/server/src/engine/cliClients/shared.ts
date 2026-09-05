@@ -42,12 +42,16 @@ export interface CliRunResult {
   stdout: string;
   stderr: string;
   timedOut: boolean;
+  /** El usuario pidió detener el análisis (botón "Detener") — distinto de un timeout normal. */
+  aborted: boolean;
 }
 
 export interface CliRunOptions {
   input?: string;
   cwd?: string;
   timeoutMs?: number;
+  /** Si se dispara, mata el proceso igual que un timeout pero marca `aborted: true`. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -55,7 +59,7 @@ export interface CliRunOptions {
  * comandos de Windows) y captura stdout/stderr con un timeout duro.
  */
 export function spawnCli(command: string, args: string[], options: CliRunOptions = {}): Promise<CliRunResult> {
-  const { input, cwd, timeoutMs = 180_000 } = options;
+  const { input, cwd, timeoutMs = 180_000, signal } = options;
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
@@ -66,11 +70,21 @@ export function spawnCli(command: string, args: string[], options: CliRunOptions
     let stdout = '';
     let stderr = '';
     let timedOut = false;
+    let aborted = false;
 
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill('SIGKILL');
     }, timeoutMs);
+
+    const onAbort = () => {
+      aborted = true;
+      child.kill('SIGKILL');
+    };
+    if (signal) {
+      if (signal.aborted) onAbort();
+      else signal.addEventListener('abort', onAbort, { once: true });
+    }
 
     child.stdout.on('data', (chunk) => {
       stdout += chunk;
@@ -80,11 +94,13 @@ export function spawnCli(command: string, args: string[], options: CliRunOptions
     });
     child.on('error', (err) => {
       clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
       reject(err);
     });
     child.on('close', (code) => {
       clearTimeout(timer);
-      resolve({ code, stdout, stderr, timedOut });
+      signal?.removeEventListener('abort', onAbort);
+      resolve({ code, stdout, stderr, timedOut, aborted });
     });
 
     if (input != null) {

@@ -15,11 +15,12 @@ export async function runAgent(
   pair: string,
   timeframe: string,
   snapshot?: string | null,
-  executionMode?: 'real' | 'simulation'
+  executionMode?: 'real' | 'simulation',
+  signal?: AbortSignal
 ): Promise<ExecutionResult> {
   const useReal = executionMode === 'real' || (executionMode !== 'simulation' && Boolean(process.env.OMNIROUTE_API_KEY && process.env.OMNIROUTE_BASE_URL));
   if (useReal) {
-    return runRealAgent(agent, context, pair, timeframe, snapshot);
+    return runRealAgent(agent, context, pair, timeframe, snapshot, signal);
   }
   return runMockAgent(agent, context, pair, timeframe, snapshot);
 }

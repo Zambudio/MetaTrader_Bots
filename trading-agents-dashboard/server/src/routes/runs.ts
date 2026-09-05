@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { nanoid } from 'nanoid';
 import { saveRun, loadRun, listRuns, deleteRun } from '../store/runsStore.js';
 import { executeRun, DEFAULT_MAX_RETRIES } from '../engine/orchestrator.js';
+import { abortRun } from '../engine/runAbortRegistry.js';
 import { getActivePreset, getPreset } from '../store/agentConfigsStore.js';
 import { hashConfiguration, validatePreset } from '../config/configValidation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -160,6 +161,32 @@ runsRouter.post(
     });
 
     res.status(202).json(run);
+  })
+);
+
+runsRouter.post(
+  '/:id/stop',
+  asyncHandler(async (req, res) => {
+    const run = await loadRun(req.params.id);
+    if (!run) {
+      res.status(404).json({ error: 'run not found' });
+      return;
+    }
+
+    const wasRunning = abortRun(run.id);
+    if (!wasRunning) {
+      res.status(409).json({ error: 'Este run no está en curso (no hay ninguna llamada que detener).' });
+      return;
+    }
+
+    // El abort mata el proceso CLI / cancela el fetch en curso; el propio bucle de ejecución
+    // marca el agente afectado como error ("Detenido por el usuario") y guarda el run al recibir
+    // esa excepción. Aquí solo reflejamos el estado inmediato para que la UI reaccione sin
+    // esperar a que termine de propagarse la cancelación.
+    run.status = 'error';
+    await saveRun(run).catch(() => {});
+
+    res.json(run);
   })
 );
 

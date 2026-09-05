@@ -187,7 +187,8 @@ export type RunIssueCode =
   | 'CONFIGURATION_ERROR'
   | 'UNEXPECTED_AGENT'
   | 'MISSING_AGENT'
-  | 'MODEL_OVERRIDE_ON_RESUME';
+  | 'MODEL_OVERRIDE_ON_RESUME'
+  | 'USER_ABORTED';
 
 export interface RunIssue {
   code: RunIssueCode;

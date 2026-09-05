@@ -144,7 +144,8 @@ export async function runRealAgent(
   context: string,
   pair: string,
   timeframe: string,
-  snapshot?: string | null
+  snapshot?: string | null,
+  signal?: AbortSignal
 ): Promise<RealExecutionResult> {
   // 4.5: Se usa 'auto/best-reasoning' por diseño para agentes de análisis estratégico y validación lógica
   const model = agent.model || process.env.OMNIROUTE_DEFAULT_MODEL || 'auto/best-reasoning';
@@ -156,7 +157,7 @@ export async function runRealAgent(
   ];
 
   if (agent.outputType === 'strategy') {
-    const data = await chatCompletion(model, messages, STRATEGY_TOOL);
+    const data = await chatCompletion(model, messages, STRATEGY_TOOL, { signal });
     const args = parseToolArgs(data);
 
     // 2.5: Validar no-vacío en campos críticos
@@ -210,7 +211,7 @@ export async function runRealAgent(
   }
 
   if (agent.outputType === 'verdict') {
-    const data = await chatCompletion(model, messages, VERDICT_TOOL);
+    const data = await chatCompletion(model, messages, VERDICT_TOOL, { signal });
     const args = parseToolArgs(data);
     if (args.veredicto !== 'go' && args.veredicto !== 'ajustar' && args.veredicto !== 'no_operar') {
       throw new Error(`Veredicto inválido devuelto por el modelo: ${String(args.veredicto)}`);
@@ -235,7 +236,7 @@ export async function runRealAgent(
   }
 
   if (agent.outputType === 'analysis') {
-    const data = await chatCompletion(model, messages, ANALYSIS_TOOL);
+    const data = await chatCompletion(model, messages, ANALYSIS_TOOL, { signal });
     const args = parseToolArgs(data);
     const validStatuses = new Set(['valid', 'data_not_available', 'abstain']);
     const validBiases = new Set(['bullish', 'bearish', 'neutral', 'mixed', 'not_applicable']);
@@ -262,7 +263,7 @@ export async function runRealAgent(
     return { analysis };
   }
 
-  const data = await chatCompletion(model, messages, null);
+  const data = await chatCompletion(model, messages, null, { signal });
   const content = data?.choices?.[0]?.message?.content;
   if (typeof content !== 'string' || !content.trim()) {
     throw new Error('El modelo no devolvió contenido');

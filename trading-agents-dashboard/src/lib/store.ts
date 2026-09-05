@@ -64,6 +64,7 @@ interface AgentStore {
   setMaxRetries: (maxRetries: number) => void;
   runWorkflow: () => Promise<void>;
   resumeWorkflow: (agentId?: string) => Promise<void>;
+  stopWorkflow: () => Promise<void>;
   loadRun: (id: string) => Promise<void>;
   toggleFavorite: (symbol: string, favorite: boolean) => Promise<void>;
   clearError: () => void;
@@ -320,6 +321,27 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Error reanudando el análisis',
+        errorDomain: 'run',
+      });
+    } finally {
+      set({ isAnalysing: false });
+    }
+  },
+
+  stopWorkflow: async () => {
+    const { currentRun } = get();
+    if (!currentRun) return;
+    try {
+      const run = await api.stopRun(currentRun.id);
+      set({ currentRun: run });
+      // Da un respiro a que el proceso CLI matado termine de propagar el error "Detenido por el
+      // usuario" hasta la tarjeta del agente antes de refrescar una última vez.
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const latest = await api.getRun(currentRun.id);
+      set({ currentRun: latest });
+    } catch (err) {
+      set({
+        error: err instanceof Error ? err.message : 'Error deteniendo el análisis',
         errorDomain: 'run',
       });
     } finally {

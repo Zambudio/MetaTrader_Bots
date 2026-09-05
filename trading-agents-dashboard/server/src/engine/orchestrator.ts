@@ -4,6 +4,7 @@ import { saveRun } from '../store/runsStore.js';
 import { buildMarketSnapshot } from './marketSnapshot.js';
 import { validateStrategyProposal } from './strategyValidator.js';
 import { allDependencies } from '../config/configValidation.js';
+import { createAbortControllerForRun, clearAbortController } from './runAbortRegistry.js';
 
 export const DEFAULT_MAX_RETRIES = 2;
 export const MAX_RETRIES_CAP = 3;
@@ -211,6 +212,8 @@ function formatObjections(verdict: VerdictResult, attemptNumber: number): string
 interface RunPassOptions {
   onlyAgentIds?: Set<string>;
   extraContextByAgentId?: Map<string, string>;
+  /** Botón "Detener análisis" — aborta cualquier llamada CLI/HTTP en vuelo de este run. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -266,6 +269,15 @@ async function executeAgentInPass(
   // Si ya está completado con éxito y no se forzó su reintento explícito, no repetir
   if (result.status === 'done' && !options.onlyAgentIds?.has(agent.id)) return 'skipped';
 
+  // Botón "Detener análisis" pulsado antes de que este agente llegara a arrancar: no lanzarlo.
+  if (options.signal?.aborted) {
+    result.status = 'error';
+    result.error = 'Detenido por el usuario';
+    result.finishedAt = new Date().toISOString();
+    await saveRun(run);
+    return 'error';
+  }
+
   const activation = evaluateAgentActivation(agent, run.dataCapabilities ?? [], resultsById, agents);
   if (!activation.active) {
     result.status = 'skipped';
@@ -315,7 +327,7 @@ async function executeAgentInPass(
         ? `${context}\n\nTu propuesta anterior fue rechazada por incoherencia numérica: ${lastValidationError}\nCorrige los precios de entrada/stop loss/take profit para que sean matemáticamente coherentes con la dirección y cumplan el R:R mínimo exigido.`
         : context;
 
-      ({ output, analysis, strategy, verdict } = await runAgent(agent, attemptContext, run.pair, run.timeframe, snapshot, run.executionMode));
+      ({ output, analysis, strategy, verdict } = await runAgent(agent, attemptContext, run.pair, run.timeframe, snapshot, run.executionMode, options.signal));
 
       // 1.1: Validación determinista de coherencia numérica tras generación de estrategia
       if (!strategy) break;
@@ -361,7 +373,8 @@ async function executeAgentInPass(
     result.error = err instanceof Error ? err.message : 'error desconocido';
     result.finishedAt = new Date().toISOString();
     result.durationMs = result.startedAt ? Date.parse(result.finishedAt) - Date.parse(result.startedAt) : undefined;
-    run.issues = [...(run.issues ?? []), { code: 'MODEL_ERROR', severity: 'error', message: result.error, agentId: agent.id }];
+    const wasAborted = options.signal?.aborted || /detenido por el usuario/i.test(result.error);
+    run.issues = [...(run.issues ?? []), { code: wasAborted ? 'USER_ABORTED' : 'MODEL_ERROR', severity: 'error', message: result.error, agentId: agent.id }];
     await saveRun(run);
     console.warn(`[orchestrator] Agente ${agent.name} (${agent.id}) falló: ${result.error}`);
     return 'error';
@@ -402,6 +415,15 @@ export function resetForRetry(run: Run, subgraph: Set<string>): void {
 }
 
 export async function executeRun(run: Run, agents: Agent[]): Promise<void> {
+  const signal = createAbortControllerForRun(run.id).signal;
+  try {
+    return await executeRunBody(run, agents, signal);
+  } finally {
+    clearAbortController(run.id);
+  }
+}
+
+async function executeRunBody(run: Run, agents: Agent[], signal: AbortSignal): Promise<void> {
   run.startedAt = run.startedAt ?? new Date().toISOString();
   run.issues = run.issues ?? [];
   const graphValidation = validateGraphIntegrity(agents);
@@ -432,7 +454,7 @@ export async function executeRun(run: Run, agents: Agent[]): Promise<void> {
   else if (run.dataQuality === 'stale') run.issues.push({ code: 'DATA_ERROR', severity: 'warning', message: 'El snapshot está obsoleto; la confianza debe reducirse.' });
   await saveRun(run);
 
-  const passed = await runPass(run, agents, snapshot);
+  const passed = await runPass(run, agents, snapshot, { signal });
   if (!passed) {
     run.status = 'error';
     run.finalState = 'error';
@@ -448,6 +470,7 @@ export async function executeRun(run: Run, agents: Agent[]): Promise<void> {
     const verdict = verdictResult?.verdict;
     if (!verdict || verdict.veredicto !== 'ajustar') break;
     if (run.retryCount >= run.maxRetries) break;
+    if (signal.aborted) break;
 
     const subgraph = computeRetrySubgraph(agents, verdictAgent.id);
     if (run.results.some((r) => subgraph.has(r.agentId) && r.status === 'error')) break;
@@ -460,7 +483,7 @@ export async function executeRun(run: Run, agents: Agent[]): Promise<void> {
     resetForRetry(run, subgraph);
     await saveRun(run);
 
-    const retryPassed = await runPass(run, agents, snapshot, { onlyAgentIds: subgraph, extraContextByAgentId });
+    const retryPassed = await runPass(run, agents, snapshot, { onlyAgentIds: subgraph, extraContextByAgentId, signal });
     if (!retryPassed) {
       run.status = 'error';
       await saveRun(run);
