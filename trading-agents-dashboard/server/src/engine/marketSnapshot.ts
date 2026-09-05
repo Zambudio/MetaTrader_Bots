@@ -85,6 +85,9 @@ export function getInstrumentPipMultiplier(symbol: string): number {
   if (s.includes('OIL') || s.includes('WTI') || s.includes('BRENT')) return 100;
   if (s.includes('BTC') || s.includes('ETH') || s.includes('XBT') || s.includes('SOL')) return 1;
   if (s.includes('US30') || s.includes('NAS100') || s.includes('SPX500') || s.includes('GER40') || s.includes('DAX')) return 1;
+  // Un ticker de acción (p. ej. TSLA, AAPL) no tiene la forma BASE+QUOTE de 6 letras de un par
+  // forex (EURUSD, GBPJPY...); cotiza en unidades de la divisa base, no en pips fraccionarios.
+  if (!/^[A-Z]{6}$/.test(s)) return 1;
   // Forex estándar de 4/5 dígitos
   return 10000;
 }

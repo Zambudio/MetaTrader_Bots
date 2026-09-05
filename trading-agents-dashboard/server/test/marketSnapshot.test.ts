@@ -42,10 +42,17 @@ describe('3.4 Tests automatizados: Market Snapshot, Indicadores y Frescura', () 
 
   it('Determina el multiplicador de pip según el tipo de instrumento (3.2)', () => {
     expect(getInstrumentPipMultiplier('EURUSD')).toBe(10000);
+    expect(getInstrumentPipMultiplier('EUR/USD')).toBe(10000);
     expect(getInstrumentPipMultiplier('USDJPY')).toBe(100);
     expect(getInstrumentPipMultiplier('XAUUSD')).toBe(10);
     expect(getInstrumentPipMultiplier('BTCUSD')).toBe(1);
     expect(getInstrumentPipMultiplier('US30')).toBe(1);
     expect(getInstrumentPipMultiplier('WTI_OIL')).toBe(100);
+  });
+
+  it('Trata los tickers de acciones (longitud != 6, sin match de instrumento conocido) como unidad 1, no como par forex (bug real: TSLA mostraba ATR en "pips" x10000)', () => {
+    expect(getInstrumentPipMultiplier('TSLA')).toBe(1);
+    expect(getInstrumentPipMultiplier('AAPL')).toBe(1);
+    expect(getInstrumentPipMultiplier('GOOGL')).toBe(1);
   });
 });
