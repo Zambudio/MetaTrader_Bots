@@ -6,8 +6,8 @@ Seguridad: **0 órdenes live, 0 capital, 0 llamadas de ejecución**. Solo análi
 
 Relacionados: [auditoría](AUDITORIA_MULTIAGENTE.md) · [config Forex](CONFIGURACION_FOREX.md) · [validation loop simulado](VALIDATION_LOOP.md) · [estado final](ESTADO_FINAL_CONFIGURACIONES.md).
 
-> **ESTADO DE LA EJECUCIÓN: `EN_VALIDACION` con dos carriles separados.** Validación estructural activa: `forex_v1.2.1`, OmniRoute por niveles, hash `e84b3d40…d9a2`. Validación analítica final: `forex_v1.1`, Claude/Codex, hash `64c35dc7…be9d135`, aplazada para preservar cuotas.
-> Hay 15 runs completados/evaluables (4 de `forex_v1`, 7 de `forex_v1.1`, 3 de `forex_v1.2` y 1 de `forex_v1.2.1`) más dos intentos R2 interrumpidos deliberadamente, excluidos de métricas y quórum. La validación estructural OmniRoute queda completada: R5a cubre abstención y R4 cubre la cadena completa hasta juez con audit OK. Estos resultados no validan la calidad analítica final ni habilitan MQL5. El quórum analítico y MQL5/MetaEditor/smoke siguen pendientes antes de declarar un estado final.
+> **ESTADO DE LA EJECUCIÓN: `BLOCKED` (2026-09-05) sobre el carril analítico final.** Validación estructural: cerrada en `forex_v1.2.1`, OmniRoute por niveles, hash `e84b3d40…d9a2`. Validación analítica final: `forex_v1.1`, hash `64c35dc7…be9d135` — primer R2 real sobre este hash con especialistas 100 % limpios y estrategia rechazada correctamente por el gate determinista (SL 1,00 ATR fuera de [1,25, 2,5]); 0 runs completos con `finalState=validated+go+0 blockers` sobre este hash. Bloqueo de **política** (cap `FOREX_VALIDATION_MAX_REVISION_ROUNDS=0` + `STRATEGY_VALIDATION_RETRIES=0` para proteger cuota), no de cuota agotada ni de código. Ver §"Continuación 2026-09-05".
+> Hay 16 runs completados/evaluables (4 de `forex_v1`, 8 de `forex_v1.1`, 3 de `forex_v1.2` y 1 de `forex_v1.2.1`) más dos intentos R2 interrumpidos deliberadamente, excluidos de métricas y quórum. La validación estructural OmniRoute queda completada: R5a cubre abstención y R4 cubre la cadena completa hasta juez con audit OK. Estos resultados no validan la calidad analítica final ni habilitan MQL5. El quórum analítico y MQL5/MetaEditor/smoke siguen pendientes; requiere una decisión del usuario sobre el trade-off cuota/probabilidad antes de continuar.
 
 ---
 
@@ -406,6 +406,63 @@ La validación estructural se considera terminada y no requiere más llamadas Om
 5. Ejecutar suite completa/typecheck/build una única vez al cierre; completar matriz, métricas y estado final.
 
 Se crea el handoff autocontenido [`HANDOFF_CLAUDE_FOREX_FINAL.md`](../../../trading-agents-dashboard/server/scripts/HANDOFF_CLAUDE_FOREX_FINAL.md), con comandos, controles de cuota, gates, blocker del hash MQL5, criterios de parada y formato de entrega. No autoriza cambios en ACCIONES/CRIPTO, operaciones live, cierre de MetaTrader, push o deploy.
+
+---
+
+## Continuación 2026-09-05 — cap fail-fast de rondas y primer R2 sobre el hash final
+
+Rama `validacion-real-forex`, partida `d46567b`. Se leyeron íntegros y se siguieron literalmente `HANDOFF_CLAUDE_FOREX_FINAL.md`, `HANDOFF_CODEX.md`, `HANDOFF_CONTINUACION.md`, este informe (§C17–C23) y `00_INDEX.md`.
+
+### Cambio previo obligatorio — `FOREX_VALIDATION_MAX_REVISION_ROUNDS`
+
+Se añadió a `scripts/validateRealForex.ts` la función pura `resolveForexMaxRevisionRounds(raw, fallback)`: lee `FOREX_VALIDATION_MAX_REVISION_ROUNDS` (rango 0..2), respeta literalmente `0` sin caer al fallback del preset, y lanza si el valor está fuera de rango o no es entero. Controla `run.maxRetries`; no toca `preset.consensus.maxRevisionRounds` ni el hash del preset. El valor resuelto se imprime en consola y se persiste en `infra` del informe máquina. Prueba focal `test/validateRealForexRevisionRounds.test.ts` (4 casos) + `npm run typecheck`: PASS. Commit `747d08c`.
+
+### `TOOL_ERROR` propio detectado y corregido antes de gastar cuota
+
+Para permitir importar esa función desde el test sin disparar el run real al cargar el módulo, se añadió un guard de entrypoint que comparaba `import.meta.url` contra una URL construida a mano (`` `file://${argv1.replace(/\\/g,'/')}` ``, dos barras). En Windows, `import.meta.url` para una ruta con letra de unidad lleva **tres** barras (`file:///C:/...`), así que la comparación era siempre falsa: al ejecutar el script de verdad (`npx tsx scripts/validateRealForex.ts r2-trend`), `main()` nunca se invocaba. Reproducido con un script mínimo (`argv1`/`import.meta.url`/comparación impresos): `isDirectRun` daba `false` con la construcción ingenua y `true` con `pathToFileURL`. Evidencia real: el primer intento de lanzar R2 en background terminó en `exit 0` en segundos, con el log de salida vacío y **sin persistir ningún run nuevo** — cero llamadas a `claude`/OmniRoute, ningún agente tocado, solo overhead de proceso; no consumió cuota de suscripción.
+
+Corrección de causa raíz: se extrajo `isDirectEntrypoint(argv1, moduleUrl)` usando `node:url` `pathToFileURL` para una comparación de URL de archivo correcta y portable. Regresión: `test/validateRealForexRevisionRounds.test.ts` amplía a 8 casos (caso Windows con letra de unidad, caso de import desde test, caso `argv1` indefinido, y una aserción explícita de que la construcción ingenua de dos barras no coincide con la URL real). `npm run typecheck`: PASS. Commit `4048be5`.
+
+### `claude -p "ping"` y ejecución real de R2
+
+`claude -p "ping"` respondió `pong` (único ping de la sesión, inmediatamente antes de la corrida). Con el guard corregido se lanzó, en background y una sola vez:
+
+```powershell
+Set-Location 'Z:\IA\02_Proyectos\MetaTrader_Bots\trading-agents-dashboard\server'
+$env:FOREX_VALIDATION_PRESET_ID = 'baseline-forex-forex-v1-1'
+$env:AGENT_CLI_RETRIES = '0'
+$env:STRATEGY_VALIDATION_RETRIES = '0'
+$env:FOREX_VALIDATION_MAX_REVISION_ROUNDS = '0'
+$env:AGENT_MAX_CONCURRENCY = '1'
+npx tsx --env-file-if-exists=.env scripts/validateRealForex.ts r2-trend
+```
+
+Run `real-forex-20260905072551-r2-trend`, hash exacto `64c35dc7e78d558c4329d58c1ba62f733c0dc28bef248db358527d2cabe9d135` (`forex_v1.1`, hash final). El log y el JSON persistido confirman los controles activos: `AGENT_CLI_RETRIES=0`, `STRATEGY_VALIDATION_RETRIES=0`, `FOREX_VALIDATION_MAX_REVISION_ROUNDS=0` → `maxRetries:0`, `retryCount:0` en el run. Snapshot Twelve Data reproducible: 4.999 velas H1 cerradas, aperturas `2025-07-02T19:00:00Z → 2026-03-24T23:00:00Z`, `as_of=2026-03-25T00:00:00Z`, `dataQuality=good`. Duración total: 442 s, 4 llamadas `claude:sonnet` (94,4 / 109,7 / 112,6 / 124,5 s).
+
+**Especialistas — limpios.** `fx-structure`, `fx-momentum-volatility` y `fx-session` terminaron `done`; `fx-macro` se omitió `DATA_NOT_AVAILABLE: verified_macro_calendar, verified_news`. `auditRealForex.ts` no marcó **ningún** hallazgo en los tres (0 alucinaciones, 0 `TEMPORAL_CONTEXT_ERROR`). Auditoría manual confirma: contrato `AgentAnalysis` válido en los tres; cada `fact` cita el campo exacto del snapshot persistido (verificado uno a uno: EMA20 1.15952, RSI 59.07, MACD 0.00058/0.0003/0.00027, Bollinger, ATR 0.00188, rango 20 velas, gap, todos literales); separación DATO/INFERENCIA/HIPÓTESIS/CONCLUSIÓN correcta; los tres declaran explícitamente que la ventana no es cotización live y evalúan frescura solo contra el `as_of` (0 `TEMPORAL_CONTEXT_ERROR`); ninguno inventa spread/slippage (los tres los declaran `DATA_NOT_AVAILABLE`); ninguno infiere liquidez alta/baja sin métrica; `fx-session` calcula correctamente "martes" para la apertura de la vela `2026-03-24` (distinto del "miércoles" ya documentado en C7 para el corte/`as_of` `2026-03-25` — son fechas distintas, sin contradicción); confidence 0,60/0,58/0,60, dentro de [0,1]; recálculo de pips coherente (p. ej. 3,1 pips a banda superior: `1.16176−1.16145=0.00031→3.1`, correcto).
+
+**Estrategia — rechazada por el gate determinista en el único intento permitido.** `fx-strategy` (124,5 s) falló: *"Incoherencia numérica en estrategia tras 1 intentos: Distancia del Stop Loss = 1.00 ATR; debe estar entre 1.25 y 2.5 ATR."* Clasificación: `MODEL_ERROR` de contenido (geometría numérica de la propuesta concreta), no defecto de infraestructura ni de prompt — el `systemPrompt` ya exige R:R≥1,6 y respetar `riskPolicy`; el modelo no lo logró en su única pasada permitida. Con `STRATEGY_VALIDATION_RETRIES=0` el propio agente no reintenta internamente (de ahí "tras 1 intentos"); con `FOREX_VALIDATION_MAX_REVISION_ROUNDS=0` no hay ronda `AJUSTAR`. `fx-risk`, `fx-critic` y `fx-judge` se omitieron correctamente `MISSING_REQUIRED_DEPENDENCY`. Resultado: `status=error`, `finalState=error`, no funcional. El cap demuestra ahorro real: 4 llamadas frente a las ~7 de un run completo, cortando en el primer fallo en vez de perseguir un GO con más intentos.
+
+**Decisión tomada:** por regla explícita de esta validación, un rechazo de contenido del modelo no se reintenta automáticamente. No se ejecuta R3/R4 (exigen R2 limpia primero) ni se relanza R2. No se modifica `forex_v1.1`, sus prompts, gates ni el `riskPolicy`.
+
+### Métricas acumuladas actualizadas
+
+| preset | runs persistidos | éxito funcional |
+|---|---:|---:|
+| `forex_v1` original | 4 | 0/4 (0 %) |
+| `forex_v1.1` (hashes sucesivos) | 3 | 1/3 (33,3 %) |
+| `forex_v1.2` (estructural OmniRoute) | 3 | 1/3 (33,3 %) |
+| `forex_v1.2.1` (estructural OmniRoute) | 1 | 1/1 (100 %) |
+| `forex_v1.1`, hash final `64c35dc7…be9d135` | 1 | 0/1 (0 %) |
+| **Total evaluable** | **16** | **5/16 (31,3 %)** |
+
+Sobre el hash final `64c35dc7…be9d135` siguen en 0 los runs completos con `finalState=validated + go + 0 blockers`; ahora hay evidencia de 1 intento con especialistas 100 % limpios y un rechazo determinista correcto en estrategia. MQL5/compilación/smoke siguen en 0 — el blocker del pin `EXPECTED_CONFIGURATION_HASH` obsoleto en `generateValidatedForexMql5.ts` no se ha corregido todavía porque sigue sin existir un run elegible.
+
+### Estado de cierre de esta sesión
+
+**`BLOCKED`.** No es un límite de sesión de Claude (`claude -p "ping"` seguía respondiendo `pong` al terminar) ni un defecto de código: los dos defectos reales encontrados en esta sesión (guard de entrypoint roto; ausencia del cap de rondas) se corrigieron con causa raíz, regresión y typecheck en verde antes de gastar cuota en agentes. El bloqueo es de **política explícita**: forzar `FOREX_VALIDATION_MAX_REVISION_ROUNDS=0` + `STRATEGY_VALIDATION_RETRIES=0` en todos los niveles —decidido por el usuario para proteger cuota de otros proyectos— reduce deliberadamente la probabilidad de que la primera propuesta numérica del modelo pase el gate estricto (R:R≥1,6, SL∈[1,25, 2,5]×ATR) en un único intento, y el propio handoff prohíbe reintentar automáticamente un rechazo de contenido. Completar el quórum mínimo (R2 limpia + 2 corridas consecutivas limpias) requiere una nueva autorización de consumo del usuario: repetir R2 con el mismo cap `0` (resultado incierto, mismo coste ~4-7 llamadas por intento) o subir el cap a `1` para una única ronda de corrección interna (más probabilidad de una propuesta válida, coste algo mayor por intento). Esa decisión de trade-off cuota/probabilidad corresponde al usuario, no a este agente.
+
+No se avanzó a `R1`, `R3`, `R4`, `R5a` ni `R5b`. No se tocó el pin del hash MQL5 (sigue sin haber run elegible). No se ejecutó `npm run build` ni la suite completa (reservados para el cierre real de la validación). No hubo órdenes live, capital, cuenta live, cierre de MetaTrader, push ni deploy. `git add` explícito de únicamente los ficheros propios de esta sesión (`scripts/validateRealForex.ts`, `test/validateRealForexRevisionRounds.test.ts`, este informe y `00_INDEX.md`); no se tocó `README.md`, `agents.json` ni el resto de cambios locales ajenos del dashboard.
 
 ---
 
