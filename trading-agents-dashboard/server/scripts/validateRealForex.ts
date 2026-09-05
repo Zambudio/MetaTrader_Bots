@@ -45,6 +45,22 @@ if (STRUCTURAL_ONLY) {
   process.env.STRATEGY_VALIDATION_RETRIES = '0';
 }
 
+/**
+ * Cap fail-fast de rondas de revisión "AJUSTAR" (juez → reejecutar estrategia→revisores→juez).
+ * Controla `run.maxRetries` sin tocar `preset.consensus.maxRevisionRounds` (el hash del preset no
+ * se ve afectado). `0` corta en la primera pasada del juez; el rango permitido es 0..2 porque el
+ * propio orquestador limita `maxRetries` a ese tope operativo (`MAX_RETRIES_CAP` en orchestrator.ts
+ * es 3, pero esta validación nunca debe superar las 2 rondas que ya autorizaba el preset).
+ */
+export function resolveForexMaxRevisionRounds(raw: string | undefined, fallback: number): number {
+  if (raw === undefined || raw.trim() === '') return fallback;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 2) {
+    throw new Error(`FOREX_VALIDATION_MAX_REVISION_ROUNDS inválido: "${raw}" (permitido 0..2)`);
+  }
+  return parsed;
+}
+
 const EXPECTED_HASHES: Record<string, string> = {
   'baseline-forex-forex-v1': '504e6f2ac86fd05a321e99049b489654f48524f776b7bcf54e679fb70429bb8c',
   'baseline-forex-forex-v1-1': '64c35dc7e78d558c4329d58c1ba62f733c0dc28bef248db358527d2cabe9d135',
@@ -118,7 +134,7 @@ async function buildScenarioSnapshot(spec: ScenarioSpec): Promise<{ snapshot: st
   };
 }
 
-function makeRun(preset: AgentConfigPreset, spec: ScenarioSpec, snapshot: string | null, suffix: string): Run {
+function makeRun(preset: AgentConfigPreset, spec: ScenarioSpec, snapshot: string | null, suffix: string, maxRevisionRounds: number): Run {
   return {
     id: `real-forex-${suffix}-${spec.id}`,
     pair: PAIR,
@@ -134,7 +150,7 @@ function makeRun(preset: AgentConfigPreset, spec: ScenarioSpec, snapshot: string
     marketSnapshot: snapshot, // pre-fijado (undefined dejaría al orquestador buscarlo en vivo)
     issues: [],
     retryCount: 0,
-    maxRetries: STRUCTURAL_ONLY ? 0 : preset.consensus.maxRevisionRounds,
+    maxRetries: maxRevisionRounds,
   };
 }
 
@@ -199,6 +215,14 @@ async function main() {
   if (!val.valid) throw new Error(`preset inválido: ${val.errors.join('; ')}`);
   if (presetHash !== EXPECTED_HASH) throw new Error(`HASH INESPERADO: ${presetHash} != ${EXPECTED_HASH}`);
 
+  const maxRevisionRounds = STRUCTURAL_ONLY
+    ? 0
+    : resolveForexMaxRevisionRounds(process.env.FOREX_VALIDATION_MAX_REVISION_ROUNDS, preset.consensus.maxRevisionRounds);
+  console.log(
+    `infra: AGENT_CLI_RETRIES=${process.env.AGENT_CLI_RETRIES} STRATEGY_VALIDATION_RETRIES=${process.env.STRATEGY_VALIDATION_RETRIES ?? '(default)'} ` +
+    `AGENT_MAX_CONCURRENCY=${process.env.AGENT_MAX_CONCURRENCY} FOREX_VALIDATION_MAX_REVISION_ROUNDS=${maxRevisionRounds}`
+  );
+
   const suffix = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
   const existing = await readJson<{ runs?: unknown[] }>(REPORT_FILE, { runs: [] });
   const report = {
@@ -216,7 +240,8 @@ async function main() {
       OMNIROUTE_MAX_RETRIES: process.env.OMNIROUTE_MAX_RETRIES,
       OMNIROUTE_FALLBACK_MODELS: process.env.OMNIROUTE_FALLBACK_MODELS,
       STRATEGY_VALIDATION_RETRIES: process.env.STRATEGY_VALIDATION_RETRIES,
-      maxRevisionRounds: STRUCTURAL_ONLY ? 0 : preset.consensus.maxRevisionRounds,
+      FOREX_VALIDATION_MAX_REVISION_ROUNDS: process.env.FOREX_VALIDATION_MAX_REVISION_ROUNDS,
+      maxRevisionRounds,
     },
     runs: [...((existing.runs as unknown[]) ?? [])],
   };
@@ -225,7 +250,7 @@ async function main() {
     console.log(`\n=== ${spec.id} — ${spec.label} ===`);
     const { snapshot, provenance } = await buildScenarioSnapshot(spec);
     console.log(`snapshot: ${snapshot ? `${snapshot.length} chars` : 'null (ausente)'}  provenance=${JSON.stringify(provenance)}`);
-    const run = makeRun(preset, spec, snapshot, suffix);
+    const run = makeRun(preset, spec, snapshot, suffix, maxRevisionRounds);
     const started = Date.now();
     await executeRun(run, structuredClone(preset.agents));
     const persisted = (await loadRun(run.id)) ?? run;
@@ -245,4 +270,9 @@ async function main() {
   console.log(`\nInforme máquina: ${REPORT_FILE}`);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+// Guard de entrypoint: permite importar `resolveForexMaxRevisionRounds` desde tests sin disparar
+// el run real (llamadas a agentes/CLI reales) al cargar el módulo.
+const isDirectRun = process.argv[1] && import.meta.url === `file://${process.argv[1].replace(/\\/g, '/')}`;
+if (isDirectRun) {
+  main().catch((e) => { console.error(e); process.exit(1); });
+}
