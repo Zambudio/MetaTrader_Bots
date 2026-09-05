@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveForexMaxRevisionRounds } from '../scripts/validateRealForex.js';
+import { resolveForexMaxRevisionRounds, isDirectEntrypoint } from '../scripts/validateRealForex.js';
 
 describe('resolveForexMaxRevisionRounds (cap fail-fast de rondas AJUSTAR)', () => {
   it('usa el fallback del preset cuando la env no está definida', () => {
@@ -21,5 +21,28 @@ describe('resolveForexMaxRevisionRounds (cap fail-fast de rondas AJUSTAR)', () =
     expect(() => resolveForexMaxRevisionRounds('-1', 2)).toThrow(/inválido/);
     expect(() => resolveForexMaxRevisionRounds('1.5', 2)).toThrow(/inválido/);
     expect(() => resolveForexMaxRevisionRounds('abc', 2)).toThrow(/inválido/);
+  });
+});
+
+describe('isDirectEntrypoint (guard de ejecución directa vs. import en tests)', () => {
+  it('reconoce ejecución directa en Windows con letra de unidad (file:/// triple barra)', () => {
+    const argv1 = 'C:\\proj\\scripts\\validateRealForex.ts';
+    expect(isDirectEntrypoint(argv1, 'file:///C:/proj/scripts/validateRealForex.ts')).toBe(true);
+  });
+
+  it('devuelve false cuando el módulo se importa desde otro archivo (p. ej. un test)', () => {
+    const argv1 = 'C:\\proj\\node_modules\\.bin\\vitest.js';
+    expect(isDirectEntrypoint(argv1, 'file:///C:/proj/scripts/validateRealForex.ts')).toBe(false);
+  });
+
+  it('devuelve false cuando argv1 no está definido', () => {
+    expect(isDirectEntrypoint(undefined, 'file:///C:/proj/scripts/validateRealForex.ts')).toBe(false);
+  });
+
+  it('rechaza la construcción manual ingenua de dos barras que motivó este bug', () => {
+    const argv1 = 'C:\\proj\\scripts\\validateRealForex.ts';
+    const naiveTwoSlashes = `file://${argv1.replace(/\\/g, '/')}`;
+    // La comparación ingenua nunca coincide con `import.meta.url` real en Windows.
+    expect(naiveTwoSlashes).not.toBe('file:///C:/proj/scripts/validateRealForex.ts');
   });
 });

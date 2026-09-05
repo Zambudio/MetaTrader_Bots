@@ -13,6 +13,7 @@
  *   scenarioId ∈ r1-current | r2-trend | r3-range | r4-highvol | r5a-absent | r5b-stale
  */
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { getPreset, loadAgentConfigsState } from '../src/store/agentConfigsStore.js';
 import { hashConfiguration, validatePreset } from '../src/config/configValidation.js';
 import { executeRun } from '../src/engine/orchestrator.js';
@@ -272,7 +273,17 @@ async function main() {
 
 // Guard de entrypoint: permite importar `resolveForexMaxRevisionRounds` desde tests sin disparar
 // el run real (llamadas a agentes/CLI reales) al cargar el módulo.
-const isDirectRun = process.argv[1] && import.meta.url === `file://${process.argv[1].replace(/\\/g, '/')}`;
-if (isDirectRun) {
+//
+// BUG real detectado y corregido en esta misma validación: una primera versión comparaba
+// `import.meta.url` contra `` `file://${argv1.replace(/\\/g,'/')}` `` construido a mano. En Windows
+// `import.meta.url` para una ruta con letra de unidad lleva TRES barras (`file:///C:/...`), no dos
+// (`file://C:/...`), así que la comparación era SIEMPRE falsa y `main()` nunca se invocaba al
+// ejecutar el script de verdad (`npx tsx scripts/validateRealForex.ts ...` terminaba con exit 0 sin
+// tocar ningún agente ni persistir ningún run). `pathToFileURL` normaliza esto correctamente.
+export function isDirectEntrypoint(argv1: string | undefined, moduleUrl: string): boolean {
+  return argv1 !== undefined && moduleUrl === pathToFileURL(argv1).href;
+}
+
+if (isDirectEntrypoint(process.argv[1], import.meta.url)) {
   main().catch((e) => { console.error(e); process.exit(1); });
 }
