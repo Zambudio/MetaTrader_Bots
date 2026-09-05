@@ -1,8 +1,8 @@
 # Configuración FOREX — `forex_v1`
 
-Activo de referencia: `EUR/USD`; timeframe base: `H1`; id persistente: `baseline-forex-forex-v1`; estado: **VALIDATED en simulación funcional**.
+Activo de referencia: `EUR/USD`; timeframe base: `H1`; id persistente: `baseline-forex-forex-v1`; estado: **VALIDATED en simulación funcional**; validación con modelos reales: ver [`VALIDACION_REAL_FOREX.md`](VALIDACION_REAL_FOREX.md) (🔴 `BLOCKED`, pendiente de decisión del usuario sobre `forex_v1.1`).
 
-Véanse también la [auditoría](AUDITORIA_MULTIAGENTE.md), el [validation loop](VALIDATION_LOOP.md) y el [estado final](ESTADO_FINAL_CONFIGURACIONES.md). La definición ejecutable y los prompts completos son la fuente de verdad en `trading-agents-dashboard/server/src/config/baselinePresets.ts`.
+Véanse también la [auditoría](AUDITORIA_MULTIAGENTE.md), el [validation loop](VALIDATION_LOOP.md), el [estado final](ESTADO_FINAL_CONFIGURACIONES.md) y la [validación real](VALIDACION_REAL_FOREX.md). La definición ejecutable y los prompts completos son la fuente de verdad en `trading-agents-dashboard/server/src/config/baselinePresets.ts`.
 
 ## Grafo
 

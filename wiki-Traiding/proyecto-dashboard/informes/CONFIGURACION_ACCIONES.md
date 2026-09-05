@@ -1,8 +1,8 @@
 # Configuración ACCIONES — `stocks_v1`
 
-Activo de referencia: `TSLA`; timeframe base: `H1`; id persistente: `baseline-acciones-stocks-v1`; estado: **VALIDATED en simulación funcional**.
+Activo de referencia: `TSLA`; timeframe base: `H1`; id persistente: `baseline-acciones-stocks-v1`; estado: **VALIDATED en simulación funcional**; validación con modelos reales: ver [`VALIDACION_REAL_ACCIONES.md`](VALIDACION_REAL_ACCIONES.md) (🟡 `EN_VALIDACION`, bloque mínimo completado, sin quórum ni GO — pendiente de afinado en vivo).
 
-Véanse la [auditoría](AUDITORIA_MULTIAGENTE.md), [validation loop](VALIDATION_LOOP.md) y [estado final](ESTADO_FINAL_CONFIGURACIONES.md). La fuente ejecutable y los prompts completos están en `trading-agents-dashboard/server/src/config/baselinePresets.ts`.
+Véanse la [auditoría](AUDITORIA_MULTIAGENTE.md), [validation loop](VALIDATION_LOOP.md), [estado final](ESTADO_FINAL_CONFIGURACIONES.md) y la [validación real](VALIDACION_REAL_ACCIONES.md). La fuente ejecutable y los prompts completos están en `trading-agents-dashboard/server/src/config/baselinePresets.ts`.
 
 ## Grafo
 
