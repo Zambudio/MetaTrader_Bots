@@ -1,0 +1,118 @@
+import { useEffect, useState } from 'react';
+import { api } from '../lib/api';
+import type { NewsSource, NewsItem } from '../types/agent';
+
+export const NewsPanel = ({ onClose }: { onClose: () => void }) => {
+  const [sources, setSources] = useState<NewsSource[]>([]);
+  const [items, setItems] = useState<NewsItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [newName, setNewName] = useState('');
+  const [newKind, setNewKind] = useState<'rss' | 'generic_url'>('rss');
+  const [newUrl, setNewUrl] = useState('');
+
+  const reload = async () => {
+    setLoading(true);
+    try {
+      const [s, i] = await Promise.all([api.listNewsSources(), api.listNewsItems()]);
+      setSources(s);
+      setItems(i);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error cargando noticias');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { reload(); }, []);
+
+  const handleAddSource = async () => {
+    if (!newName.trim() || !newUrl.trim()) return;
+    await api.addNewsSource({ name: newName.trim(), kind: newKind, url: newUrl.trim() });
+    setNewName('');
+    setNewUrl('');
+    await reload();
+  };
+
+  const handleFetchAll = async () => {
+    setLoading(true);
+    try {
+      await api.fetchAllNews();
+      await reload();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDigest = async () => {
+    await api.generateNewsDigest();
+    await reload();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-void/95 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-panel border border-line/70 rounded-2xl p-6 w-full max-w-3xl max-h-[85vh] overflow-y-auto space-y-5 card-edge shadow-2xl">
+        <div className="flex items-center justify-between border-b border-line/60 pb-3">
+          <h2 className="font-display font-bold text-lg text-paper tracking-wide">NOTICIAS</h2>
+          <button onClick={onClose} className="text-muted hover:text-paper text-lg font-mono px-1 cursor-pointer">✕</button>
+        </div>
+
+        {error && <p className="text-sm text-bear">{error}</p>}
+
+        <div className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted">Añadir fuente</p>
+          <div className="flex gap-2 flex-wrap">
+            <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Nombre"
+              className="flex-1 min-w-[140px] bg-void/50 border border-line/70 rounded-xl px-3 py-2 text-sm text-paper" />
+            <select value={newKind} onChange={(e) => setNewKind(e.target.value as 'rss' | 'generic_url')}
+              className="bg-panel border border-line/70 rounded-xl px-3 py-2 text-sm text-paper">
+              <option value="rss">RSS/Atom</option>
+              <option value="generic_url">URL genérica</option>
+            </select>
+            <input value={newUrl} onChange={(e) => setNewUrl(e.target.value)} placeholder="https://..."
+              className="flex-1 min-w-[200px] bg-void/50 border border-line/70 rounded-xl px-3 py-2 text-sm text-paper" />
+            <button onClick={handleAddSource} className="rounded-xl border border-cyan/60 bg-cyan/10 text-cyan text-sm px-4 py-2 cursor-pointer">Añadir</button>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted">Fuentes ({sources.length})</p>
+            <div className="flex gap-2">
+              <button onClick={handleFetchAll} disabled={loading} className="text-xs text-cyan hover:underline cursor-pointer disabled:opacity-40">Actualizar todas</button>
+              <button onClick={handleDigest} className="text-xs text-cyan hover:underline cursor-pointer">Generar resumen de wiki</button>
+            </div>
+          </div>
+          <ul className="divide-y divide-line/40 border border-line/70 rounded-xl overflow-hidden bg-void/40">
+            {sources.map((s) => (
+              <li key={s.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-paper truncate">{s.name} <span className="text-muted font-normal">({s.kind})</span></p>
+                  <p className="text-xs text-muted truncate">{s.url}</p>
+                  {s.lastFetchStatus === 'error' && <p className="text-xs text-bear">Último error: {s.lastFetchError}</p>}
+                </div>
+                <button onClick={async () => { await api.fetchNewsSource(s.id); await reload(); }}
+                  className="text-xs text-cyan hover:underline cursor-pointer shrink-0">Actualizar</button>
+                <button onClick={async () => { await api.deleteNewsSource(s.id); await reload(); }}
+                  className="text-xs text-bear hover:underline cursor-pointer shrink-0">Borrar</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted">Registro ({items.length})</p>
+          <ul className="divide-y divide-line/40 border border-line/70 rounded-xl overflow-hidden bg-void/40 max-h-64 overflow-y-auto">
+            {items.map((i) => (
+              <li key={i.id} className="px-4 py-3">
+                <a href={i.url} target="_blank" rel="noreferrer" className="text-sm text-paper hover:text-cyan">{i.title}</a>
+                <p className="text-xs text-muted">{i.fetchedAt}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+};
