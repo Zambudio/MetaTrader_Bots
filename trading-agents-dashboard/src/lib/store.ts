@@ -7,7 +7,13 @@ import { api } from './api';
 
 export const TIMEFRAME_OPTIONS = ['M15', 'H1', 'H4', 'D1'];
 export const MAX_RETRIES_OPTIONS = [0, 1, 2, 3];
-const MAX_POLL_ATTEMPTS = 600; // 10 minutos máximo de polling para permitir razonamiento profundo de múltiples agentes
+// 30 minutos. Medido en real 2026-09-06 con OmniRoute (auto/best-coding): la cola secuencial
+// estrategia->riesgo->crítico->juez de un análisis completo puede tardar 12-13 min ella sola
+// (un único agente, crypto-strategy, tardó 363s en una corrida real), muy por encima de los 10
+// min que tenía antes esta constante. Con el límite corto, el frontend dejaba de sondear y
+// mostraba "tiempo límite alcanzado" mientras el backend seguía trabajando y terminaba bien
+// (veredicto real, no un fallo) segundos o minutos después — parecía un fallo sin serlo.
+const MAX_POLL_ATTEMPTS = 1800;
 
 // Motor de generación de MQL5 elegido por el usuario (string "<fuente>:<modelo>[:<esfuerzo>]").
 // `null` = usar el modelo del agente de estrategia (comportamiento por defecto). Persistido en
