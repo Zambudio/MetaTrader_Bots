@@ -170,28 +170,37 @@ export const StrategyResultCard = ({
   );
 
   return (
-    <div className="bg-panel border border-cyan/30 rounded-2xl overflow-hidden glow-cyan">
+    <div className="cyber-panel border border-cyan/35 rounded-2xl overflow-hidden card-edge relative shadow-[0_0_40px_rgba(0,240,255,0.15)]">
+      <div className="laser-line w-full h-[1px] absolute top-0" />
       <div className="p-6 md:p-8">
-        <div className="flex flex-wrap items-start justify-between gap-3 pb-5 mb-5 border-b border-line/60">
+        <div className="flex flex-wrap items-center justify-between gap-4 pb-6 mb-6 border-b border-line-bright/60">
           <div>
-            <p className="text-sm font-medium text-cyan mb-1.5 tracking-wide uppercase">Propuesta de estrategia</p>
-            <h3 className="font-display font-bold text-3xl text-paper tracking-wide">{strategy.pair}</h3>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="w-2 h-2 rounded-full bg-cyan shadow-[0_0_8px_#00f0ff]" />
+              <p className="text-xs font-mono font-bold text-cyan tracking-widest uppercase glow-text-cyan">Propuesta de Estrategia</p>
+            </div>
+            <h3 className="font-display font-black text-2xl md:text-3xl text-paper tracking-wide">{strategy.pair}</h3>
           </div>
           <div className="text-right">
-            <p className="text-base font-semibold text-bull">Ejecutada</p>
-            <p className="text-sm text-muted mt-1">
-              {agentName} · {strategy.timeframe}
+            <span className="inline-flex items-center gap-1.5 text-xs font-mono font-bold px-3 py-1 rounded-full bg-bull/15 border border-bull text-bull glow-text-bull tracking-wider uppercase">
+              <span className="w-1.5 h-1.5 rounded-full bg-bull animate-ping" />
+              Ejecutada
+            </span>
+            <p className="text-xs font-mono text-muted mt-1.5">
+              {agentName} · <span className="text-slate-300 font-bold">{strategy.timeframe}</span>
             </p>
           </div>
         </div>
 
-        <MarkdownText className="text-base text-paper/90 leading-relaxed">{strategy.resumen}</MarkdownText>
+        <MarkdownText className="text-base text-slate-100 leading-relaxed font-body">{strategy.resumen}</MarkdownText>
 
-        <div className="mt-5">
-          <p className="text-sm font-medium text-muted mb-2">Indicadores clave</p>
+        <div className="mt-6">
+          <p className="text-xs font-mono font-bold uppercase tracking-wider text-muted mb-2.5 flex items-center gap-2">
+            <span>⚙️</span> Indicadores Clave:
+          </p>
           <div className="flex flex-wrap gap-2">
             {strategy.indicadoresClave.map((ind) => (
-              <span key={ind} className="text-sm bg-panel-raised text-paper/80 px-3 py-1.5 rounded-full">
+              <span key={ind} className="text-xs font-mono font-semibold bg-panel-raised border border-cyan/25 text-cyan-soft px-3 py-1 rounded-lg shadow-sm">
                 {ind}
               </span>
             ))}
@@ -199,39 +208,42 @@ export const StrategyResultCard = ({
         </div>
 
         {strategy.condicionEntrada && (
-          <div className="mt-5 bg-void/50 rounded-xl p-4">
-            <p className="text-sm font-medium text-muted">Condición de entrada (regla que codificará el EA)</p>
-            <MarkdownText className="text-base text-paper/90 mt-2 leading-relaxed">
+          <div className="mt-6 bg-void/70 border border-cyan/25 rounded-xl p-5 shadow-inner relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-1 h-full bg-cyan shadow-[0_0_10px_#00f0ff]" />
+            <p className="text-xs font-mono font-bold uppercase tracking-wider text-cyan glow-text-cyan mb-2">
+              Condición de Entrada (Regla MQL5):
+            </p>
+            <MarkdownText className="text-sm md:text-base text-slate-100 leading-relaxed font-mono">
               {strategy.condicionEntrada}
             </MarkdownText>
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6">
-          <div className="bg-void/50 rounded-xl p-4">
-            <p className="text-sm font-medium text-muted">Entrada</p>
-            <MarkdownText className="text-base text-cyan mt-2 tabular-nums leading-relaxed">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
+          <div className="bg-void/70 rounded-xl p-4 border border-cyan/35 shadow-[0_0_20px_rgba(0,240,255,0.08)] relative overflow-hidden">
+            <p className="text-xs font-mono uppercase font-bold text-muted tracking-wider">Entrada</p>
+            <MarkdownText className="text-lg md:text-xl text-cyan glow-text-cyan mt-1.5 font-bold font-mono">
               {strategy.puntoEntrada}
             </MarkdownText>
           </div>
-          <div className="bg-void/50 rounded-xl p-4">
-            <p className="text-sm font-medium text-muted">Stop loss</p>
-            <MarkdownText className="text-base text-bear mt-2 tabular-nums leading-relaxed">
+          <div className="bg-void/70 rounded-xl p-4 border border-bear/40 shadow-[0_0_20px_rgba(255,42,109,0.08)] relative overflow-hidden">
+            <p className="text-xs font-mono uppercase font-bold text-muted tracking-wider">Stop Loss</p>
+            <MarkdownText className="text-lg md:text-xl text-bear glow-text-pink mt-1.5 font-bold font-mono">
               {strategy.stopLoss}
             </MarkdownText>
           </div>
-          <div className="bg-void/50 rounded-xl p-4">
-            <p className="text-sm font-medium text-muted">Take profit</p>
-            <MarkdownText className="text-base text-bull mt-2 tabular-nums leading-relaxed">
+          <div className="bg-void/70 rounded-xl p-4 border border-bull/40 shadow-[0_0_20px_rgba(0,255,159,0.08)] relative overflow-hidden">
+            <p className="text-xs font-mono uppercase font-bold text-muted tracking-wider">Take Profit</p>
+            <MarkdownText className="text-lg md:text-xl text-bull glow-text-bull mt-1.5 font-bold font-mono">
               {strategy.takeProfit}
             </MarkdownText>
           </div>
         </div>
 
         {strategy.entradasEscalonadas && (
-          <div className="mt-5">
-            <p className="text-sm font-medium text-muted mb-1.5">Entradas escalonadas</p>
-            <MarkdownText className="text-base text-paper/80 leading-relaxed">{strategy.entradasEscalonadas}</MarkdownText>
+          <div className="mt-5 p-4 rounded-xl bg-void/50 border border-line-bright">
+            <p className="text-xs font-mono uppercase tracking-wider text-muted mb-1 font-semibold">Entradas escalonadas</p>
+            <MarkdownText className="text-sm md:text-base text-slate-200 leading-relaxed">{strategy.entradasEscalonadas}</MarkdownText>
           </div>
         )}
 

@@ -119,8 +119,8 @@ export const SymbolSearchModal = ({ onClose, initialTab = 'favoritos', initialQu
   const filteredResults = results.filter((r) => matchesTab(tab, r.type));
 
   return (
-    <div className="fixed inset-0 bg-void/90 backdrop-blur-sm flex items-start justify-center z-50 p-4 pt-20">
-      <div className="bg-panel border border-line/70 rounded-2xl w-full max-w-2xl max-h-[75vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 bg-void/95 backdrop-blur-sm flex items-start justify-center z-50 p-4 pt-20">
+      <div className="bg-panel border border-line/70 rounded-2xl w-full max-w-2xl max-h-[75vh] flex flex-col overflow-hidden card-edge shadow-2xl shadow-cyan/[0.03]">
         <div className="p-5 border-b border-line/60">
           <div className="flex items-center justify-between gap-3 mb-3">
             <h2 className="font-display font-bold text-lg text-paper tracking-wide">Buscar símbolo</h2>
@@ -133,7 +133,7 @@ export const SymbolSearchModal = ({ onClose, initialTab = 'favoritos', initialQu
             value={query}
             onChange={(e) => handleQueryChange(e.target.value)}
             placeholder="Ej. AAPL, EUR/USD, ETH..."
-            className="w-full bg-void/50 border border-line/70 rounded-xl px-3.5 py-2.5 text-paper text-base outline-none focus:border-cyan/60"
+            className="w-full bg-void/50 border border-line/70 rounded-xl px-3.5 py-2.5 text-paper text-base outline-none focus:border-cyan/60 focus:shadow-[0_0_0_3px_rgba(45,230,244,0.15)] transition-all"
           />
           <div className="flex gap-1.5 mt-3 overflow-x-auto">
             {TABS.map((t) => (
@@ -141,10 +141,10 @@ export const SymbolSearchModal = ({ onClose, initialTab = 'favoritos', initialQu
                 key={t.key}
                 type="button"
                 onClick={() => setTab(t.key)}
-                className={`shrink-0 text-sm px-3.5 py-1.5 rounded-full border transition-colors ${
+                className={`shrink-0 text-sm px-3.5 py-1.5 rounded-full border transition-all ${
                   tab === t.key
-                    ? 'bg-cyan/15 border-cyan/60 text-cyan'
-                    : 'border-line/70 text-muted hover:text-paper hover:border-line'
+                    ? 'bg-cyan/15 border-cyan/60 text-cyan shadow-[0_0_10px_-3px_rgba(45,230,244,0.35)]'
+                    : 'border-line/70 text-muted hover:text-paper hover:border-line hover:bg-panel-raised/50'
                 }`}
               >
                 {t.label}

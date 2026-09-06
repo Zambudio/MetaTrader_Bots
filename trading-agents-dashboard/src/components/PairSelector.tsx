@@ -66,38 +66,40 @@ export const PairSelector = () => {
 
   return (
     <>
-      <div className="flex items-end gap-2">
-        <button
-          type="button"
-          onClick={() => setModal({ tab: 'favoritos', query: '' })}
-          title="Buscar símbolo"
-          className="mb-0.5 w-10 h-10 flex items-center justify-center rounded-xl border border-line/70 text-muted hover:text-cyan hover:border-cyan/50 transition-colors shrink-0"
-        >
-          <SearchIcon />
-        </button>
+      <div className="flex items-end gap-3">
+        <div className="flex items-end gap-2">
+          <button
+            type="button"
+            onClick={() => setModal({ tab: 'favoritos', query: '' })}
+            title="Buscar símbolo"
+            className="h-11 w-11 flex items-center justify-center rounded-xl border border-line-bright bg-panel text-muted hover:text-cyan hover:border-cyan hover:shadow-[0_0_15px_rgba(0,240,255,0.3)] transition-all shrink-0 cursor-pointer"
+          >
+            <SearchIcon />
+          </button>
 
-        <div>
-          <label className="block text-sm font-medium text-muted mb-1.5">Par</label>
-          <div className="flex items-center gap-2">
-            <input
-              value={inputValue}
-              onChange={(e) => handleInputChange(e.target.value)}
-              onFocus={(e) => e.target.select()}
-              placeholder="Buscar par..."
-              className="bg-panel border border-line/70 rounded-xl font-semibold text-base text-cyan px-3.5 py-2.5 outline-none w-40 focus:border-cyan/60 placeholder:text-muted placeholder:font-normal transition-colors"
-            />
-            <button
-              type="button"
-              onClick={() => toggleFavorite(selectedPair, !isFavorite)}
-              title={isFavorite ? 'Quitar de favoritos' : 'Marcar como favorito'}
-              className={`w-10 h-10 flex items-center justify-center rounded-xl border transition-colors shrink-0 ${
-                isFavorite
-                  ? 'border-cyan/60 text-cyan bg-cyan/10'
-                  : 'border-line/70 text-muted hover:text-cyan hover:border-cyan/50'
-              }`}
-            >
-              <StarIcon filled={isFavorite} />
-            </button>
+          <div>
+            <label className="block text-sm font-medium text-muted mb-1.5">Par</label>
+            <div className="flex items-center gap-2">
+              <input
+                value={inputValue}
+                onChange={(e) => handleInputChange(e.target.value)}
+                onFocus={(e) => e.target.select()}
+                placeholder="Buscar par..."
+                className="h-11 bg-panel border border-line-bright rounded-xl font-semibold text-base text-cyan glow-text-cyan px-3.5 outline-none w-36 sm:w-40 focus:border-cyan focus:shadow-[0_0_18px_rgba(0,240,255,0.25)] placeholder:text-muted placeholder:font-normal transition-all"
+              />
+              <button
+                type="button"
+                onClick={() => toggleFavorite(selectedPair, !isFavorite)}
+                title={isFavorite ? 'Quitar de favoritos' : 'Marcar como favorito'}
+                className={`h-11 w-11 flex items-center justify-center rounded-xl border transition-all shrink-0 cursor-pointer ${
+                  isFavorite
+                    ? 'border-cyan text-cyan bg-cyan/15 shadow-[0_0_16px_rgba(0,240,255,0.55)]'
+                    : 'border-line-bright bg-panel text-muted hover:text-cyan hover:border-cyan hover:shadow-[0_0_14px_rgba(0,240,255,0.25)]'
+                }`}
+              >
+                <StarIcon filled={isFavorite} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -106,7 +108,7 @@ export const PairSelector = () => {
           <select
             value={timeframe}
             onChange={(e) => setTimeframe(e.target.value)}
-            className="bg-panel border border-line/70 rounded-xl text-base text-paper px-3 py-2.5 outline-none focus:border-cyan/60"
+            className="h-11 bg-panel border border-line-bright rounded-xl text-base text-paper font-semibold px-3 outline-none focus:border-cyan focus:shadow-[0_0_18px_rgba(0,240,255,0.25)] transition-all cursor-pointer"
           >
             {TIMEFRAME_OPTIONS.map((tf) => (
               <option key={tf} value={tf} className="bg-panel text-paper">

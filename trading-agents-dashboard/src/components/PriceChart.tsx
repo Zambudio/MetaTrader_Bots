@@ -219,20 +219,27 @@ export const PriceChart = () => {
   }, [candles, active]);
 
   return (
-    <div className="bg-panel border border-line/70 rounded-2xl p-5 mb-10">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <h2 className="font-display font-bold text-lg text-paper tracking-wide">
-          {selectedPair} <span className="text-muted font-body font-normal text-base">· {timeframe}</span>
-        </h2>
-        <div className="flex flex-wrap gap-2">
+    <div className="cyber-panel border border-cyan/25 rounded-2xl p-5 md:p-6 mb-12 card-edge relative overflow-hidden shadow-[0_0_40px_rgba(0,0,0,0.8)]">
+      <div className="absolute top-0 right-0 w-96 h-96 bg-cyan/10 rounded-full blur-[120px] -translate-y-1/2 translate-x-1/3 pointer-events-none" aria-hidden="true" />
+      <div className="relative flex flex-wrap items-center justify-between gap-4 mb-5 pb-4 border-b border-line-bright/60">
+        <div className="flex items-center gap-3">
+          <div className="w-2.5 h-2.5 rounded-full bg-bull shadow-[0_0_8px_#00ff9f] animate-pulse" />
+          <h2 className="font-display font-black text-xl text-paper tracking-wide flex items-center gap-2.5">
+            <span className="text-cyan glow-text-cyan">{selectedPair}</span>
+            <span className="font-mono text-xs font-bold text-slate-300 border border-cyan/30 px-2.5 py-0.5 rounded bg-cyan/10 shadow-[0_0_10px_rgba(0,240,255,0.15)]">
+              {timeframe}
+            </span>
+          </h2>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
           {INDICATOR_DEFS.map((def) => (
             <button
               key={def.key}
               onClick={() => toggleIndicator(def.key)}
-              className={`text-sm px-3 py-1.5 rounded-full border transition-colors ${
+              className={`font-mono text-xs px-3 py-1 rounded-lg border transition-all cursor-pointer ${
                 active.has(def.key)
-                  ? 'bg-cyan/15 border-cyan/60 text-cyan'
-                  : 'bg-transparent border-line/70 text-muted hover:text-paper hover:border-line'
+                  ? 'bg-cyan/20 border-cyan text-cyan font-bold shadow-[0_0_14px_rgba(0,240,255,0.4)] glow-text-cyan'
+                  : 'bg-void/50 border-line-bright text-muted hover:text-slate-200 hover:border-cyan/50 hover:bg-panel-raised/80'
               }`}
             >
               {def.label}
@@ -241,16 +248,21 @@ export const PriceChart = () => {
         </div>
       </div>
 
-      {loading && <p className="text-muted text-base py-8 text-center">Cargando velas…</p>}
+      {loading && (
+        <div className="py-16 text-center space-y-3">
+          <div className="w-8 h-8 border-2 border-cyan border-t-transparent rounded-full animate-spin mx-auto shadow-[0_0_15px_rgba(0,240,255,0.5)]" />
+          <p className="text-cyan font-mono text-xs tracking-widest uppercase">Cargando datos de mercado…</p>
+        </div>
+      )}
 
       {!loading && error && (
-        <div className="px-4 py-3 bg-bear/10 border border-bear/25 rounded-xl">
-          <p className="text-base text-bear">{error}</p>
+        <div className="px-5 py-4 bg-bear/10 border border-bear/40 rounded-xl shadow-[0_0_15px_rgba(255,42,109,0.2)]">
+          <p className="text-base text-bear font-medium">{error}</p>
         </div>
       )}
 
       {!loading && !error && candles.length === 0 && (
-        <p className="text-muted text-base py-8 text-center">No hay datos disponibles para este par.</p>
+        <p className="text-muted text-base py-12 text-center font-mono">No hay datos de velas disponibles para este par.</p>
       )}
 
       {!loading && !error && candles.length > 0 && (

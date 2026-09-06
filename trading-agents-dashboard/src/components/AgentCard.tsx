@@ -33,9 +33,9 @@ const STATUS_LABELS: Record<string, string> = {
 const STATUS_DOT: Record<string, string> = {
   idle: 'bg-muted',
   waiting: 'bg-muted',
-  running: 'bg-cyan shadow-[0_0_8px_1px_var(--color-cyan)]',
-  done: 'bg-bull shadow-[0_0_8px_1px_var(--color-bull)]',
-  error: 'bg-bear shadow-[0_0_8px_1px_var(--color-bear)]',
+  running: 'bg-cyan shadow-[0_0_10px_2px_var(--color-cyan)]',
+  done: 'bg-bull shadow-[0_0_10px_2px_var(--color-bull)]',
+  error: 'bg-bear shadow-[0_0_10px_2px_var(--color-bear)]',
 };
 
 const STATUS_TEXT: Record<string, string> = {
@@ -44,14 +44,6 @@ const STATUS_TEXT: Record<string, string> = {
   running: 'text-cyan',
   done: 'text-bull',
   error: 'text-bear',
-};
-
-const RING: Record<string, string> = {
-  idle: 'ring-line',
-  waiting: 'ring-line',
-  running: 'ring-cyan',
-  done: 'ring-bull',
-  error: 'ring-bear',
 };
 
 function initials(name: string) {
@@ -93,9 +85,9 @@ export const AgentCard = forwardRef<HTMLDivElement, Props>(
 
     const dropRing =
       dropState === 'valid'
-        ? 'ring-2 ring-cyan/70 shadow-[0_0_20px_-4px_var(--color-cyan)]'
+        ? 'ring-2 ring-cyan'
         : dropState === 'invalid'
-          ? 'ring-2 ring-bear/70'
+          ? 'ring-2 ring-bear'
           : '';
 
     return (
@@ -107,10 +99,18 @@ export const AgentCard = forwardRef<HTMLDivElement, Props>(
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
-        className={`w-72 bg-panel border border-line/70 rounded-2xl p-5 cursor-grab active:cursor-grabbing transition-[opacity,box-shadow] ${isDragging ? 'opacity-40' : isDisabled ? 'opacity-50' : ''} ${dropRing}`}
+        className={`w-72 cyber-card-interactive rounded-2xl p-5 cursor-grab active:cursor-grabbing card-edge card-sheen relative ${
+          isRunning ? 'border-cyan shadow-[0_0_30px_rgba(0,240,255,0.4)] ring-1 ring-cyan/50' :
+          status === 'done' ? 'border-bull/50 shadow-[0_0_22px_rgba(0,255,159,0.25)]' :
+          isError ? 'border-bear/60 shadow-[0_0_22px_rgba(255,42,109,0.35)]' : ''
+        } ${isDragging ? 'opacity-40 scale-95' : isDisabled ? 'opacity-40' : ''} ${dropRing}`}
       >
         <div className="flex flex-col items-center text-center">
-          <div className={`relative rounded-full ring-2 ${RING[status]} ${isRunning ? 'pulse-soft' : ''} p-0.5`}>
+          <div className={`relative rounded-full ring-2 ${
+            isRunning ? 'ring-cyan shadow-[0_0_18px_rgba(0,240,255,0.8)] pulse-soft' :
+            status === 'done' ? 'ring-bull shadow-[0_0_14px_rgba(0,255,159,0.6)]' :
+            isError ? 'ring-bear shadow-[0_0_14px_rgba(255,42,109,0.6)]' : 'ring-line-bright'
+          } p-1 bg-void/60`}>
             {showPhoto ? (
               <img
                 src={agent.photo}
@@ -119,41 +119,49 @@ export const AgentCard = forwardRef<HTMLDivElement, Props>(
                 className="w-16 h-16 rounded-full object-cover"
               />
             ) : (
-              <div className="w-16 h-16 rounded-full bg-panel-raised flex items-center justify-center font-display font-bold text-base text-cyan">
+              <div className="w-16 h-16 rounded-full bg-panel-raised border border-cyan/30 flex items-center justify-center font-display font-black text-lg text-cyan glow-text-cyan">
                 {initials(agent.name) || '?'}
               </div>
             )}
           </div>
 
-          <h3 className="font-semibold text-lg text-paper mt-3">{agent.name}</h3>
-          <p className="text-sm text-muted">{agent.role}</p>
+          <h3 className="font-display font-bold text-lg text-paper mt-3 tracking-wide">{agent.name}</h3>
+          <p className="text-xs font-mono uppercase tracking-wider text-muted mt-0.5">{agent.role}</p>
 
-          <div className="flex items-center gap-1.5 mt-2.5">
-            <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[status]}`} />
-            <span className={`text-sm font-medium ${STATUS_TEXT[status]}`}>{STATUS_LABELS[status]}</span>
+          <div className="flex items-center gap-2 mt-3 px-3 py-1 rounded-full bg-void/70 border border-line-bright shadow-inner">
+            <span className={`w-2 h-2 rounded-full ${STATUS_DOT[status]}`} />
+            <span className={`text-xs font-mono font-semibold tracking-wide uppercase ${STATUS_TEXT[status]}`}>{STATUS_LABELS[status]}</span>
           </div>
 
           {isDisabled && (
-            <span className="mt-1.5 text-xs font-semibold text-muted uppercase tracking-wider">Inactivo</span>
+            <span className="mt-2 text-[11px] font-mono font-bold text-muted uppercase tracking-widest bg-void/60 px-2 py-0.5 rounded border border-line">Inactivo</span>
           )}
           {!isDisabled && isOrphanedByDisabled && (
-            <span className="mt-1.5 text-xs font-medium text-amber-400/90">
+            <span className="mt-2 text-xs font-medium text-amber-400 bg-amber-400/10 border border-amber-400/30 px-2.5 py-1 rounded-lg">
               Omitido: depende de un agente inactivo
             </span>
           )}
 
           {(agent.dependsOn.length > 0 || agent.model || (runResult?.attempt ?? 1) > 1) && (
-            <div className="flex flex-col items-center gap-0.5 mt-2 text-sm text-muted">
-              {agent.dependsOn.length > 0 && <span>Encadenado</span>}
-              {agent.model && <span className="truncate max-w-full text-cyan-soft">{agent.model}</span>}
-              {(runResult?.attempt ?? 1) > 1 && <span className="text-violet">Intento {runResult?.attempt}</span>}
+            <div className="flex flex-col items-center gap-1 mt-3 w-full">
+              {agent.model && (
+                <span className="truncate max-w-full text-cyan-soft bg-cyan/10 border border-cyan/30 px-2.5 py-0.5 rounded-md font-mono text-xs shadow-[0_0_12px_rgba(0,240,255,0.15)]">
+                  {agent.model}
+                </span>
+              )}
+              {agent.dependsOn.length > 0 && (
+                <span className="text-xs text-muted font-mono">⮡ Encadenado ({agent.dependsOn.length})</span>
+              )}
+              {(runResult?.attempt ?? 1) > 1 && (
+                <span className="text-pink font-mono text-xs glow-text-pink">Intento {runResult?.attempt}</span>
+              )}
             </div>
           )}
 
-          <div className="flex items-center justify-center gap-3 mt-3 flex-wrap">
+          <div className="flex items-center justify-center gap-3 mt-4 pt-3 border-t border-line/60 w-full flex-wrap">
             <button
               onClick={onConfigure}
-              className="text-sm font-medium text-cyan hover:text-cyan-soft transition-colors"
+              className="text-xs font-mono tracking-wider font-semibold text-cyan hover:text-white uppercase transition-colors cursor-pointer"
             >
               Configurar
             </button>

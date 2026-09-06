@@ -28,7 +28,10 @@ export const Dashboard = () => {
     removeAgent,
     runWorkflow,
     resumeWorkflow,
+    stopWorkflow,
     loadRun,
+    maxRetries,
+    setMaxRetries,
   } = useAgentStore();
 
   const [editingAgent, setEditingAgent] = useState<Agent | null | 'new'>(null);
@@ -121,47 +124,65 @@ export const Dashboard = () => {
   };
 
   return (
-    <div className="min-h-screen text-paper font-body">
-      <div className="max-w-7xl mx-auto px-6 py-12 md:px-10">
-        <header className="pb-8 mb-10 flex flex-wrap items-end justify-between gap-6 border-b border-line/60">
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-2 h-2 rounded-full bg-bull pulse-soft shadow-[0_0_8px_1px_var(--color-bull)]" aria-hidden="true" />
-              <span className="text-sm font-medium tracking-wide text-muted uppercase">Sistema activo</span>
+    <div className="min-h-screen text-paper font-body relative">
+      {/* Luces de neón ambientales de fondo */}
+      <div className="fixed top-0 left-1/4 w-96 h-96 bg-cyan/10 rounded-full blur-[140px] pointer-events-none -z-10 animate-neon-halo" />
+      <div className="fixed top-20 right-10 w-[500px] h-[500px] bg-pink/10 rounded-full blur-[160px] pointer-events-none -z-10 animate-neon-halo" style={{ animationDelay: '1.5s' }} />
+      <div className="fixed bottom-10 left-10 w-[450px] h-[450px] bg-violet/10 rounded-full blur-[150px] pointer-events-none -z-10" />
+
+      <div className="relative max-w-7xl mx-auto px-6 py-12 md:px-10">
+        <header className="pb-10 mb-10 flex flex-col items-center text-center gap-7 border-b border-line-bright/50 relative">
+          <div className="laser-line w-full max-w-lg h-[1px] absolute top-0" />
+          <div className="space-y-3">
+            <div className="inline-flex items-center justify-center gap-2.5 px-4 py-1.5 rounded-full bg-void/80 border border-cyan/30 shadow-[0_0_20px_rgba(0,240,255,0.15)] backdrop-blur-md">
+              <span className="w-2 h-2 rounded-full bg-bull pulse-soft shadow-[0_0_10px_2px_#00ff9f]" aria-hidden="true" />
+              <span className="text-xs font-mono font-bold tracking-widest text-slate-300 uppercase">Sistema Activo</span>
+              <span className="text-cyan/40 font-mono text-xs">/</span>
+              <span className="text-xs font-mono tracking-widest text-cyan glow-text-cyan uppercase">● Live Neural Core</span>
             </div>
-            <h1 className="font-display font-bold text-3xl md:text-4xl text-paper tracking-wide">
-              BOTS DE <span className="text-cyan">TRADING</span>
+            <h1 className="font-display font-black text-4xl md:text-5xl text-paper tracking-wider uppercase flex items-center justify-center gap-3.5 md:gap-4">
+              <img
+                src="/logo.png"
+                alt="Logo Bots de Trading"
+                className="w-11 h-11 md:w-13 md:h-13 object-contain drop-shadow-[0_0_16px_rgba(0,240,255,0.5)] select-none"
+              />
+              <span>
+                Bots de <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan via-cyan-soft to-pink glow-text-cyan">Trading</span>
+              </span>
             </h1>
-            <p className="text-muted mt-2 text-base">Consola de agentes de análisis · cadena de estrategia</p>
+            <p className="text-muted text-sm md:text-base max-w-xl mx-auto font-body">
+              Consola neuronal de agentes de análisis · Algoritmos adaptativos en tiempo real
+            </p>
           </div>
 
-          <div className="flex items-end gap-3 flex-wrap">
+          <div className="cyber-panel rounded-2xl p-4 md:p-5 border border-cyan/25 shadow-[0_0_30px_rgba(0,240,255,0.07)] flex items-end justify-center gap-3.5 flex-wrap w-full max-w-5xl">
             <PairSelector />
-            <div className="flex flex-col gap-1">
-              <label htmlFor="maxRetriesSelect" className="text-xs text-muted font-medium">
+            <div>
+              <label htmlFor="maxRetriesSelect" className="block text-sm font-medium text-muted mb-1.5">
                 Reintentos máx.
               </label>
               <select
                 id="maxRetriesSelect"
-                value={useAgentStore.getState().maxRetries}
-                onChange={(e) => useAgentStore.getState().setMaxRetries(Number(e.target.value))}
-                className="bg-panel border border-line rounded-xl px-3 py-3 text-sm text-paper font-semibold focus:outline-none focus:border-cyan"
+                value={maxRetries}
+                onChange={(e) => setMaxRetries(Number(e.target.value))}
+                className="h-11 bg-panel border border-line-bright rounded-xl px-3 text-base text-paper font-semibold focus:outline-none focus:border-cyan focus:shadow-[0_0_0_3px_rgba(0,240,255,0.2)] transition-all cursor-pointer"
               >
-                <option value={0}>0 reintentos</option>
-                <option value={1}>1 reintento</option>
-                <option value={2}>2 reintentos</option>
-                <option value={3}>3 reintentos</option>
+                <option value={0} className="bg-panel text-paper">0 reintentos</option>
+                <option value={1} className="bg-panel text-paper">1 reintento</option>
+                <option value={2} className="bg-panel text-paper">2 reintentos</option>
+                <option value={3} className="bg-panel text-paper">3 reintentos</option>
               </select>
             </div>
             <button
               onClick={() => setShowHistory(true)}
-              className="rounded-xl border border-line/70 text-paper/80 font-semibold text-base px-5 py-3 hover:text-cyan hover:border-cyan/50 transition-all whitespace-nowrap"
+              className="h-11 rounded-xl border border-line-bright bg-panel-raised/70 backdrop-blur-md text-paper/90 hover:text-cyan hover:border-cyan/50 hover:shadow-[0_0_18px_rgba(0,240,255,0.3)] font-semibold text-base px-5 transition-all whitespace-nowrap inline-flex items-center justify-center gap-2 cursor-pointer"
             >
-              👁️ Análisis anteriores
+              <span>👁️</span>
+              <span>Análisis anteriores</span>
             </button>
             <button
               onClick={() => setShowNews(true)}
-              className="rounded-xl border border-line/70 text-paper/80 font-semibold text-base px-5 py-3 hover:text-cyan hover:border-cyan/50 transition-all whitespace-nowrap cursor-pointer inline-flex items-center gap-2"
+              className="h-11 rounded-xl border border-line-bright bg-panel-raised/70 backdrop-blur-md text-paper/90 hover:text-cyan hover:border-cyan/50 hover:shadow-[0_0_18px_rgba(0,240,255,0.3)] font-semibold text-base px-5 transition-all whitespace-nowrap inline-flex items-center justify-center gap-2 cursor-pointer"
             >
               <span>📰</span>
               <span>Noticias</span>
@@ -169,10 +190,22 @@ export const Dashboard = () => {
             <button
               onClick={runWorkflow}
               disabled={isAnalysing || agents.length === 0}
-              className="rounded-xl border border-cyan/60 bg-cyan/10 text-cyan font-semibold text-base px-6 py-3 hover:bg-cyan/20 hover:glow-cyan disabled:opacity-40 disabled:cursor-not-allowed transition-all whitespace-nowrap"
+              className="h-11 rounded-xl cyber-btn-cta font-bold text-base text-cyan hover:text-white px-7 transition-all whitespace-nowrap inline-flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {isAnalysing ? 'Analizando…' : 'Ejecutar análisis'}
+              <span className={isAnalysing ? 'animate-spin text-lg' : 'text-lg'}>
+                {isAnalysing ? '⚙️' : '⚡'}
+              </span>
+              <span>{isAnalysing ? 'Analizando…' : 'Ejecutar análisis'}</span>
             </button>
+            {isAnalysing && (
+              <button
+                onClick={stopWorkflow}
+                className="h-11 rounded-xl border border-bear/50 bg-bear/10 text-bear font-bold text-base px-5 hover:bg-bear/20 hover:border-bear transition-all whitespace-nowrap inline-flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <span>⏹</span>
+                <span>Detener análisis</span>
+              </button>
+            )}
           </div>
         </header>
 
@@ -191,24 +224,28 @@ export const Dashboard = () => {
         <PriceChart />
 
         {error && (
-          <div className="mb-6 px-4 py-3 bg-bear/10 border border-bear/30 rounded-xl">
-            <p className="text-base text-bear">{error}</p>
+          <div className="mb-6 px-5 py-4 bg-bear/10 border border-bear/40 rounded-2xl shadow-[0_0_20px_rgba(255,42,109,0.2)]">
+            <p className="text-base text-bear font-medium">{error}</p>
           </div>
         )}
 
         {isLoading ? (
-          <p className="text-muted text-base">Cargando agentes…</p>
+          <div className="py-16 text-center space-y-3">
+            <div className="w-10 h-10 border-2 border-cyan border-t-transparent rounded-full animate-spin mx-auto shadow-[0_0_15px_rgba(0,240,255,0.5)]" />
+            <p className="text-cyan font-mono text-sm tracking-widest uppercase">Cargando agentes de red…</p>
+          </div>
         ) : (
           <>
-            <div className="flex items-center gap-3 mb-6 flex-wrap">
-              <span className="text-base font-medium text-cyan whitespace-nowrap">Cadena de agentes</span>
-              <span className="h-px flex-1 bg-line/60" aria-hidden="true" />
+            <div className="flex items-center gap-3 mb-8 flex-wrap">
+              <span className="font-mono text-xs text-cyan bg-cyan/10 border border-cyan/30 px-2 py-0.5 rounded tracking-widest glow-text-cyan uppercase">[01]</span>
+              <span className="text-base font-display font-semibold text-paper tracking-wider uppercase">Cadena de agentes</span>
+              <span className="h-px flex-1 bg-gradient-to-r from-cyan/40 via-line-bright to-transparent" aria-hidden="true" />
               <AgentConfigBar />
             </div>
 
             {draggingId && (
-              <p className="text-sm text-muted text-center mb-4">
-                Suelta sobre otra tarjeta para conectar la dependencia, o en un espacio vacío para quitarla.
+              <p className="text-sm text-cyan/90 bg-cyan/10 border border-cyan/30 rounded-xl px-4 py-2 text-center mb-6 shadow-[0_0_15px_rgba(0,240,255,0.15)] font-medium">
+                ⚡ Suelta sobre otra tarjeta para conectar la dependencia, o en un espacio vacío para quitarla.
               </p>
             )}
 
@@ -227,7 +264,7 @@ export const Dashboard = () => {
               {levels.map((level) => (
                 <div
                   key={level.map((a) => a.id).join('-')}
-                  className="flex flex-row flex-wrap items-start justify-center gap-4"
+                  className="flex flex-row flex-wrap items-start justify-center gap-5"
                 >
                   {level.map((agent) => (
                     <AgentCard
@@ -263,9 +300,12 @@ export const Dashboard = () => {
               ))}
               <button
                 onClick={() => setEditingAgent('new')}
-                className="w-72 min-h-[120px] border border-dashed border-line rounded-2xl flex items-center justify-center text-base font-medium text-muted hover:text-cyan hover:border-cyan/50 transition-colors px-6"
+                className="w-72 min-h-[120px] border-2 border-dashed border-line-bright/60 hover:border-cyan/80 bg-panel/30 hover:bg-cyan/[0.04] rounded-2xl flex flex-col items-center justify-center gap-2 text-base font-medium text-muted hover:text-cyan transition-all duration-300 hover:shadow-[0_0_25px_rgba(0,240,255,0.15)] px-6 group cursor-pointer"
               >
-                + Añadir agente
+                <span className="w-8 h-8 rounded-full border border-line-bright group-hover:border-cyan flex items-center justify-center text-lg text-muted group-hover:text-cyan transition-colors">
+                  +
+                </span>
+                <span>Añadir agente</span>
               </button>
             </div>
 

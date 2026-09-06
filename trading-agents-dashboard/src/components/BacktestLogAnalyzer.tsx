@@ -78,8 +78,8 @@ export const BacktestLogAnalyzer = () => {
           }}
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
-          className={`rounded-xl border-2 border-dashed p-6 text-center transition-colors ${
-            dragOver ? 'border-cyan bg-cyan/5' : 'border-line/60'
+          className={`rounded-xl border-2 border-dashed p-6 text-center transition-all ${
+            dragOver ? 'border-cyan bg-cyan/5 shadow-[0_0_20px_-4px_rgba(45,230,244,0.3)]' : 'border-line/60 hover:border-line-bright/50'
           }`}
         >
           <input ref={fileInputRef} type="file" accept=".log,.txt" className="hidden" onChange={onFileInputChange} />
@@ -90,7 +90,7 @@ export const BacktestLogAnalyzer = () => {
               <p className="text-sm text-muted mb-3">Arrastra aquí el archivo .log, o</p>
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="text-sm font-medium px-4 py-2 rounded-lg bg-cyan/10 text-cyan hover:bg-cyan/20 transition-colors border border-cyan/30"
+                className="text-sm font-medium px-4 py-2 rounded-lg bg-cyan/10 text-cyan hover:bg-cyan/20 transition-all border border-cyan/30 hover:shadow-[0_0_14px_-3px_rgba(45,230,244,0.4)]"
               >
                 Elegir archivo…
               </button>
@@ -135,47 +135,47 @@ export const BacktestLogAnalyzer = () => {
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="bg-void/50 rounded-xl p-4">
+            <div className="bg-void/50 rounded-xl p-4 border border-line/30">
               <p className="text-sm font-medium text-muted">Balance inicial → final</p>
-              <p className="text-base text-paper mt-2 tabular-nums">
+              <p className="text-base text-paper mt-2 tabular-nums font-mono">
                 {fmtMoney(session.initialDeposit, session.currency)} → {fmtMoney(session.finalBalance, session.currency)}
               </p>
             </div>
-            <div className="bg-void/50 rounded-xl p-4">
+            <div className="bg-void/50 rounded-xl p-4 border border-line/30">
               <p className="text-sm font-medium text-muted">Resultado neto</p>
-              <p className={`text-base mt-2 tabular-nums ${(s.netProfit ?? 0) >= 0 ? 'text-bull' : 'text-bear'}`}>
+              <p className={`text-base mt-2 tabular-nums font-mono ${(s.netProfit ?? 0) >= 0 ? 'text-bull' : 'text-bear'}`}>
                 {fmtMoney(s.netProfit, session.currency)} ({fmtPct(s.netProfitPct)})
               </p>
             </div>
-            <div className="bg-void/50 rounded-xl p-4">
+            <div className="bg-void/50 rounded-xl p-4 border border-line/30">
               <p className="text-sm font-medium text-muted">Operaciones cerradas</p>
-              <p className="text-base text-paper mt-2 tabular-nums">
+              <p className="text-base text-paper mt-2 tabular-nums font-mono">
                 {s.closedTrades} ({s.wins} TP / {s.losses} SL)
               </p>
             </div>
-            <div className="bg-void/50 rounded-xl p-4">
+            <div className="bg-void/50 rounded-xl p-4 border border-line/30">
               <p className="text-sm font-medium text-muted">Win rate</p>
-              <p className="text-base text-paper mt-2 tabular-nums">{s.winRatePct === null ? '—' : `${s.winRatePct.toFixed(1)} %`}</p>
+              <p className="text-base text-paper mt-2 tabular-nums font-mono">{s.winRatePct === null ? '—' : `${s.winRatePct.toFixed(1)} %`}</p>
             </div>
-            <div className="bg-void/50 rounded-xl p-4">
+            <div className="bg-void/50 rounded-xl p-4 border border-line/30">
               <p className="text-sm font-medium text-muted">R:R medio (SL/TP del log)</p>
-              <p className="text-base text-paper mt-2 tabular-nums">{s.avgRR === null ? '—' : `1:${s.avgRR.toFixed(2)}`}</p>
+              <p className="text-base text-paper mt-2 tabular-nums font-mono">{s.avgRR === null ? '—' : `1:${s.avgRR.toFixed(2)}`}</p>
             </div>
-            <div className="bg-void/50 rounded-xl p-4">
+            <div className="bg-void/50 rounded-xl p-4 border border-line/30">
               <p className="text-sm font-medium text-muted">Esperanza matemática</p>
-              <p className={`text-base mt-2 tabular-nums ${(s.expectancyR ?? 0) >= 0 ? 'text-bull' : 'text-bear'}`}>
+              <p className={`text-base mt-2 tabular-nums font-mono ${(s.expectancyR ?? 0) >= 0 ? 'text-bull' : 'text-bear'}`}>
                 {s.expectancyR === null ? '—' : `${s.expectancyR >= 0 ? '+' : ''}${s.expectancyR.toFixed(2)} R / operación`}
               </p>
             </div>
-            <div className="bg-void/50 rounded-xl p-4">
+            <div className="bg-void/50 rounded-xl p-4 border border-line/30">
               <p className="text-sm font-medium text-muted">Profit factor (aprox.)</p>
-              <p className="text-base text-paper mt-2 tabular-nums">
+              <p className="text-base text-paper mt-2 tabular-nums font-mono">
                 {s.profitFactorApprox === null ? '—' : s.profitFactorApprox.toFixed(2)}
               </p>
             </div>
-            <div className="bg-void/50 rounded-xl p-4">
+            <div className="bg-void/50 rounded-xl p-4 border border-line/30">
               <p className="text-sm font-medium text-muted">Bruto ganado / perdido (aprox.)</p>
-              <p className="text-base text-paper mt-2 tabular-nums">
+              <p className="text-base text-paper mt-2 tabular-nums font-mono">
                 {fmtMoney(s.grossProfitApprox, session.currency)} / {fmtMoney(s.grossLossApprox && -s.grossLossApprox, session.currency)}
               </p>
             </div>

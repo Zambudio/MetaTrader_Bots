@@ -13,7 +13,7 @@ interface Props {
 
 const fieldLabel = 'block text-sm font-medium text-muted mb-1.5';
 const fieldInput =
-  'w-full bg-void/50 border border-line/70 rounded-xl px-3.5 py-2.5 text-paper text-base outline-none focus:border-cyan/60 transition-colors';
+  'w-full bg-void/50 border border-line/70 rounded-xl px-3.5 py-2.5 text-paper text-base outline-none focus:border-cyan/60 focus:shadow-[0_0_0_3px_rgba(45,230,244,0.15)] transition-all';
 
 /**
  * Selector en cascada Fuente -> Modelo -> Esfuerzo. Totalmente controlado: recibe/emite el

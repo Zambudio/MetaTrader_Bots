@@ -13,9 +13,15 @@ export const AgentConfigBar = () => {
   const deletePreset = useAgentStore((state) => state.deletePreset);
 
   const [showSaveAs, setShowSaveAs] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [newName, setNewName] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  const isBaseline = Boolean(activePresetId?.startsWith('baseline-'));
+  const customPresets = presets.filter((p) => !p.id.startsWith('baseline-'));
+  const activePreset = presets.find((p) => p.id === activePresetId);
+  const isDeleteDisabled = isAnalysing || (isBaseline && customPresets.length === 0) || (!activePresetId && customPresets.length === 0);
 
   const handleLoad = (id: string) => {
     if (!id || id === activePresetId) return;
@@ -32,13 +38,16 @@ export const AgentConfigBar = () => {
     }
   };
 
-  const handleDelete = () => {
-    if (!activePresetId) return;
-    const preset = presets.find((p) => p.id === activePresetId);
-    if (!window.confirm(`¿Borrar la configuración "${preset?.name ?? ''}"? Los agentes activos ahora mismo no se ven afectados.`)) {
+  const handleDeleteClick = () => {
+    if (activePreset && !isBaseline) {
+      if (window.confirm(`¿Borrar la configuración "${activePreset.name}"? Los agentes activos ahora mismo no se ven afectados.`)) {
+        deletePreset(activePreset.id);
+      }
       return;
     }
-    deletePreset(activePresetId);
+    if (customPresets.length > 0) {
+      setShowDeleteModal(true);
+    }
   };
 
   const handleSaveAsConfirm = async () => {
@@ -59,22 +68,39 @@ export const AgentConfigBar = () => {
     }
   };
 
+  const getDeleteButtonTitle = () => {
+    if (activePreset && !isBaseline) return `Borrar la configuración "${activePreset.name}"`;
+    if (isBaseline && customPresets.length > 0) {
+      return 'La configuración activa es base (protegida). Haz clic para gestionar o borrar configuraciones personalizadas.';
+    }
+    if (isBaseline) {
+      return 'Las configuraciones base del sistema (FOREX, ACCIONES, CRIPTOMONEDAS) están protegidas y no se pueden borrar.';
+    }
+    if (customPresets.length > 0) {
+      return 'Gestionar o borrar configuraciones personalizadas.';
+    }
+    return 'No hay configuraciones personalizadas para borrar.';
+  };
+
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <select
         value={activePresetId ?? ''}
         onChange={(e) => handleLoad(e.target.value)}
         disabled={isAnalysing}
-        className="bg-panel border border-line/70 rounded-xl px-3 py-2 text-sm text-paper font-medium focus:outline-none focus:border-cyan disabled:opacity-40"
+        className="bg-panel border border-line/70 rounded-xl px-3 py-2 text-sm text-paper font-medium focus:outline-none focus:border-cyan focus:shadow-[0_0_0_3px_rgba(45,230,244,0.15)] disabled:opacity-40 transition-all cursor-pointer"
       >
         <option value="" className="bg-panel">
           — sin guardar —
         </option>
-        {presets.map((p) => (
-          <option key={p.id} value={p.id} className="bg-panel">
-            {p.name} · {p.version} · {p.referenceAsset}
-          </option>
-        ))}
+        {presets.map((p) => {
+          const details = [p.version, p.referenceAsset].filter(Boolean).join(' · ');
+          return (
+            <option key={p.id} value={p.id} className="bg-panel">
+              {details ? `${p.name} · ${details}` : p.name}
+            </option>
+          );
+        })}
       </select>
 
       {activePresetId && (
@@ -82,17 +108,18 @@ export const AgentConfigBar = () => {
           onClick={() => loadPreset(activePresetId)}
           disabled={isAnalysing}
           title="Descarta los cambios hechos desde que se cargó y vuelve a dejar los agentes tal como estaban guardados"
-          className="rounded-xl border border-line/70 text-paper/80 font-medium text-sm px-3 py-2 hover:text-cyan hover:border-cyan/50 transition-all disabled:opacity-40"
+          className="rounded-xl border border-line/70 text-paper/80 font-medium text-sm px-3 py-2 hover:text-cyan hover:border-cyan/50 hover:shadow-[0_0_12px_-4px_rgba(45,230,244,0.3)] transition-all disabled:opacity-40 cursor-pointer"
         >
           ↺ Restaurar
         </button>
       )}
 
-      {activePresetId && !activePresetId.startsWith('baseline-') && (
+      {activePresetId && !isBaseline && (
         <button
           onClick={() => overwriteActivePreset()}
           disabled={isAnalysing}
-          className="rounded-xl border border-line/70 text-paper/80 font-medium text-sm px-3 py-2 hover:text-cyan hover:border-cyan/50 transition-all disabled:opacity-40"
+          title="Sobrescribir esta configuración con los agentes actuales"
+          className="rounded-xl border border-line/70 text-paper/80 font-medium text-sm px-3 py-2 hover:text-cyan hover:border-cyan/50 hover:shadow-[0_0_12px_-4px_rgba(45,230,244,0.3)] transition-all disabled:opacity-40 cursor-pointer"
         >
           💾 Guardar
         </button>
@@ -110,25 +137,27 @@ export const AgentConfigBar = () => {
       <button
         onClick={() => setShowSaveAs(true)}
         disabled={isAnalysing}
-        className="rounded-xl border border-line/70 text-paper/80 font-medium text-sm px-3 py-2 hover:text-cyan hover:border-cyan/50 transition-all disabled:opacity-40"
+        className="rounded-xl border border-line/70 text-paper/80 font-medium text-sm px-3 py-2 hover:text-cyan hover:border-cyan/50 hover:shadow-[0_0_12px_-4px_rgba(45,230,244,0.3)] transition-all disabled:opacity-40 cursor-pointer"
       >
         Guardar como…
       </button>
 
-      {activePresetId && !activePresetId.startsWith('baseline-') && (
-        <button
-          onClick={handleDelete}
-          disabled={isAnalysing}
-          title="Borrar esta configuración"
-          className="rounded-xl border border-line/70 text-bear/80 font-medium text-sm px-3 py-2 hover:text-bear hover:border-bear/50 transition-all disabled:opacity-40"
-        >
-          🗑️
-        </button>
-      )}
+      <button
+        onClick={handleDeleteClick}
+        disabled={isDeleteDisabled}
+        title={getDeleteButtonTitle()}
+        className={`rounded-xl border font-medium text-sm px-3 py-2 transition-all ${
+          isDeleteDisabled
+            ? 'border-line/40 text-muted/30 cursor-not-allowed opacity-40'
+            : 'border-line/70 text-bear/80 hover:text-bear hover:border-bear/50 hover:shadow-[0_0_12px_-4px_rgba(255,61,110,0.3)] cursor-pointer'
+        }`}
+      >
+        🗑️
+      </button>
 
       {showSaveAs && (
-        <div className="fixed inset-0 bg-void/90 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-panel border border-line/70 rounded-2xl p-6 w-full max-w-sm space-y-4">
+        <div className="fixed inset-0 bg-void/95 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-panel border border-line/70 rounded-2xl p-6 w-full max-w-sm space-y-4 card-edge shadow-2xl">
             <h2 className="font-display font-bold text-lg text-paper tracking-wide">GUARDAR COMO…</h2>
             <div>
               <label className="block text-sm font-medium text-muted mb-1.5">Nombre de la configuración</label>
@@ -139,7 +168,7 @@ export const AgentConfigBar = () => {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleSaveAsConfirm();
                 }}
-                className="w-full bg-void/50 border border-line/70 rounded-xl px-3.5 py-2.5 text-paper text-base outline-none focus:border-cyan/60 transition-colors"
+                className="w-full bg-void/50 border border-line/70 rounded-xl px-3.5 py-2.5 text-paper text-base outline-none focus:border-cyan/60 focus:shadow-[0_0_0_3px_rgba(45,230,244,0.15)] transition-all"
               />
             </div>
             {saveError && (
@@ -154,16 +183,88 @@ export const AgentConfigBar = () => {
                   setNewName('');
                   setSaveError(null);
                 }}
-                className="text-base font-medium text-muted hover:text-paper transition-colors px-2"
+                className="text-base font-medium text-muted hover:text-paper transition-colors px-2 cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleSaveAsConfirm}
                 disabled={saving}
-                className="rounded-xl border border-cyan/60 bg-cyan/10 text-cyan font-semibold text-base px-5 py-2.5 hover:bg-cyan/20 hover:glow-cyan disabled:opacity-50 transition-all"
+                className="rounded-xl border border-cyan/60 bg-cyan/10 text-cyan font-semibold text-base px-5 py-2.5 hover:bg-cyan/20 hover:glow-cyan disabled:opacity-50 transition-all shadow-[0_0_14px_-4px_rgba(45,230,244,0.4)] cursor-pointer"
               >
                 {saving ? 'Guardando…' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-void/95 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-panel border border-line/70 rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-line/60 pb-3">
+              <h2 className="font-display font-bold text-lg text-paper tracking-wide">
+                BORRAR CONFIGURACIÓN
+              </h2>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="text-muted hover:text-paper text-lg font-mono px-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-sm text-muted">
+              Las configuraciones base del sistema (<span className="text-cyan font-medium">FOREX</span>,{' '}
+              <span className="text-cyan font-medium">ACCIONES</span>,{' '}
+              <span className="text-cyan font-medium">CRIPTOMONEDAS</span>) son inmutables y están protegidas.
+            </p>
+
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted">
+                Configuraciones personalizadas:
+              </p>
+              {customPresets.length === 0 ? (
+                <p className="text-sm text-muted italic">No hay configuraciones personalizadas guardadas.</p>
+              ) : (
+                <ul className="divide-y divide-line/40 border border-line/70 rounded-xl overflow-hidden bg-void/40">
+                  {customPresets.map((p) => (
+                    <li key={p.id} className="flex items-center justify-between px-4 py-3 gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-paper truncate">{p.name}</p>
+                        <p className="text-xs text-muted">
+                          {p.agents.length} agentes · Creada el {new Date(p.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          if (
+                            window.confirm(
+                              `¿Seguro que deseas eliminar permanentemente la configuración "${p.name}"?`
+                            )
+                          ) {
+                            await deletePreset(p.id);
+                            if (customPresets.length <= 1) {
+                              setShowDeleteModal(false);
+                            }
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-lg border border-bear/40 bg-bear/10 text-bear font-medium text-xs hover:bg-bear/20 hover:border-bear/60 transition-all shrink-0 cursor-pointer"
+                      >
+                        🗑️ Eliminar
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="rounded-xl border border-line/70 text-paper/80 font-medium text-sm px-4 py-2 hover:text-paper hover:border-line transition-all cursor-pointer"
+              >
+                Cerrar
               </button>
             </div>
           </div>

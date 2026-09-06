@@ -107,22 +107,23 @@ export const AgentLogsPanel = ({ agents, currentRun, isAnalysing, onResume }: Ag
   });
 
   return (
-    <section className="mt-14 border border-line/70 bg-card/60 backdrop-blur-md rounded-2xl p-6 md:p-8 shadow-xl">
+    <section className="mt-16 cyber-panel rounded-2xl p-6 md:p-8 card-edge relative shadow-[0_0_40px_rgba(0,0,0,0.8)]">
+      <div className="laser-line w-full h-[1px] absolute top-0" />
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-line/60">
+      <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-line-bright/60">
         <div>
           <div className="flex items-center gap-3">
             <span className="text-xl">📋</span>
-            <h2 className="font-display font-bold text-2xl text-paper tracking-wide">
-              Registro de Respuestas y Logs de Agentes
+            <h2 className="font-display font-black text-xl md:text-2xl text-paper tracking-wide">
+              Registro y Telemetría de Agentes
             </h2>
             <span
-              className={`px-3 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider ${
+              className={`px-3 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider font-mono ${
                 currentRun.status === 'done'
-                  ? 'bg-bull/20 text-bull border border-bull/40'
+                  ? 'bg-bull/20 text-bull border border-bull shadow-[0_0_14px_rgba(0,255,159,0.4)] glow-text-bull'
                   : currentRun.status === 'error'
-                    ? 'bg-bear/20 text-bear border border-bear/40'
-                    : 'bg-cyan/20 text-cyan border border-cyan/40 animate-pulse'
+                    ? 'bg-bear/20 text-bear border border-bear shadow-[0_0_14px_rgba(255,42,109,0.4)] glow-text-pink'
+                    : 'bg-cyan/20 text-cyan border border-cyan animate-pulse shadow-[0_0_14px_rgba(0,240,255,0.4)] glow-text-cyan'
               }`}
             >
               {currentRun.status === 'done'
@@ -132,8 +133,8 @@ export const AgentLogsPanel = ({ agents, currentRun, isAnalysing, onResume }: Ag
                   : 'En Ejecución'}
             </span>
           </div>
-          <p className="text-sm text-muted mt-1">
-            {completedCount} de {resultsWithAgents.length} agentes completados · Par: {currentRun.pair} ({currentRun.timeframe})
+          <p className="text-xs md:text-sm text-muted font-mono mt-1">
+            {completedCount} de {resultsWithAgents.length} agentes completados · Par: <span className="text-cyan font-semibold">{currentRun.pair}</span> ({currentRun.timeframe})
           </p>
         </div>
 
@@ -142,7 +143,7 @@ export const AgentLogsPanel = ({ agents, currentRun, isAnalysing, onResume }: Ag
             <button
               onClick={() => onResume(errorResults[0]?.result.agentId)}
               disabled={isAnalysing}
-              className="px-4 py-2.5 rounded-xl bg-bear/20 hover:bg-bear/30 text-bear border border-bear/50 font-semibold text-sm transition-all flex items-center gap-2 shadow-[0_0_12px_rgba(239,68,68,0.2)]"
+              className="px-4 py-2 rounded-xl bg-bear/20 hover:bg-bear/30 text-bear border border-bear/60 font-mono text-xs font-bold transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(255,42,109,0.3)] cursor-pointer"
             >
               🔄 Reintentar agente fallido
             </button>
@@ -150,14 +151,14 @@ export const AgentLogsPanel = ({ agents, currentRun, isAnalysing, onResume }: Ag
 
           <button
             onClick={toggleCollapseAll}
-            className="px-4 py-2.5 rounded-xl bg-paper/5 hover:bg-paper/10 text-paper/80 border border-line font-medium text-sm transition-colors flex items-center gap-2"
+            className="px-4 py-2 rounded-xl bg-void/50 hover:bg-panel-raised text-paper/80 hover:text-cyan border border-line-bright font-mono text-xs transition-colors flex items-center gap-2 cursor-pointer"
           >
             {allCollapsed ? '▾ Expandir todos' : '▸ Colapsar todos'}
           </button>
 
           <button
             onClick={handleCopyAll}
-            className="px-4 py-2.5 rounded-xl bg-paper/5 hover:bg-paper/10 text-paper/80 border border-line font-medium text-sm transition-colors flex items-center gap-2"
+            className="px-4 py-2 rounded-xl bg-void/50 hover:bg-panel-raised text-paper/80 hover:text-cyan border border-line-bright font-mono text-xs transition-colors flex items-center gap-2 cursor-pointer"
           >
             {copied ? '✓ Copiado' : '📋 Copiar todo'}
           </button>
@@ -168,40 +169,40 @@ export const AgentLogsPanel = ({ agents, currentRun, isAnalysing, onResume }: Ag
       <div className="flex items-center gap-2 pt-6 pb-4 overflow-x-auto">
         <button
           onClick={() => setFilter('all')}
-          className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+          className={`px-4 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all cursor-pointer ${
             filter === 'all'
-              ? 'bg-cyan/20 text-cyan border border-cyan/50'
-              : 'text-muted hover:text-paper hover:bg-paper/5 border border-transparent'
+              ? 'bg-cyan/20 text-cyan border border-cyan shadow-[0_0_12px_rgba(0,240,255,0.35)] glow-text-cyan'
+              : 'text-muted hover:text-paper hover:bg-void/60 border border-line-bright'
           }`}
         >
           Todos ({resultsWithAgents.length})
         </button>
         <button
           onClick={() => setFilter('text')}
-          className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+          className={`px-4 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all cursor-pointer ${
             filter === 'text'
-              ? 'bg-cyan/20 text-cyan border border-cyan/50'
-              : 'text-muted hover:text-paper hover:bg-paper/5 border border-transparent'
+              ? 'bg-cyan/20 text-cyan border border-cyan shadow-[0_0_12px_rgba(0,240,255,0.35)] glow-text-cyan'
+              : 'text-muted hover:text-paper hover:bg-void/60 border border-line-bright'
           }`}
         >
           Análisis Técnicos/Fundamentales
         </button>
         <button
           onClick={() => setFilter('strategy')}
-          className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+          className={`px-4 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all cursor-pointer ${
             filter === 'strategy'
-              ? 'bg-cyan/20 text-cyan border border-cyan/50'
-              : 'text-muted hover:text-paper hover:bg-paper/5 border border-transparent'
+              ? 'bg-cyan/20 text-cyan border border-cyan shadow-[0_0_12px_rgba(0,240,255,0.35)] glow-text-cyan'
+              : 'text-muted hover:text-paper hover:bg-void/60 border border-line-bright'
           }`}
         >
           Estrategia
         </button>
         <button
           onClick={() => setFilter('verdict')}
-          className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+          className={`px-4 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all cursor-pointer ${
             filter === 'verdict'
-              ? 'bg-cyan/20 text-cyan border border-cyan/50'
-              : 'text-muted hover:text-paper hover:bg-paper/5 border border-transparent'
+              ? 'bg-cyan/20 text-cyan border border-cyan shadow-[0_0_12px_rgba(0,240,255,0.35)] glow-text-cyan'
+              : 'text-muted hover:text-paper hover:bg-void/60 border border-line-bright'
           }`}
         >
           Veredicto
@@ -209,10 +210,10 @@ export const AgentLogsPanel = ({ agents, currentRun, isAnalysing, onResume }: Ag
         {errorResults.length > 0 && (
           <button
             onClick={() => setFilter('errors')}
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+            className={`px-4 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all cursor-pointer ${
               filter === 'errors'
-                ? 'bg-bear/20 text-bear border border-bear/50'
-                : 'text-bear/80 hover:bg-bear/10 border border-transparent'
+                ? 'bg-bear/20 text-bear border border-bear shadow-[0_0_12px_rgba(255,42,109,0.35)] glow-text-pink'
+                : 'text-bear/80 hover:bg-bear/10 border border-bear/30'
             }`}
           >
             Errores ({errorResults.length})
@@ -286,7 +287,7 @@ export const AgentLogsPanel = ({ agents, currentRun, isAnalysing, onResume }: Ag
                       <span className="text-xs text-muted">({agent.role})</span>
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-xs font-mono text-cyan bg-cyan/10 px-2 py-0.5 rounded border border-cyan/20">
+                      <span className="text-xs font-mono text-cyan bg-cyan/10 px-2 py-0.5 rounded border border-cyan/20 shadow-[0_0_8px_-2px_rgba(45,230,244,0.25)]">
                         {agent.model ?? 'auto'}
                       </span>
                       {duration && (
@@ -298,13 +299,13 @@ export const AgentLogsPanel = ({ agents, currentRun, isAnalysing, onResume }: Ag
 
                 <div className="flex items-center gap-2">
                   <span
-                    className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    className={`px-3 py-1 rounded-full text-xs font-medium font-mono ${
                       result.status === 'done'
-                        ? 'bg-bull/15 text-bull border border-bull/30'
+                        ? 'bg-bull/15 text-bull border border-bull/30 shadow-[0_0_10px_-2px_rgba(57,255,176,0.3)]'
                         : result.status === 'error'
-                          ? 'bg-bear/20 text-bear border border-bear/40'
+                          ? 'bg-bear/20 text-bear border border-bear/40 shadow-[0_0_10px_-2px_rgba(255,61,110,0.3)]'
                           : result.status === 'running'
-                            ? 'bg-cyan/20 text-cyan border border-cyan/40 animate-pulse'
+                            ? 'bg-cyan/20 text-cyan border border-cyan/40 animate-pulse shadow-[0_0_10px_-2px_rgba(45,230,244,0.3)]'
                             : 'bg-paper/5 text-muted border border-line'
                     }`}
                   >

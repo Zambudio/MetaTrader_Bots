@@ -130,6 +130,16 @@ export function AgentConnections({ agents, resultsByAgentId, containerRef, cardR
       aria-hidden="true"
     >
       <defs>
+        <filter id="neon-glow-cyan" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor="#00f0ff" floodOpacity="0.85" />
+        </filter>
+        <filter id="neon-glow-bull" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="#00ff9f" floodOpacity="0.75" />
+        </filter>
+        <filter id="neon-glow-bear" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="#ff2a6d" floodOpacity="0.75" />
+        </filter>
+
         {MARKER_STATES.map((state) => (
           <marker
             key={state}
@@ -151,10 +161,19 @@ export function AgentConnections({ agents, resultsByAgentId, containerRef, cardR
           d={edge.d}
           fill="none"
           stroke={EDGE_COLOR[edge.status]}
-          strokeWidth={2}
+          strokeWidth={edge.status === 'running' ? 2.5 : 2}
           strokeLinejoin="round"
           strokeLinecap="round"
           markerEnd={`url(#agent-arrow-${edge.status})`}
+          filter={
+            edge.status === 'running'
+              ? 'url(#neon-glow-cyan)'
+              : edge.status === 'done'
+              ? 'url(#neon-glow-bull)'
+              : edge.status === 'error'
+              ? 'url(#neon-glow-bear)'
+              : undefined
+          }
           className={edge.status === 'running' ? 'agent-edge-flow' : undefined}
         >
           <title>{edge.title}</title>

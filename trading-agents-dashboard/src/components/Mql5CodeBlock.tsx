@@ -51,12 +51,12 @@ export const Mql5CodeBlock = ({ result, onOptimize, isOptimizing }: Props) => {
         <div className="flex items-center gap-2.5">
           <p className="text-sm font-bold text-cyan tracking-wide font-mono uppercase">{result.filename}</p>
           {result.iteration && result.iteration > 1 && (
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-cyan/20 text-cyan border border-cyan/40">
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-cyan/20 text-cyan border border-cyan/40 shadow-[0_0_10px_-2px_rgba(45,230,244,0.35)]">
               Iteración #{result.iteration}
             </span>
           )}
           {isClean && (
-            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-bull/20 text-bull border border-bull/40">
+            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-bull/20 text-bull border border-bull/40 shadow-[0_0_10px_-2px_rgba(57,255,176,0.3)]">
               ✓ Compilado OK
             </span>
           )}
@@ -66,7 +66,7 @@ export const Mql5CodeBlock = ({ result, onOptimize, isOptimizing }: Props) => {
             </span>
           )}
           {hasErrors && (
-            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-bear/20 text-bear border border-bear/40">
+            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-bear/20 text-bear border border-bear/40 shadow-[0_0_10px_-2px_rgba(255,61,110,0.3)]">
               ⛔ Errores de compilación
             </span>
           )}
@@ -77,7 +77,7 @@ export const Mql5CodeBlock = ({ result, onOptimize, isOptimizing }: Props) => {
             <button
               onClick={onOptimize}
               disabled={isOptimizing}
-              className="text-sm font-semibold px-4 py-1.5 rounded-lg bg-cyan/20 hover:bg-cyan/30 text-cyan border border-cyan/50 transition-all flex items-center gap-1.5 shadow-[0_0_12px_rgba(6,182,212,0.25)]"
+              className="text-sm font-semibold px-4 py-1.5 rounded-lg bg-cyan/20 hover:bg-cyan/30 text-cyan border border-cyan/50 transition-all flex items-center gap-1.5 shadow-[0_0_14px_-3px_rgba(45,230,244,0.4)] hover:shadow-[0_0_20px_-3px_rgba(45,230,244,0.55)]"
             >
               {isOptimizing ? '⏳ Optimizando…' : '🧠 Iterar con IA (Optimizar)'}
             </button>
@@ -196,11 +196,11 @@ export const Mql5CodeBlock = ({ result, onOptimize, isOptimizing }: Props) => {
 
       {/* Backtest Simulation Results Card */}
       {(stats || (result.optimizationNotes && result.optimizationNotes.length > 0)) && (
-        <div className="p-5 bg-void/70 border border-cyan/30 rounded-2xl space-y-4 shadow-lg">
+        <div className="p-5 bg-void/70 border border-cyan/30 rounded-2xl space-y-4 shadow-lg card-edge">
           <div className="flex items-center justify-between border-b border-line/60 pb-3">
             <div className="flex items-center gap-2">
               <span className="text-base">📊</span>
-              <h4 className="text-sm font-semibold text-paper uppercase tracking-wider">
+              <h4 className="text-sm font-semibold text-paper uppercase tracking-wider font-mono">
                 Resultados de la Simulación Histórica (MetaTrader 5)
               </h4>
             </div>
@@ -208,8 +208,8 @@ export const Mql5CodeBlock = ({ result, onOptimize, isOptimizing }: Props) => {
               <span
                 className={`px-3 py-0.5 rounded-full text-xs font-bold font-mono ${
                   stats.netProfit >= 0
-                    ? 'bg-bull/20 text-bull border border-bull/40'
-                    : 'bg-bear/20 text-bear border border-bear/40'
+                    ? 'bg-bull/20 text-bull border border-bull/40 shadow-[0_0_10px_-2px_rgba(57,255,176,0.3)]'
+                    : 'bg-bear/20 text-bear border border-bear/40 shadow-[0_0_10px_-2px_rgba(255,61,110,0.3)]'
                 }`}
               >
                 {stats.netProfit >= 0 ? `+${stats.netProfit.toFixed(2)} USD` : `${stats.netProfit.toFixed(2)} USD`}
@@ -328,7 +328,7 @@ export const Mql5CodeBlock = ({ result, onOptimize, isOptimizing }: Props) => {
           Código oculto ({result.code.split('\n').length} líneas) — pulsa para expandir
         </button>
       ) : (
-        <pre className="bg-void/70 rounded-xl p-4 overflow-x-auto text-sm text-paper/90 font-mono leading-relaxed border border-line/40">
+        <pre className="bg-void/70 rounded-xl p-4 overflow-x-auto text-sm text-paper/90 font-mono-tech leading-relaxed border border-line/40">
           <code>{result.code}</code>
         </pre>
       )}

@@ -12,9 +12,9 @@ interface Props {
   onDelete?: () => Promise<void>;
 }
 
-const fieldLabel = 'block text-sm font-medium text-muted mb-1.5';
+const fieldLabel = 'block text-xs font-mono font-bold uppercase tracking-wider text-muted mb-1.5';
 const fieldInput =
-  'w-full bg-void/50 border border-line/70 rounded-xl px-3.5 py-2.5 text-paper text-base outline-none focus:border-cyan/60 transition-colors';
+  'w-full bg-void/70 border border-line-bright rounded-xl px-3.5 py-2.5 text-paper font-medium text-base outline-none focus:border-cyan focus:shadow-[0_0_15px_rgba(0,240,255,0.25)] transition-all';
 
 export const AgentConfigModal = ({ agent, otherAgents, onClose, onSave, onDelete }: Props) => {
   const allAgents = useAgentStore((state) => state.agents);
@@ -63,23 +63,24 @@ export const AgentConfigModal = ({ agent, otherAgents, onClose, onSave, onDelete
   };
 
   return (
-    <div className="fixed inset-0 bg-void/90 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-panel border border-line/70 rounded-2xl p-6 md:p-8 w-full max-w-lg space-y-5 max-h-[90vh] overflow-y-auto">
-        <div className="pb-4 border-b border-line/60 flex items-center gap-3">
+    <div className="fixed inset-0 bg-void/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
+      <div className="cyber-panel border border-cyan/30 rounded-2xl p-6 md:p-8 w-full max-w-lg space-y-5 max-h-[90vh] overflow-y-auto card-edge shadow-[0_0_50px_rgba(0,0,0,0.9)] relative">
+        <div className="laser-line w-full h-[1px] absolute top-0" />
+        <div className="pb-4 border-b border-line-bright/60 flex items-center gap-3">
           {photo && !photoFailed ? (
             <img
               src={photo}
               alt=""
               onError={() => setPhotoFailed(true)}
-              className="w-12 h-12 rounded-full object-cover border border-line"
+              className="w-12 h-12 rounded-full object-cover border-2 border-cyan/40 shadow-[0_0_12px_rgba(0,240,255,0.3)]"
             />
           ) : (
-            <div className="w-12 h-12 rounded-full bg-panel-raised flex items-center justify-center font-display font-bold text-cyan">
+            <div className="w-12 h-12 rounded-full bg-panel-raised border border-cyan/30 flex items-center justify-center font-display font-black text-cyan glow-text-cyan">
               {(name.trim()[0] ?? '?').toUpperCase()}
             </div>
           )}
-          <h2 className="font-display font-bold text-xl text-paper tracking-wide">
-            {agent ? 'CONFIGURAR AGENTE' : 'AÑADIR AGENTE'}
+          <h2 className="font-display font-black text-xl text-paper tracking-wider uppercase">
+            {agent ? 'Configurar Agente' : 'Añadir Agente'}
           </h2>
         </div>
 
@@ -201,7 +202,7 @@ export const AgentConfigModal = ({ agent, otherAgents, onClose, onSave, onDelete
             <button
               onClick={handleSave}
               disabled={saving}
-              className="rounded-xl border border-cyan/60 bg-cyan/10 text-cyan font-semibold text-base px-5 py-2.5 hover:bg-cyan/20 hover:glow-cyan disabled:opacity-50 transition-all"
+              className="rounded-xl cyber-btn-cta text-cyan hover:text-white font-bold text-base px-6 py-2.5 transition-all shadow-[0_0_16px_rgba(0,240,255,0.4)] cursor-pointer disabled:opacity-40"
             >
               {saving ? 'Guardando…' : 'Guardar'}
             </button>

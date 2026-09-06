@@ -1,20 +1,26 @@
 @import "tailwindcss";
 
 @theme {
-  --color-void: #05070c;
-  --color-panel: #0e1420;
-  --color-panel-raised: #141c2c;
-  --color-line: #24304a;
-  --color-paper: #eaf1fb;
-  --color-muted: #7c8aa5;
-  --color-cyan: #22d3ee;
-  --color-cyan-soft: #7ee6f7;
+  --color-void: #02050c;
+  --color-panel: #070c18;
+  --color-panel-raised: #0d1527;
+  --color-card: #091020;
+  --color-line: #162238;
+  --color-line-bright: #25385c;
+  --color-paper: #f1f6ff;
+  --color-muted: #889bb8;
+  --color-cyan: #00f0ff;
+  --color-cyan-soft: #70f3ff;
+  --color-pink: #ff007f;
+  --color-magenta: #f43f5e;
   --color-violet: #a855f7;
-  --color-bull: #34e5a8;
-  --color-bear: #fb4570;
+  --color-bull: #00ff9f;
+  --color-bear: #ff2a6d;
+  --color-amber: #ffb703;
 
   --font-display: "Orbitron", "Plus Jakarta Sans", sans-serif;
   --font-body: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-mono-tech: "JetBrains Mono", "SFMono-Regular", "Consolas", monospace;
 }
 
 html {
@@ -22,33 +28,171 @@ html {
 }
 
 body {
-  background: var(--color-void);
+  background-color: #02050c;
   color: var(--color-paper);
   font-family: var(--font-body);
   min-height: 100vh;
+  /* Fondo cyberpunk: rejilla holográfica + nebulosas de neón cyan, magenta y violeta */
+  background-image:
+    radial-gradient(1200px 600px at 80% -5%, rgba(0, 240, 255, 0.13), transparent 60%),
+    radial-gradient(900px 500px at 15% 8%, rgba(255, 0, 127, 0.09), transparent 55%),
+    radial-gradient(1100px 650px at 50% 115%, rgba(168, 85, 247, 0.1), transparent 60%),
+    linear-gradient(rgba(0, 240, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.04) 1px, transparent 1px);
+  background-size: auto, auto, auto, 44px 44px, 44px 44px;
+  background-attachment: fixed;
+  overflow-x: hidden;
 }
 
 ::selection {
   background: var(--color-cyan);
-  color: var(--color-void);
+  color: #02050c;
 }
 
 :focus-visible {
   outline: 2px solid var(--color-cyan);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 8px;
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-cyan) 25%, transparent);
 }
 
-.glow-cyan {
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-cyan) 35%, transparent), 0 0 24px -8px color-mix(in srgb, var(--color-cyan) 55%, transparent);
+/* ============ Text Glows Cyberpunk ============ */
+
+.glow-text-cyan {
+  text-shadow: 0 0 10px rgba(0, 240, 255, 0.75), 0 0 24px rgba(0, 240, 255, 0.45);
 }
+
+.glow-text-pink {
+  text-shadow: 0 0 10px rgba(255, 0, 127, 0.75), 0 0 24px rgba(255, 0, 127, 0.45);
+}
+
+.glow-text-bull {
+  text-shadow: 0 0 10px rgba(0, 255, 159, 0.75), 0 0 24px rgba(0, 255, 159, 0.45);
+}
+
+.glow-text-violet {
+  text-shadow: 0 0 10px rgba(168, 85, 247, 0.75), 0 0 24px rgba(168, 85, 247, 0.45);
+}
+
+/* ============ Utilidades de neón / glow ============ */
+
+.glow-cyan {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-cyan) 50%, transparent),
+    0 0 25px -3px color-mix(in srgb, var(--color-cyan) 65%, transparent);
+}
+
+.glow-pink {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-pink) 50%, transparent),
+    0 0 25px -3px color-mix(in srgb, var(--color-pink) 65%, transparent);
+}
+
+.glow-bull {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-bull) 50%, transparent),
+    0 0 25px -3px color-mix(in srgb, var(--color-bull) 60%, transparent);
+}
+
+.glow-bear {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-bear) 50%, transparent),
+    0 0 25px -3px color-mix(in srgb, var(--color-bear) 60%, transparent);
+}
+
+/* ============ Tarjetas y Paneles Cyberpunk ============ */
+
+.cyber-panel {
+  background: linear-gradient(165deg, rgba(12, 19, 36, 0.78) 0%, rgba(6, 10, 22, 0.88) 100%);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 240, 255, 0.16);
+  box-shadow:
+    0 12px 32px -8px rgba(0, 0, 0, 0.75),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cyber-panel:hover {
+  border-color: rgba(0, 240, 255, 0.38);
+  box-shadow:
+    0 16px 40px -8px rgba(0, 0, 0, 0.85),
+    0 0 28px -4px rgba(0, 240, 255, 0.22);
+}
+
+.cyber-card-interactive {
+  background: linear-gradient(165deg, rgba(13, 22, 40, 0.8) 0%, rgba(7, 12, 24, 0.9) 100%);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(0, 240, 255, 0.18);
+  box-shadow:
+    0 10px 25px -6px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cyber-card-interactive:hover {
+  border-color: rgba(0, 240, 255, 0.5);
+  box-shadow:
+    0 16px 36px -8px rgba(0, 0, 0, 0.85),
+    0 0 30px -4px rgba(0, 240, 255, 0.35);
+  transform: translateY(-3px);
+}
+
+/* Botón CTA Cyberpunk Principal */
+.cyber-btn-cta {
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.22) 0%, rgba(255, 0, 127, 0.22) 100%);
+  border: 1px solid rgba(0, 240, 255, 0.75);
+  box-shadow:
+    0 0 22px -2px rgba(0, 240, 255, 0.45),
+    inset 0 0 14px rgba(0, 240, 255, 0.2);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cyber-btn-cta:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.36) 0%, rgba(255, 0, 127, 0.36) 100%);
+  border-color: rgba(0, 240, 255, 1);
+  box-shadow:
+    0 0 35px 2px rgba(0, 240, 255, 0.75),
+    0 0 15px 1px rgba(255, 0, 127, 0.4),
+    inset 0 0 20px rgba(0, 240, 255, 0.35);
+  transform: translateY(-2px) scale(1.02);
+}
+
+.cyber-btn-cta:active:not(:disabled) {
+  transform: translateY(1px) scale(0.98);
+}
+
+/* Fondo de cristal con borde técnico (ángulo escuadrado en una esquina) */
+.card-edge {
+  position: relative;
+}
+.card-edge::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  border-top: 2px solid var(--color-cyan);
+  border-right: 2px solid var(--color-cyan);
+  border-radius: 0 0 0 6px;
+  opacity: 0.8;
+  pointer-events: none;
+  filter: drop-shadow(0 0 4px var(--color-cyan));
+}
+.card-edge:hover::after {
+  opacity: 1;
+  filter: drop-shadow(0 0 8px var(--color-cyan));
+}
+
+/* ============ Animaciones ============ */
 
 @keyframes pulse-soft {
   50% {
-    opacity: 0.35;
+    opacity: 0.3;
   }
 }
-
 .pulse-soft {
   animation: pulse-soft 1.6s ease-in-out infinite;
 }
@@ -58,7 +202,6 @@ body {
     background-position: 24px 0;
   }
 }
-
 .flow-x {
   background-image: repeating-linear-gradient(
     90deg,
@@ -75,7 +218,6 @@ body {
     background-position: 0 24px;
   }
 }
-
 .flow-y {
   background-image: repeating-linear-gradient(
     180deg,
@@ -91,11 +233,113 @@ body {
   stroke-dasharray: 5 5;
   animation: agent-edge-flow 0.6s linear infinite;
 }
-
 @keyframes agent-edge-flow {
   to {
     stroke-dashoffset: -10;
   }
+}
+
+/* Parpadeo de datos en vivo / scanline sutil */
+@keyframes scan-flicker {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.82;
+  }
+}
+.scan-flicker {
+  animation: scan-flicker 3.4s steps(2, end) infinite;
+}
+
+/* Barrido de brillo al pasar el ratón por tarjetas */
+@keyframes sheen {
+  0% {
+    transform: translateX(-130%);
+  }
+  100% {
+    transform: translateX(130%);
+  }
+}
+.card-sheen {
+  position: relative;
+  overflow: hidden;
+}
+.card-sheen::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 55%;
+  background: linear-gradient(
+    105deg,
+    transparent,
+    color-mix(in srgb, white 7%, transparent),
+    transparent
+  );
+  transform: translateX(-130%);
+  pointer-events: none;
+}
+.card-sheen:hover::before {
+  animation: sheen 0.85s ease;
+}
+
+/* Animación de halo neón y láser */
+@keyframes neon-halo {
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.05);
+  }
+}
+.animate-neon-halo {
+  animation: neon-halo 3s ease-in-out infinite;
+}
+
+@keyframes laser-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  50%, 100% {
+    transform: translateX(100%);
+  }
+}
+.laser-line {
+  position: relative;
+  overflow: hidden;
+}
+.laser-line::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, var(--color-cyan), transparent);
+  animation: laser-sweep 3.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  opacity: 0.8;
+}
+
+/* Scrollbars cyberpunk */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #030611;
+}
+::-webkit-scrollbar-thumb {
+  background: #162238;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 240, 255, 0.2);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 240, 255, 0.5);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.8);
 }
 
 @media (prefers-reduced-motion: reduce) {
