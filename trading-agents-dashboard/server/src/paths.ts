@@ -16,3 +16,6 @@ export const MQL5_KNOWN_ISSUES_FILE = path.join(DATA_DIR, 'mql5-known-issues.jso
 export const MQL5_KNOWN_ISSUES_DOC = path.join(currentDir, '..', '..', 'docs', 'MQL5_ERRORES_CONOCIDOS.md');
 export const WIKI_DIR = path.join(currentDir, '..', '..', '..', 'wiki-Traiding');
 export const WIKI_INDEX_FILE = path.join(WIKI_DIR, 'index.md');
+export const NEWS_SOURCES_FILE = path.join(DATA_DIR, 'newsSources.json');
+export const NEWS_ITEMS_DIR = path.join(DATA_DIR, 'news-items');
+
