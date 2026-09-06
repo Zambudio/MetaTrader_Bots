@@ -1,6 +1,6 @@
 # Timeout de 180s agotado en producción + botón "Detener análisis"
 
-**Fecha:** 2026-09-06. **Estado: ✅ DESPLEGADO** (`main` `a0dcc0f`, `npm run build` + `pm2 restart trading-dashboard`, arranque limpio verificado en logs, dos veces).
+**Fecha:** 2026-09-06. **Estado: 🟡 DESPLEGADO, PERO EL USUARIO REPORTA QUE SIGUE SIN IR BIEN** (`main` `a0dcc0f`/`00ff004`, `npm run build` + `pm2 restart trading-dashboard`, arranque limpio verificado en logs, dos veces). Ver §"Estado tras el despliegue" al final — no se maquilla como resuelto.
 
 ## Síntoma reportado
 
@@ -54,3 +54,7 @@ Pedido explícito de Pedro: poder detener un análisis en curso en vez de espera
 - No se ha probado el botón "Detener análisis" en vivo con una llamada real a Claude/OmniRoute en curso (verificado mediante tests de integración con un proceso real, pero no desde la UI con la suscripción real).
 - Backport de la resiliencia de CLI (`AGENT_CLI_RETRIES`/`isTransientCliError`) de `validacion-real-forex` a `main`: pendiente, no crítico para el síntoma reportado (ver diagnóstico arriba).
 - `retryStrategyForBacktestFailure` (el bucle de reconsideración de estrategia tras un backtest real fallido) no recibe el `AbortSignal` — queda fuera de alcance de este botón por ahora; no se invoca desde la ruta de "Ejecutar análisis"/"Reintentar" que el botón cubre.
+
+## Estado tras el despliegue (mismo día, después de las verificaciones de arriba)
+
+Pedro reporta explícitamente que, tras el despliegue, la experiencia sigue sin ir bien ("esto va como el culo"), sin especificar todavía el síntoma exacto. No se maquilla este informe como un cierre exitoso: los tres cambios de esta entrada (timeout, botón detener, y el fix del día anterior sobre sincronía de modelo) están verificados por tests + typecheck + arranque limpio del proceso, pero **no** hay todavía una confirmación en vivo de que la experiencia global del usuario sea satisfactoria. Pendiente: que Pedro aporte el síntoma concreto (captura, mensaje de error, agente afectado) para diagnosticar el siguiente problema real, en vez de asumir que los fixes de hoy bastan.
