@@ -3,10 +3,16 @@ import type { Agent, AgentConfigPreset, DataCapability, MarketType } from '../ty
 const CREATED_AT = '2026-08-30T00:00:00.000Z';
 // Motor por defecto: OmniRoute (router local propio), no las suscripciones Claude/ChatGPT del
 // usuario — decisión explícita para dejar de consumir esas cuotas en el uso diario del dashboard.
-// `auto/best-reasoning` para todo lo que exige aritmética/arbitraje correcto (especialistas
-// obligatorios, estrategia, riesgo, crítico, juez); `auto/best-fast` para los especialistas
-// opcionales, que casi siempre se abstienen por DATA_NOT_AVAILABLE y no necesitan el modelo caro.
-const OMNI_REASONING = 'omniroute:auto/best-reasoning';
+// `auto/best-coding` para todo lo que exige tool-calling fiable (especialistas obligatorios,
+// estrategia, riesgo, crítico, juez — TODOS devuelven su contrato vía function-calling).
+// `auto/best-reasoning` se probó primero y quedó descartado: con prompt+tool_choice reales
+// (no solo texto plano) tardaba 100-300s+ por llamada, agotando su propio timeout y cayendo al
+// fallback interno (`OMNIROUTE_FALLBACK_MODELS`, que ya incluye auto/pro-coding) — es decir,
+// pagaba el timeout completo para acabar en el mismo sitio. `auto/best-coding` responde
+// correctamente en ~10-30s con la misma llamada real. `auto/best-fast` para los especialistas
+// opcionales, que casi siempre se abstienen por DATA_NOT_AVAILABLE y no necesitan tool-calling
+// fiable con contenido complejo.
+const OMNI_STRUCTURED = 'omniroute:auto/best-coding';
 const OMNI_FAST = 'omniroute:auto/best-fast';
 
 const CONTRACT = `Devuelve exclusivamente el contrato estructurado solicitado. Separa DATO (con source exacto), INFERENCIA, HIPOTESIS y CONCLUSION. No inventes precios, noticias, fundamentales ni métricas. Si un dato necesario no está en el contexto, usa status=data_not_available y DATA_NOT_AVAILABLE en la conclusión. Confianza entre 0 y 1; reduce la confianza cuando el snapshot esté obsoleto.`;
@@ -27,7 +33,7 @@ function specialist(
     systemPrompt: `${prompt}\n\n${CONTRACT}`,
     dependsOn: [],
     outputType: 'analysis',
-    model: optional ? OMNI_FAST : OMNI_REASONING,
+    model: optional ? OMNI_FAST : OMNI_STRUCTURED,
     enabled: true,
     inputs: requiredData,
     outputs: ['AgentAnalysis'],
@@ -56,7 +62,7 @@ Propón una única regla de entrada mecánica con un evento y como máximo un fi
     dependsOn,
     optionalDependsOn,
     outputType: 'strategy',
-    model: OMNI_REASONING,
+    model: OMNI_STRUCTURED,
     enabled: true,
     inputs: ['Análisis estructurados de especialistas', 'market_snapshot'],
     outputs: ['StrategyProposalLite'],
@@ -84,7 +90,7 @@ ${isRisk
 ${CONTRACT}`,
     dependsOn: [strategyId],
     outputType: 'analysis',
-    model: OMNI_REASONING,
+    model: OMNI_STRUCTURED,
     enabled: true,
     inputs: ['StrategyProposalLite', 'market_snapshot', 'Análisis de especialistas'],
     outputs: ['AgentAnalysis con blockers y recommendation'],
@@ -105,7 +111,7 @@ function judgeAgent(id: string, riskId: string, criticId: string): Agent {
     systemPrompt: `Emite GO solo para generar/backtestear una hipótesis; nunca significa rentable ni autorizada para vivo. Un blocker no puede descartarse sin explicar su resolución con evidencia recibida. AJUSTAR requiere blockers corregibles; NO_OPERAR se usa para contradicción no corregible o datos insuficientes. No inventes evidencia. Enumera conflictos resueltos y blockers pendientes.`,
     dependsOn: [riskId, criticId],
     outputType: 'verdict',
-    model: OMNI_REASONING,
+    model: OMNI_STRUCTURED,
     enabled: true,
     inputs: ['Revisión de riesgo', 'Crítica adversarial', 'Propuesta y evidencia ancestral'],
     outputs: ['VerdictResult'],
