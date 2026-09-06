@@ -61,6 +61,10 @@ interface AgentStore {
   addAgent: (agent: Partial<Agent>) => Promise<void>;
   updateAgent: (id: string, updates: Partial<Agent>) => Promise<void>;
   removeAgent: (id: string) => Promise<void>;
+  /** Limpia dependsOn/optionalDependsOn de TODOS los agentes cargados, solo en memoria (no llama
+   * al backend, no persiste). Para empezar a rediseñar una cadena desde cero reutilizando agentes
+   * existentes. Ver wiki-Traiding/proyecto-dashboard/specs/2026-09-06-estrategias-simples-y-noticias-design.md */
+  detachAgentRelations: () => void;
   savePresetAs: (name: string) => Promise<void>;
   overwriteActivePreset: () => Promise<void>;
   loadPreset: (id: string) => Promise<void>;
@@ -155,6 +159,12 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
       });
       throw err;
     }
+  },
+
+  detachAgentRelations: () => {
+    set((state) => ({
+      agents: state.agents.map((a) => ({ ...a, dependsOn: [], optionalDependsOn: [] })),
+    }));
   },
 
   removeAgent: async (id) => {
