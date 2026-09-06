@@ -32,6 +32,7 @@
 
 - [`2026-08-15-multi-parent-dependencies-design.md`](specs/2026-08-15-multi-parent-dependencies-design.md) — diseño aprobado (aprobado 2026-08-15) previo al plan de arriba: por qué `dependsOn` pasa de `string | null` a `string[]`, y qué módulos del motor de orquestación y del frontend se ven afectados.
 - [`2026-08-19-agent-config-presets-design.md`](specs/2026-08-19-agent-config-presets-design.md) — diseño aprobado (aprobado 2026-08-19) para el log de agentes colapsable y las configuraciones nombradas y guardables de la cadena de agentes (con activar/desactivar agentes por configuración). Pendiente de plan de implementación.
+- [`2026-09-06-estrategias-simples-y-noticias-design.md`](specs/2026-09-06-estrategias-simples-y-noticias-design.md) — diseño aprobado (aprobado 2026-09-06), escrito para entregarse a otro agente (Antigravity) sin contexto previo. Tres fases: **1A** botón "Crear nueva estrategia" (desconecta `dependsOn` de los agentes cargados solo en el lienzo de edición, sin persistir); **1B** sistema de noticias nuevo (fuentes RSS/URL genérica, registro consultable, resumen periódico volcado como página nueva de la wiki — Telegram documentado como ampliación futura, no implementada); **2** (alto nivel, prompts sin fijar) tres presets nuevos "Simple" (FOREX/ACCIONES/CRIPTOMONEDAS) con máximo 3 agentes en cadena estrictamente serial, `omniroute:auto/best-coding` por defecto, usando la wiki ya existente. Las configuraciones actuales no se tocan en ninguna fase. Pendiente de plan de implementación.
 
 ## Estado
 
