@@ -80,3 +80,16 @@ export async function markDigested(sourceId: string, ids: string[]): Promise<voi
   await writeJson(itemsFile(sourceId), updated);
 }
 
+export async function listAllRecentNews(limit = 10): Promise<NewsItem[]> {
+  const sources = await listSources();
+  const activeSources = sources.filter((s) => s.enabled);
+  const allItems: NewsItem[] = [];
+  for (const source of activeSources) {
+    const items = await listItems(source.id);
+    allItems.push(...items);
+  }
+  return allItems
+    .sort((a, b) => new Date(b.publishedAt || b.fetchedAt).getTime() - new Date(a.publishedAt || a.fetchedAt).getTime())
+    .slice(0, limit);
+}
+

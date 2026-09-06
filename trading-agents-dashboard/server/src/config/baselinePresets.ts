@@ -129,7 +129,8 @@ function preset(
   marketType: MarketType,
   referenceAsset: string,
   capabilities: DataCapability[],
-  agents: Agent[]
+  agents: Agent[],
+  customName?: string
 ): AgentConfigPreset {
   const allCapabilities: DataCapability[] = [
     'market_snapshot', 'ohlcv', 'session_clock', 'verified_macro_calendar', 'verified_news',
@@ -139,7 +140,7 @@ function preset(
     // El id incorpora la versión: cada revisión se guarda como un preset nuevo
     // y las ejecuciones antiguas continúan siendo reproducibles.
     id: `baseline-${key.toLowerCase()}-${version.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`,
-    name: key,
+    name: customName ?? key,
     schemaVersion: 'multiagent-config.v1',
     key,
     version,
@@ -198,12 +199,168 @@ const cryptoAgents: Agent[] = [
   judgeAgent('crypto-judge', 'crypto-risk', 'crypto-critic'),
 ];
 
+function simpleSpecialist(
+  id: string,
+  name: string,
+  responsibility: string,
+  prompt: string,
+  requiredData: DataCapability[]
+): Agent {
+  return {
+    id,
+    name,
+    role: name,
+    responsibility,
+    systemPrompt: `${prompt}\n\n${CONTRACT}`,
+    dependsOn: [],
+    outputType: 'analysis',
+    model: OMNI_STRUCTURED,
+    enabled: true,
+    inputs: requiredData,
+    outputs: ['AgentAnalysis'],
+    tools: requiredData.filter((d) => d === 'market_snapshot' || d === 'session_clock' || d === 'ohlcv'),
+    activation: {
+      mode: 'data_available',
+      requiredData: ['market_snapshot'],
+      description: 'Ejecutar cuando esté disponible el snapshot técnico del mercado.',
+    },
+    abstentionConditions: ['Snapshot de mercado ausente', 'Datos técnicos contradictorios'],
+    weight: 0.3,
+    interventionType: 'specialist',
+  };
+}
+
+function simpleStrategyAgent(
+  id: string,
+  name: string,
+  analystId: string,
+  marketInstruction: string
+): Agent {
+  return {
+    id,
+    name,
+    role: name,
+    responsibility: 'Transformar el análisis técnico en una hipótesis mecánica unificada apta para validación.',
+    systemPrompt: `${marketInstruction}
+Propón una única regla de entrada mecánica con un evento y como máximo un filtro. Usa solo campos presentes en el snapshot. La salida es una hipótesis para backtest, no una orden. Calcula entrada, SL y TP numéricos desde el cierre/ATR provistos, R:R >= 1.60 y riskPercent <= 1.0. Si falta snapshot o ATR, abstente: nunca inventes números. Distingue evidencia, riesgos e invalidaciones.`,
+    dependsOn: [analystId],
+    outputType: 'strategy',
+    model: OMNI_STRUCTURED,
+    enabled: true,
+    inputs: ['Análisis estructurado de especialista', 'market_snapshot'],
+    outputs: ['StrategyProposalLite'],
+    tools: ['market_snapshot'],
+    activation: { mode: 'always', description: 'Ejecutar tras completarse el análisis técnico.' },
+    abstentionConditions: ['Snapshot o ATR ausente', 'Análisis previo ausente', 'No existe regla codificable'],
+    weight: 0.35,
+    interventionType: 'synthesizer',
+  };
+}
+
+function simpleJudgeAgent(
+  id: string,
+  name: string,
+  strategyId: string,
+  marketInstruction: string
+): Agent {
+  return {
+    id,
+    name,
+    role: name,
+    responsibility: 'Auditar la propuesta contra límites deterministas de riesgo y emitir veredicto para backtest.',
+    systemPrompt: `${marketInstruction}
+Recalcula geometría BUY/SELL, R:R, riesgo porcentual y distancias respecto a ATR. Comprueba que R:R >= 1.60 y que el stop loss se ubique entre 1.25 y 2.5 ATR. Emite GO solo para generar/backtestear una hipótesis; nunca significa rentable ni autorizada para vivo. Si hay objeciones aritméticas corregibles emite AJUSTAR; con contradicción o datos insuficientes emite NO_OPERAR.
+${CONTRACT}`,
+    dependsOn: [strategyId],
+    outputType: 'verdict',
+    model: OMNI_STRUCTURED,
+    enabled: true,
+    inputs: ['StrategyProposalLite', 'market_snapshot', 'Análisis previo'],
+    outputs: ['VerdictResult'],
+    tools: ['market_snapshot'],
+    activation: { mode: 'always', description: 'Siempre como cierre del grafo tras la propuesta de estrategia.' },
+    abstentionConditions: ['No existe propuesta que validar'],
+    weight: 1.0,
+    interventionType: 'judge',
+  };
+}
+
+const forexSimpleAgents: Agent[] = [
+  simpleSpecialist(
+    'fx-simple-analyst',
+    'Analista FX Simple',
+    'Analizar estructura técnica, tendencia, soportes/resistencias y sesión de Forex.',
+    'Usa OHLC, medias móviles (EMA20, EMA50, SMA200), ATR y el reloj de sesión para clasificar régimen y niveles de invalidación en Forex. Respeta mercado cerrado y noticias recientes si están disponibles.',
+    ['market_snapshot', 'ohlcv', 'session_clock', 'verified_news']
+  ),
+  simpleStrategyAgent(
+    'fx-simple-strategy',
+    'Estrategia FX Simple',
+    'fx-simple-analyst',
+    'Diseña una hipótesis mecánica específica para Forex; respeta el reloj de sesión y no inventes datos macro ausentes.'
+  ),
+  simpleJudgeAgent(
+    'fx-simple-judge',
+    'Juez y Validador FX Simple',
+    'fx-simple-strategy',
+    'Audita los límites de riesgo para Forex, validando que el SL respete la volatilidad ATR y R:R >= 1.60.'
+  ),
+];
+
+const stockSimpleAgents: Agent[] = [
+  simpleSpecialist(
+    'stock-simple-analyst',
+    'Analista Acciones Simple',
+    'Analizar estructura de precio, medias móviles, volumen relativo y riesgo de gaps.',
+    'Usa OHLC, medias móviles, ATR y volumen relativo para TSLA. Evalúa riesgo de gap en apertura y horario de mercado US. No inventes fundamentales no provistos.',
+    ['market_snapshot', 'ohlcv', 'session_clock', 'verified_news']
+  ),
+  simpleStrategyAgent(
+    'stock-simple-strategy',
+    'Estrategia Acciones Simple',
+    'stock-simple-analyst',
+    'Diseña una hipótesis mecánica de acciones para TSLA; considera gaps y horario bursátil.'
+  ),
+  simpleJudgeAgent(
+    'stock-simple-judge',
+    'Juez y Validador Acciones Simple',
+    'stock-simple-strategy',
+    'Audita la exposición a gaps y la geometría de SL/TP respecto a ATR para acciones.'
+  ),
+];
+
+const cryptoSimpleAgents: Agent[] = [
+  simpleSpecialist(
+    'crypto-simple-analyst',
+    'Analista Cripto Simple',
+    'Analizar estructura técnica 24/7, volumen, momentum y régimen de volatilidad.',
+    'Usa OHLC, medias, RSI y ATR en mercado 24/7 para BTC/USD. No apliques cierre semanal ni horario bursátil tradicional.',
+    ['market_snapshot', 'ohlcv', 'session_clock', 'verified_news']
+  ),
+  simpleStrategyAgent(
+    'crypto-simple-strategy',
+    'Estrategia Cripto Simple',
+    'crypto-simple-analyst',
+    'Diseña una hipótesis mecánica para Bitcoin 24/7 adaptada a alta volatilidad.'
+  ),
+  simpleJudgeAgent(
+    'crypto-simple-judge',
+    'Juez y Validador Cripto Simple',
+    'crypto-simple-strategy',
+    'Audita volatilidad elevada, sizing y distancia de SL respecto a ATR en cripto 24/7.'
+  ),
+];
+
 export const BASELINE_PRESETS: AgentConfigPreset[] = [
   preset('FOREX', 'forex_v1', 'forex', 'EUR/USD', ['market_snapshot', 'ohlcv', 'session_clock'], forexAgents),
   preset('ACCIONES', 'stocks_v1', 'stocks', 'TSLA', ['market_snapshot', 'ohlcv', 'session_clock'], stockAgents),
   preset('CRIPTOMONEDAS', 'crypto_v1', 'crypto', 'BTC/USD', ['market_snapshot', 'ohlcv', 'session_clock'], cryptoAgents),
+  preset('FOREX', 'forex_simple_v1', 'forex', 'EUR/USD', ['market_snapshot', 'ohlcv', 'session_clock', 'verified_news'], forexSimpleAgents, 'FOREX (Simple)'),
+  preset('ACCIONES', 'stocks_simple_v1', 'stocks', 'TSLA', ['market_snapshot', 'ohlcv', 'session_clock', 'verified_news'], stockSimpleAgents, 'ACCIONES (Simple)'),
+  preset('CRIPTOMONEDAS', 'crypto_simple_v1', 'crypto', 'BTC/USD', ['market_snapshot', 'ohlcv', 'session_clock', 'verified_news'], cryptoSimpleAgents, 'CRIPTOMONEDAS (Simple)'),
 ];
 
 export function cloneBaselinePresets(): AgentConfigPreset[] {
   return structuredClone(BASELINE_PRESETS);
 }
+

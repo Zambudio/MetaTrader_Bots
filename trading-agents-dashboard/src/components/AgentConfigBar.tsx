@@ -18,10 +18,10 @@ export const AgentConfigBar = () => {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const isBaseline = Boolean(activePresetId?.startsWith('baseline-'));
-  const customPresets = presets.filter((p) => !p.id.startsWith('baseline-'));
   const activePreset = presets.find((p) => p.id === activePresetId);
-  const isDeleteDisabled = isAnalysing || (isBaseline && customPresets.length === 0) || (!activePresetId && customPresets.length === 0);
+  const isProtected = Boolean(activePreset?.isProtected);
+  const deletablePresets = presets.filter((p) => !p.isProtected);
+  const isDeleteDisabled = isAnalysing;
 
   const handleLoad = (id: string) => {
     if (!id || id === activePresetId) return;
@@ -39,15 +39,15 @@ export const AgentConfigBar = () => {
   };
 
   const handleDeleteClick = () => {
-    if (activePreset && !isBaseline) {
-      if (window.confirm(`¿Borrar la configuración "${activePreset.name}"? Los agentes activos ahora mismo no se ven afectados.`)) {
+    if (activePreset && !isProtected) {
+      const details = [activePreset.version, activePreset.referenceAsset].filter(Boolean).join(' · ');
+      const label = details ? `"${activePreset.name}" (${details})` : `"${activePreset.name}"`;
+      if (window.confirm(`¿Borrar la configuración guardada ${label}? Los agentes actuales en pantalla no se verán afectados.`)) {
         deletePreset(activePreset.id);
       }
       return;
     }
-    if (customPresets.length > 0) {
-      setShowDeleteModal(true);
-    }
+    setShowDeleteModal(true);
   };
 
   const handleSaveAsConfirm = async () => {
@@ -69,17 +69,13 @@ export const AgentConfigBar = () => {
   };
 
   const getDeleteButtonTitle = () => {
-    if (activePreset && !isBaseline) return `Borrar la configuración "${activePreset.name}"`;
-    if (isBaseline && customPresets.length > 0) {
-      return 'La configuración activa es base (protegida). Haz clic para gestionar o borrar configuraciones personalizadas.';
+    if (activePreset && !isProtected) {
+      return `Borrar la configuración guardada "${activePreset.name}"`;
     }
-    if (isBaseline) {
-      return 'Las configuraciones base del sistema (FOREX, ACCIONES, CRIPTOMONEDAS) están protegidas y no se pueden borrar.';
+    if (activePreset && isProtected) {
+      return `"${activePreset.name}" es una plantilla base oficial (protegida). Haz clic para gestionar o borrar otras configuraciones guardadas.`;
     }
-    if (customPresets.length > 0) {
-      return 'Gestionar o borrar configuraciones personalizadas.';
-    }
-    return 'No hay configuraciones personalizadas para borrar.';
+    return 'Gestionar o borrar configuraciones guardadas.';
   };
 
   return (
@@ -114,7 +110,7 @@ export const AgentConfigBar = () => {
         </button>
       )}
 
-      {activePresetId && !isBaseline && (
+      {activePresetId && !isProtected && (
         <button
           onClick={() => overwriteActivePreset()}
           disabled={isAnalysing}
@@ -201,10 +197,10 @@ export const AgentConfigBar = () => {
 
       {showDeleteModal && (
         <div className="fixed inset-0 bg-void/95 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-panel border border-line/70 rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl">
+          <div className="bg-panel border border-line/70 rounded-2xl p-6 w-full max-w-lg space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-line/60 pb-3">
               <h2 className="font-display font-bold text-lg text-paper tracking-wide">
-                BORRAR CONFIGURACIÓN
+                GESTIONAR / BORRAR CONFIGURACIONES
               </h2>
               <button
                 onClick={() => setShowDeleteModal(false)}
@@ -215,46 +211,54 @@ export const AgentConfigBar = () => {
             </div>
 
             <p className="text-sm text-muted">
-              Las configuraciones base del sistema (<span className="text-cyan font-medium">FOREX</span>,{' '}
+              Las plantillas base del sistema (<span className="text-cyan font-medium">FOREX</span>,{' '}
               <span className="text-cyan font-medium">ACCIONES</span>,{' '}
-              <span className="text-cyan font-medium">CRIPTOMONEDAS</span>) son inmutables y están protegidas.
+              <span className="text-cyan font-medium">CRIPTOMONEDAS</span> y sus versiones <span className="text-cyan font-medium">Simple</span>) están protegidas como puntos de partida oficiales.
             </p>
 
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted">
-                Configuraciones personalizadas:
+                Configuraciones guardadas y personalizadas:
               </p>
-              {customPresets.length === 0 ? (
-                <p className="text-sm text-muted italic">No hay configuraciones personalizadas guardadas.</p>
+              {deletablePresets.length === 0 ? (
+                <div className="p-4 rounded-xl border border-line/40 bg-void/30 text-center">
+                  <p className="text-sm text-muted italic">No hay configuraciones personalizadas guardadas para borrar.</p>
+                  <p className="text-xs text-muted/70 mt-1">Cualquier estrategia guardada con "Guardar como…" aparecerá aquí para gestionarse o borrarse.</p>
+                </div>
               ) : (
-                <ul className="divide-y divide-line/40 border border-line/70 rounded-xl overflow-hidden bg-void/40">
-                  {customPresets.map((p) => (
-                    <li key={p.id} className="flex items-center justify-between px-4 py-3 gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-paper truncate">{p.name}</p>
-                        <p className="text-xs text-muted">
-                          {p.agents.length} agentes · Creada el {new Date(p.createdAt).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <button
-                        onClick={async () => {
-                          if (
-                            window.confirm(
-                              `¿Seguro que deseas eliminar permanentemente la configuración "${p.name}"?`
-                            )
-                          ) {
-                            await deletePreset(p.id);
-                            if (customPresets.length <= 1) {
-                              setShowDeleteModal(false);
+                <ul className="divide-y divide-line/40 border border-line/70 rounded-xl overflow-hidden bg-void/40 max-h-72 overflow-y-auto">
+                  {deletablePresets.map((p) => {
+                    const details = [p.version, p.referenceAsset].filter(Boolean).join(' · ');
+                    return (
+                      <li key={p.id} className="flex items-center justify-between px-4 py-3 gap-3 hover:bg-void/60 transition-colors">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-paper truncate">
+                            {p.name} {details ? <span className="text-xs font-normal text-cyan/80">({details})</span> : null}
+                          </p>
+                          <p className="text-xs text-muted">
+                            {p.agents.length} agentes · {p.createdAt ? new Date(p.createdAt).toLocaleDateString() : 'guardada'}
+                          </p>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (
+                              window.confirm(
+                                `¿Seguro que deseas eliminar permanentemente la configuración "${p.name}"?`
+                              )
+                            ) {
+                              await deletePreset(p.id);
+                              if (deletablePresets.length <= 1) {
+                                setShowDeleteModal(false);
+                              }
                             }
-                          }
-                        }}
-                        className="px-3 py-1.5 rounded-lg border border-bear/40 bg-bear/10 text-bear font-medium text-xs hover:bg-bear/20 hover:border-bear/60 transition-all shrink-0 cursor-pointer"
-                      >
-                        🗑️ Eliminar
-                      </button>
-                    </li>
-                  ))}
+                          }}
+                          className="px-3 py-1.5 rounded-lg border border-bear/40 bg-bear/10 text-bear font-medium text-xs hover:bg-bear/20 hover:border-bear/60 transition-all shrink-0 cursor-pointer"
+                        >
+                          🗑️ Eliminar
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>

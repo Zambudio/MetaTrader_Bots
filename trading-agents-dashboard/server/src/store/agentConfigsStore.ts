@@ -10,10 +10,17 @@ interface AgentConfigsFile {
 
 const EMPTY_STATE: AgentConfigsFile = { presets: [], activePresetId: null };
 
+export function isProtectedPreset(id: string): boolean {
+  const baselines = cloneBaselinePresets();
+  return baselines.some((baseline) => baseline.id === id);
+}
+
 export async function loadAgentConfigsState(): Promise<AgentConfigsFile> {
   const state = await readJson<AgentConfigsFile>(AGENT_CONFIGS_FILE, EMPTY_STATE);
   const baselines = cloneBaselinePresets();
+  const baselineIds = new Set(baselines.map((b) => b.id));
   let changed = false;
+
   for (const baseline of baselines) {
     const index = state.presets.findIndex((preset) => preset.id === baseline.id);
     if (index === -1) {
@@ -21,12 +28,21 @@ export async function loadAgentConfigsState(): Promise<AgentConfigsFile> {
       changed = true;
     }
   }
+
+  for (const preset of state.presets) {
+    const isProtected = baselineIds.has(preset.id);
+    if (preset.isProtected !== isProtected) {
+      preset.isProtected = isProtected;
+      changed = true;
+    }
+  }
+
   const active = state.presets.find((preset) => preset.id === state.activePresetId);
-  const activeIsDeprecatedBaseline = Boolean(active?.id.startsWith('baseline-') && !baselines.some((baseline) => baseline.id === active.id));
-  if (!active || active.schemaVersion !== 'multiagent-config.v1' || activeIsDeprecatedBaseline) {
-    state.activePresetId = baselines.find((baseline) => baseline.key === active?.key)?.id ?? baselines[0].id;
+  if (!active || active.schemaVersion !== 'multiagent-config.v1') {
+    state.activePresetId = baselines[0]?.id ?? state.presets[0]?.id ?? null;
     changed = true;
   }
+
   if (changed) await saveAgentConfigsState(state);
   return state;
 }
@@ -54,6 +70,7 @@ export async function createPreset(name: string, agents: Agent[]): Promise<Agent
     validation: structuredClone(template.validation),
     riskPolicy: structuredClone(template.riskPolicy),
     mql5Model: template.mql5Model,
+    isProtected: false,
     createdAt: now,
     updatedAt: now,
   };
@@ -67,7 +84,7 @@ export async function overwritePreset(id: string, agents: Agent[]): Promise<Agen
   const state = await loadAgentConfigsState();
   const preset = state.presets.find((p) => p.id === id);
   if (!preset) return null;
-  if (preset.id.startsWith('baseline-')) {
+  if (isProtectedPreset(preset.id)) {
     return null;
   }
   preset.agents = agents;
@@ -96,9 +113,12 @@ export async function deletePreset(id: string): Promise<boolean> {
   const state = await loadAgentConfigsState();
   const index = state.presets.findIndex((p) => p.id === id);
   if (index === -1) return false;
-  if (state.presets[index].id.startsWith('baseline-')) return false;
+  if (isProtectedPreset(state.presets[index].id)) return false;
   state.presets.splice(index, 1);
-  if (state.activePresetId === id) state.activePresetId = null;
+  if (state.activePresetId === id) {
+    state.activePresetId = state.presets[0]?.id ?? null;
+  }
   await saveAgentConfigsState(state);
   return true;
 }
+

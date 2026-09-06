@@ -25,7 +25,7 @@ export interface AgentConfigPreset {
   consensus: { method: 'judge_with_adversarial_review'; judgeAgentId: string; maxRevisionRounds: number; conflictPolicy: 'unresolved_blocker_prevents_go' };
   validation: { requireStructuredOutputs: boolean; requireEvidence: boolean; deterministicRiskGate: boolean };
   riskPolicy: { maxRiskPercent: number; minRrRatio: number; minStopAtr: number; maxStopAtr: number };
-  mql5Model?: string; createdAt: string; updatedAt: string;
+  mql5Model?: string; isProtected?: boolean; createdAt: string; updatedAt: string;
 }
 
 export interface NewsSource {

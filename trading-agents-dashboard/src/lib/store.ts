@@ -244,12 +244,16 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
   deletePreset: async (id) => {
     try {
       await api.deleteAgentConfig(id);
-      set((state) => ({
-        presets: state.presets.filter((p) => p.id !== id),
-        activePresetId: state.activePresetId === id ? null : state.activePresetId,
+      const configs = await api.listAgentConfigs();
+      set({
+        presets: configs.presets,
+        activePresetId: configs.activePresetId,
         error: null,
         errorDomain: null,
-      }));
+      });
+      if (configs.activePresetId) {
+        await get().loadPreset(configs.activePresetId);
+      }
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Error al borrar la configuración',

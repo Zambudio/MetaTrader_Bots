@@ -1,5 +1,6 @@
 import type { Agent, AgentAnalysis, StrategyProposalLite, VerdictResult } from '../types.js';
 import { getWikiContextBlock } from '../store/wikiStore.js';
+import { listAllRecentNews } from '../store/newsStore.js';
 import { sanitizeJsonResponse, type ChatMessage } from './omniClient.js';
 import { routeChatCompletion as chatCompletion } from './llmRouter.js';
 import { parsePriceFromText } from './strategyValidator.js';
@@ -112,7 +113,7 @@ const VERDICT_TOOL = {
 };
 
 // 1.8: Aviso explícito cuando el snapshot de mercado es null en modo real
-function buildUserPrompt(pair: string, timeframe: string, context: string, snapshot?: string | null): string {
+function buildUserPrompt(pair: string, timeframe: string, context: string, snapshot?: string | null, newsBlock?: string | null): string {
   const snapshotBlock = snapshot
     ? snapshot
     : 'Snapshot de mercado recibido: no (sin velas disponibles). IMPORTANTE: No inventes datos de precio ni niveles de indicadores específicos no provistos; señala explícitamente esta limitación en tu análisis.';
@@ -121,6 +122,7 @@ function buildUserPrompt(pair: string, timeframe: string, context: string, snaps
     `Par: ${pair}`,
     `Timeframe: ${timeframe}`,
     snapshotBlock,
+    newsBlock,
     context ? `Contexto de agentes anteriores:\n${context}` : null,
   ]
     .filter((part): part is string => Boolean(part))
@@ -151,9 +153,23 @@ export async function runRealAgent(
   const model = agent.model || process.env.OMNIROUTE_DEFAULT_MODEL || 'auto/best-reasoning';
   const baseSystemPrompt = agent.systemPrompt || `Eres ${agent.name}, ${agent.role}.`;
   const wikiBlock = await getWikiContextBlock(`${agent.role}\n${agent.systemPrompt}`, { maxPages: 3 });
+
+  let newsBlock: string | null = null;
+  if (agent.inputs?.includes('verified_news')) {
+    try {
+      const recent = await listAllRecentNews(5);
+      if (recent.length > 0) {
+        newsBlock = `=== NOTICIAS RECIENTES VERIFICADAS ===\n` +
+          recent.map((n) => `- [${n.publishedAt || n.fetchedAt}] ${n.title}${n.summary ? `: ${n.summary}` : ''}`).join('\n');
+      }
+    } catch {
+      // No fallar si no hay acceso a noticias
+    }
+  }
+
   const messages: ChatMessage[] = [
     { role: 'system', content: wikiBlock ? `${baseSystemPrompt}\n\n${wikiBlock}` : baseSystemPrompt },
-    { role: 'user', content: buildUserPrompt(pair, timeframe, context, snapshot) },
+    { role: 'user', content: buildUserPrompt(pair, timeframe, context, snapshot, newsBlock) },
   ];
 
   if (agent.outputType === 'strategy') {

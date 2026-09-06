@@ -71,7 +71,7 @@ agentConfigsRouter.delete(
   asyncHandler(async (req, res) => {
     const deleted = await deletePreset(req.params.id);
     if (!deleted) {
-      res.status(404).json({ error: 'preset not found' });
+      res.status(400).json({ error: 'No se puede eliminar una plantilla base oficial o la configuración no existe.' });
       return;
     }
     res.json({ ok: true });

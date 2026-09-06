@@ -86,6 +86,7 @@ export interface AgentConfigPreset {
     maxStopAtr: number;
   };
   mql5Model?: string;
+  isProtected?: boolean;
   createdAt: string;
   updatedAt: string;
 }
