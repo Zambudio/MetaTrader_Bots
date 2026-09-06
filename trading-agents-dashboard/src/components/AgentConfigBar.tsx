@@ -4,10 +4,12 @@ import { useAgentStore } from '../lib/store';
 export const AgentConfigBar = () => {
   const presets = useAgentStore((state) => state.presets);
   const activePresetId = useAgentStore((state) => state.activePresetId);
+  const agents = useAgentStore((state) => state.agents);
   const isAnalysing = useAgentStore((state) => state.isAnalysing);
   const savePresetAs = useAgentStore((state) => state.savePresetAs);
   const overwriteActivePreset = useAgentStore((state) => state.overwriteActivePreset);
   const loadPreset = useAgentStore((state) => state.loadPreset);
+  const detachAgentRelations = useAgentStore((state) => state.detachAgentRelations);
   const deletePreset = useAgentStore((state) => state.deletePreset);
 
   const [showSaveAs, setShowSaveAs] = useState(false);
@@ -18,6 +20,16 @@ export const AgentConfigBar = () => {
   const handleLoad = (id: string) => {
     if (!id || id === activePresetId) return;
     loadPreset(id);
+  };
+
+  const handleDetach = () => {
+    if (
+      window.confirm(
+        'Esto desconecta las relaciones entre los agentes que ves ahora mismo (solo en esta edición, nada se guarda todavía). Puedes desactivar agentes, añadir nuevos y reconectar a tu gusto. Si no guardas, "Restaurar" recupera la configuración original tal cual. ¿Continuar?'
+      )
+    ) {
+      detachAgentRelations();
+    }
   };
 
   const handleDelete = () => {
@@ -85,6 +97,15 @@ export const AgentConfigBar = () => {
           💾 Guardar
         </button>
       )}
+
+      <button
+        onClick={handleDetach}
+        disabled={isAnalysing || agents.length === 0}
+        title="Desconecta las relaciones de los agentes actuales para rediseñar la cadena desde cero, sin guardar nada todavía"
+        className="rounded-xl border border-line/70 text-paper/80 font-medium text-sm px-3 py-2 hover:text-cyan hover:border-cyan/50 hover:shadow-[0_0_12px_-4px_rgba(45,230,244,0.3)] transition-all disabled:opacity-40 cursor-pointer"
+      >
+        🧩 Crear nueva estrategia
+      </button>
 
       <button
         onClick={() => setShowSaveAs(true)}

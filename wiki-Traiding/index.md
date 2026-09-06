@@ -76,3 +76,7 @@ Planes de implementación, specs de diseño e informes de prueba/auditoría de `
 ---
 
 _Última actualización: 2026-08-16 (revisión de rigor académico: eliminación de referencias a cursos formativos y sustitución por papers seminales de Black-Scholes, Osler, Ralph Vince y Almgren-Chriss). Ver [`log.md`](log.md) para el detalle._
+
+## Noticias
+
+- [`noticias/2026-09-06.md`](noticias/2026-09-06.md) — 11 artículo(s) obtenidos el 2026-09-06 — ver detalle en la página.

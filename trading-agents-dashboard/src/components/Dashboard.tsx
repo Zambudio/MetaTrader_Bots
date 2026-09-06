@@ -9,6 +9,7 @@ import { AgentLogsPanel } from './AgentLogsPanel';
 import { PairSelector } from './PairSelector';
 import { PriceChart } from './PriceChart';
 import { RunHistoryModal } from './RunHistoryModal';
+import { NewsPanel } from './NewsPanel';
 import { StrategyResultCard } from './StrategyResultCard';
 import { VerdictResultCard } from './VerdictResultCard';
 import { buildLevels, filterEnabledAgents, wouldCreateCycle } from '../lib/agentGraph';
@@ -32,6 +33,7 @@ export const Dashboard = () => {
 
   const [editingAgent, setEditingAgent] = useState<Agent | null | 'new'>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [showNews, setShowNews] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const chainContainerRef = useRef<HTMLDivElement>(null);
@@ -158,6 +160,13 @@ export const Dashboard = () => {
               👁️ Análisis anteriores
             </button>
             <button
+              onClick={() => setShowNews(true)}
+              className="rounded-xl border border-line/70 text-paper/80 font-semibold text-base px-5 py-3 hover:text-cyan hover:border-cyan/50 transition-all whitespace-nowrap cursor-pointer inline-flex items-center gap-2"
+            >
+              <span>📰</span>
+              <span>Noticias</span>
+            </button>
+            <button
               onClick={runWorkflow}
               disabled={isAnalysing || agents.length === 0}
               className="rounded-xl border border-cyan/60 bg-cyan/10 text-cyan font-semibold text-base px-6 py-3 hover:bg-cyan/20 hover:glow-cyan disabled:opacity-40 disabled:cursor-not-allowed transition-all whitespace-nowrap"
@@ -176,6 +185,8 @@ export const Dashboard = () => {
             }}
           />
         )}
+
+        {showNews && <NewsPanel onClose={() => setShowNews(false)} />}
 
         <PriceChart />
 

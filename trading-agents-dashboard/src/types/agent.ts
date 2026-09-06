@@ -27,3 +27,27 @@ export interface AgentConfigPreset {
   riskPolicy: { maxRiskPercent: number; minRrRatio: number; minStopAtr: number; maxStopAtr: number };
   mql5Model?: string; createdAt: string; updatedAt: string;
 }
+
+export interface NewsSource {
+  id: string;
+  name: string;
+  kind: 'rss' | 'generic_url';
+  url: string;
+  enabled: boolean;
+  createdAt: string;
+  lastFetchedAt?: string;
+  lastFetchStatus?: 'ok' | 'error';
+  lastFetchError?: string;
+}
+
+export interface NewsItem {
+  id: string;
+  sourceId: string;
+  title: string;
+  url: string;
+  publishedAt?: string;
+  fetchedAt: string;
+  summary?: string;
+  digestedToWiki?: boolean;
+}
+

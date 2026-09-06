@@ -1,4 +1,4 @@
-import type { Agent, AgentConfigPreset } from '../types/agent';
+import type { Agent, AgentConfigPreset, NewsSource, NewsItem } from '../types/agent';
 import type { Run, RunSummary } from '../types/run';
 import type { Candle } from '../types/candle';
 import type { SavedPair, SymbolSearchResult } from '../types/pair';
@@ -101,6 +101,21 @@ export const api = {
   ) => optimizeMql5WithPolling(strategy, previousCode, previousBacktest, iteration, model, runId, onProgress, previousNotes),
   analyzeBacktestLog: (logText: string) =>
     request<{ sessions: Mt5LogSession[] }>('/backtest/analyze', { method: 'POST', body: JSON.stringify({ logText }) }),
+  listNewsSources: () => request<NewsSource[]>('/news/sources'),
+  addNewsSource: (input: { name: string; kind: 'rss' | 'generic_url'; url: string }) =>
+    request<NewsSource>('/news/sources', { method: 'POST', body: JSON.stringify(input) }),
+  updateNewsSource: (id: string, patch: Partial<NewsSource>) =>
+    request<NewsSource>(`/news/sources/${id}`, { method: 'PUT', body: JSON.stringify(patch) }),
+  deleteNewsSource: (id: string) =>
+    request<{ ok: boolean }>(`/news/sources/${id}`, { method: 'DELETE' }),
+  fetchNewsSource: (id: string) =>
+    request<{ source: NewsSource; newItems: number; error?: string }>(`/news/sources/${id}/fetch`, { method: 'POST' }),
+  fetchAllNews: () =>
+    request<Array<{ source: NewsSource; newItems: number; error?: string }>>('/news/fetch-all', { method: 'POST' }),
+  listNewsItems: (sourceId?: string) =>
+    request<NewsItem[]>(sourceId ? `/news/items?sourceId=${encodeURIComponent(sourceId)}` : '/news/items'),
+  generateNewsDigest: () =>
+    request<{ pageRelPath: string | null; digestedIds: string[] }>('/news/digest', { method: 'POST' }),
 };
 
 const MQL5_POLL_INTERVAL_MS = 2000;
