@@ -13,6 +13,7 @@ import { candlesRouter } from './routes/candles.js';
 import { symbolSearchRouter } from './routes/symbolSearch.js';
 import { mql5Router } from './routes/mql5.js';
 import { backtestRouter } from './routes/backtest.js';
+import { newsRouter } from './routes/news.js';
 import { reconcileOrphanedRuns } from './store/runsStore.js';
 import { reconcileOrphanedMql5Jobs } from './engine/mql5Jobs.js';
 
@@ -37,6 +38,7 @@ app.use('/api/candles', candlesRouter);
 app.use('/api/symbols/search', symbolSearchRouter);
 app.use('/api/mql5', mql5Router);
 app.use('/api/backtest', backtestRouter);
+app.use('/api/news', newsRouter);
 
 // ── Frontend compilado (producción) ────────────────────────────────────────────
 // En `npm run dev` el frontend lo sirve Vite (localhost:5173) y proxya /api aquí.

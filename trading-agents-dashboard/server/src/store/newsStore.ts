@@ -71,3 +71,12 @@ export async function appendItems(
   }
   return fresh;
 }
+
+export async function markDigested(sourceId: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const idSet = new Set(ids);
+  const items = await listItems(sourceId);
+  const updated = items.map((i) => (idSet.has(i.id) ? { ...i, digestedToWiki: true } : i));
+  await writeJson(itemsFile(sourceId), updated);
+}
+
