@@ -103,7 +103,11 @@ const DELIVER_EA_TOOL = {
     parameters: {
       type: 'object',
       properties: {
-        code: { type: 'string', description: 'Código fuente completo del archivo .mq5.' },
+        code: {
+          type: 'string',
+          description:
+            'Código fuente completo y autocontenido del archivo .mq5 con todas sus secciones (OnInit, OnDeinit, OnTick, CheckRiskLimits, CalculatePositionSize). Debe compilar limpiamente en MetaEditor. NUNCA un fragmento, stub ni solo comentarios.',
+        },
         assumptionsToVerify: {
           type: 'array',
           items: { type: 'string' },
@@ -455,8 +459,8 @@ async function requestEa(model: string, systemPrompt: string, userPrompt: string
     throw new Error('El modelo no devolvió la llamada estructurada a deliver_ea');
   }
 
-  if (typeof args.code !== 'string' || !args.code.trim()) {
-    throw new Error('El modelo no devolvió código MQL5 válido');
+  if (typeof args.code !== 'string' || args.code.trim().length < 200 || !args.code.includes('OnTick')) {
+    throw new Error(`El modelo devolvió código MQL5 trunco o incompleto (longitud=${typeof args.code === 'string' ? args.code.length : 0}, falta OnTick).`);
   }
 
   return {
@@ -476,7 +480,29 @@ async function runMql5Pipeline(
   onProgress?: Mql5ProgressCallback
 ): Promise<Mql5GenerationResult> {
   onProgress?.({ attempt: 1, maxAttempts: MAX_COMPILE_ATTEMPTS, phase: 'generating', details: 'Generando código MQL5 estructurado...' });
-  let draft = await requestEa(resolvedModel, systemPrompt, initialUserPrompt);
+  let draft: EaDraft | null = null;
+  let lastDraftError: string | null = null;
+  const candidateModels = [
+    resolvedModel,
+    ...(resolvedModel.includes('auto/best-coding') ? ['omniroute:auto/pro-coding'] : []),
+  ];
+
+  for (const modelCandidate of candidateModels) {
+    for (let initAttempt = 1; initAttempt <= 2; initAttempt++) {
+      try {
+        const promptToUse = lastDraftError
+          ? `${initialUserPrompt}\n\nATENCIÓN CRÍTICA: El intento anterior fue rechazado porque devolviste código incompleto o trunco (${lastDraftError}). Debes entregar el archivo .mq5 COMPLETO y AUTOCONTENIDO desde las directivas #property y OnInit hasta el cierre de OnTick y OnTradeTransaction, sin omitir ninguna función ni usar stubs ni comentarios vacíos.`
+          : initialUserPrompt;
+        draft = await requestEa(modelCandidate, systemPrompt, promptToUse);
+        break;
+      } catch (err: any) {
+        lastDraftError = err instanceof Error ? err.message : String(err);
+        console.warn(`[mql5Generator] Intento con ${modelCandidate} (${initAttempt}/2) falló: ${lastDraftError}`);
+      }
+    }
+    if (draft) break;
+  }
+  if (!draft) throw new Error(`No se pudo generar borrador MQL5 tras probar modelos candidatos: ${lastDraftError}`);
   onProgress?.({ attempt: 1, maxAttempts: MAX_COMPILE_ATTEMPTS, phase: 'compiling', details: 'Compilando en MetaEditor64...' });
   let compile = await compileMql5(draft.code, filename);
   let attempts = 1;

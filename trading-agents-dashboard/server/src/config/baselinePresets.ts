@@ -211,7 +211,8 @@ function simpleSpecialist(
     name,
     role: name,
     responsibility,
-    systemPrompt: `${prompt}\n\n${CONTRACT}`,
+    systemPrompt: `${prompt}
+Identifica régimen, estructura técnica y niveles clave basándote estrictamente en el snapshot provisto. Si hay noticias verificadas en el contexto, sintetízalas objetivamente. No inventes fundamentales, noticias no provistas ni datos macro ausentes; si faltan datos requeridos, usa status=data_not_available y señala DATA_NOT_AVAILABLE en la conclusión.\n\n${CONTRACT}`,
     dependsOn: [],
     outputType: 'analysis',
     model: OMNI_STRUCTURED,
@@ -242,7 +243,24 @@ function simpleStrategyAgent(
     role: name,
     responsibility: 'Transformar el análisis técnico en una hipótesis mecánica unificada apta para validación.',
     systemPrompt: `${marketInstruction}
-Propón una única regla de entrada mecánica con un evento y como máximo un filtro. Usa solo campos presentes en el snapshot. La salida es una hipótesis para backtest, no una orden. Calcula entrada, SL y TP numéricos desde el cierre/ATR provistos, R:R >= 1.60 y riskPercent <= 1.0. Si falta snapshot o ATR, abstente: nunca inventes números. Distingue evidencia, riesgos e invalidaciones.`,
+Propón una única regla de entrada mecánica con un evento y como máximo un filtro.
+REGLAS OBLIGATORIAS DE ESTRATEGIA Y COHERENCIA NUMÉRICA:
+1. condicionEntrada DEBE ser una regla MECÁNICA y REPETIBLE formulada en relaciones entre indicadores técnicos del snapshot (p. ej. "EMA20 cruza por encima de EMA50 Y RSI(14) > 50" o "Cierre supera EMA20 con volumen > media20"). NUNCA uses un precio estático de hoy ni una fecha fija como condición.
+2. CÁLCULO ARITMÉTICO OBLIGATORIO DE SL Y TP A PARTIR DE ATR:
+   - Identifica el valor numérico de ATR (14 periodos) en el snapshot.
+   - Calcula la distancia de Stop Loss exacta usando un multiplicador entre 1.40 y 1.80: distancia_SL = 1.50 * ATR (la relación |entry - SL| / ATR DEBE estar estrictamente entre 1.25 y 2.50 ATR).
+   - Calcula la distancia de Take Profit para garantizar R:R >= 1.60: distancia_TP = 1.70 * distancia_SL.
+   - Para BUY (Compra):
+       entryPriceNum = precio de cierre actual
+       stopLossNum = entryPriceNum - distancia_SL
+       takeProfitNum = entryPriceNum + distancia_TP
+   - Para SELL (Venta):
+       entryPriceNum = precio de cierre actual
+       stopLossNum = entryPriceNum + distancia_SL
+       takeProfitNum = entryPriceNum - distancia_TP
+   - NUNCA sitúes el Stop Loss a una distancia menor a 1.25 ATR (ej. en una media móvil cercana); la distancia debe ser >= 1.25 ATR.
+   - riskPercent <= 1.0 (usa 1.0 o 0.5).
+3. Si falta snapshot o ATR, abstente y nunca inventes números. Distingue evidencia, riesgos e invalidaciones.`,
     dependsOn: [analystId],
     outputType: 'strategy',
     model: OMNI_STRUCTURED,
@@ -269,7 +287,16 @@ function simpleJudgeAgent(
     role: name,
     responsibility: 'Auditar la propuesta contra límites deterministas de riesgo y emitir veredicto para backtest.',
     systemPrompt: `${marketInstruction}
-Recalcula geometría BUY/SELL, R:R, riesgo porcentual y distancias respecto a ATR. Comprueba que R:R >= 1.60 y que el stop loss se ubique entre 1.25 y 2.5 ATR. Emite GO solo para generar/backtestear una hipótesis; nunca significa rentable ni autorizada para vivo. Si hay objeciones aritméticas corregibles emite AJUSTAR; con contradicción o datos insuficientes emite NO_OPERAR.
+Audita rigurosamente la propuesta de estrategia recibida contra los límites deterministas:
+1. Geometría BUY/SELL: verifica que entrada, SL y TP sean consistentes con la dirección.
+2. Distancia Stop Loss: comprueba que |entryPriceNum - stopLossNum| esté estrictamente entre 1.25 y 2.50 ATR.
+3. Ratio R:R: comprueba que sea >= 1.60.
+4. Riesgo de cuenta: riskPercent <= 1.0%.
+5. Regla mecánica: verifica que condicionEntrada sea una regla repetible basada en indicadores y no un precio anecdótico.
+CRITERIOS DE VEREDICTO:
+- 'go': emite GO únicamente si la hipótesis es coherente y cumple todos los límites. IMPORTANTE: con 'go', el campo unresolvedBlockers DEBE ser un array vacío ([]).
+- 'ajustar': si hay objeciones aritméticas o de distancia de SL/TP corregibles, enuméralas claramente en el array 'objeciones'.
+- 'no_operar': si hay contradicción técnica grave, mercado cerrado desfavorable o datos insuficientes.
 ${CONTRACT}`,
     dependsOn: [strategyId],
     outputType: 'verdict',

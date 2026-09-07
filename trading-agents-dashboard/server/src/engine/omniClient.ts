@@ -16,6 +16,7 @@ export interface OmniClientOptions {
   timeoutMs?: number;
   maxRetries?: number;
   retryDelayMs?: number;
+  maxTokens?: number;
   /** Aborta la llamada en curso (botón "Detener análisis") — también respetado por los CLIs. */
   signal?: AbortSignal;
 }
@@ -181,6 +182,7 @@ async function chatCompletionOnce(
         model,
         messages,
         stream: false,
+        max_tokens: options.maxTokens ?? 8192,
       };
 
       if (tool) {
@@ -267,6 +269,7 @@ async function chatCompletionJsonFallback(
         model,
         messages: fallbackMessages,
         stream: false,
+        max_tokens: 8192,
       }),
     },
     timeoutMs,
