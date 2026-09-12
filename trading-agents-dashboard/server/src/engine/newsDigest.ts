@@ -73,7 +73,8 @@ export async function generateNewsDigest(items: NewsItem[], opts: GenerateDigest
   try {
     indexContent = await fs.readFile(opts.indexFile, 'utf-8');
   } catch (err) {
-    if (!(err instanceof Error && (err as any).code === 'ENOENT')) throw;
+    const isNotFound = err instanceof Error && (err as NodeJS.ErrnoException).code === 'ENOENT';
+    if (!isNotFound) throw err;
     await fs.mkdir(path.dirname(opts.indexFile), { recursive: true });
   }
   const description = `${pending.length} artículo(s) obtenidos el ${date} — ver detalle en la página.`;
