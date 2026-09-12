@@ -6,7 +6,7 @@
     "url": "https://feeds.reuters.com/reuters/businessNews",
     "enabled": true,
     "createdAt": "2026-09-12T12:00:00.000Z",
-    "lastFetchedAt": "2026-09-12T10:43:27.684Z",
+    "lastFetchedAt": "2026-09-12T10:48:44.870Z",
     "lastFetchStatus": "error",
     "lastFetchError": "getaddrinfo ENOTFOUND feeds.reuters.com"
   },
@@ -17,7 +17,7 @@
     "url": "https://www.investing.com/rss/news_1.rss",
     "enabled": true,
     "createdAt": "2026-09-12T12:00:00.000Z",
-    "lastFetchedAt": "2026-09-12T10:42:58.348Z",
+    "lastFetchedAt": "2026-09-12T10:48:45.132Z",
     "lastFetchStatus": "ok"
   },
   {
@@ -27,7 +27,7 @@
     "url": "https://www.fxstreet.com/rss",
     "enabled": true,
     "createdAt": "2026-09-12T12:00:00.000Z",
-    "lastFetchedAt": "2026-09-12T10:42:59.250Z",
+    "lastFetchedAt": "2026-09-12T10:48:46.309Z",
     "lastFetchStatus": "ok"
   },
   {
@@ -37,7 +37,7 @@
     "url": "https://www.litefinance.org/rss/",
     "enabled": true,
     "createdAt": "2026-09-12T12:00:00.000Z",
-    "lastFetchedAt": "2026-09-12T10:43:30.260Z",
+    "lastFetchedAt": "2026-09-12T10:48:46.586Z",
     "lastFetchStatus": "error",
     "lastFetchError": "Invalid character in entity name\nLine: 22\nColumn: 43\nChar: ="
   },
@@ -48,7 +48,7 @@
     "url": "https://www.investing.com/rss/news_25.rss",
     "enabled": true,
     "createdAt": "2026-09-12T12:00:00.000Z",
-    "lastFetchedAt": "2026-09-12T10:42:59.549Z",
+    "lastFetchedAt": "2026-09-12T10:48:46.675Z",
     "lastFetchStatus": "ok"
   },
   {
@@ -58,7 +58,7 @@
     "url": "https://www.investing.com/rss/news_1062.rss",
     "enabled": true,
     "createdAt": "2026-09-12T12:00:00.000Z",
-    "lastFetchedAt": "2026-09-12T10:42:59.628Z",
+    "lastFetchedAt": "2026-09-12T10:48:46.763Z",
     "lastFetchStatus": "ok"
   },
   {
@@ -68,7 +68,7 @@
     "url": "https://feeds.marketwatch.com/marketwatch/topstories/",
     "enabled": true,
     "createdAt": "2026-09-12T12:00:00.000Z",
-    "lastFetchedAt": "2026-09-12T10:43:00.121Z",
+    "lastFetchedAt": "2026-09-12T10:48:47.064Z",
     "lastFetchStatus": "ok"
   },
   {
@@ -78,7 +78,7 @@
     "url": "https://feeds.finance.yahoo.com/rss/2.0/headline",
     "enabled": true,
     "createdAt": "2026-09-12T12:00:00.000Z",
-    "lastFetchedAt": "2026-09-12T10:43:00.587Z",
+    "lastFetchedAt": "2026-09-12T10:48:47.529Z",
     "lastFetchStatus": "error",
     "lastFetchError": "Status code 400"
   },
@@ -89,7 +89,7 @@
     "url": "https://www.coindesk.com/arc/outboundfeeds/rss/",
     "enabled": true,
     "createdAt": "2026-09-12T12:00:00.000Z",
-    "lastFetchedAt": "2026-09-12T10:43:00.902Z",
+    "lastFetchedAt": "2026-09-12T10:48:47.932Z",
     "lastFetchStatus": "ok"
   },
   {
@@ -99,7 +99,7 @@
     "url": "https://cointelegraph.com/feed",
     "enabled": true,
     "createdAt": "2026-09-12T12:00:00.000Z",
-    "lastFetchedAt": "2026-09-12T10:43:01.006Z",
+    "lastFetchedAt": "2026-09-12T10:48:48.242Z",
     "lastFetchStatus": "ok"
   },
   {
@@ -109,7 +109,7 @@
     "url": "https://cryptoslate.com/feed/",
     "enabled": true,
     "createdAt": "2026-09-12T12:00:00.000Z",
-    "lastFetchedAt": "2026-09-12T10:43:01.165Z",
+    "lastFetchedAt": "2026-09-12T10:48:48.378Z",
     "lastFetchStatus": "ok"
   },
   {
@@ -119,7 +119,7 @@
     "url": "https://www.investing.com/rss/news_100.rss",
     "enabled": true,
     "createdAt": "2026-09-12T12:00:00.000Z",
-    "lastFetchedAt": "2026-09-12T10:43:03.319Z",
+    "lastFetchedAt": "2026-09-12T10:48:52.277Z",
     "lastFetchStatus": "error",
     "lastFetchError": "Status code 404"
   },
@@ -130,7 +130,7 @@
     "url": "https://feeds.cnbc.com/cnbc/rss-full",
     "enabled": true,
     "createdAt": "2026-09-12T12:00:00.000Z",
-    "lastFetchedAt": "2026-09-12T10:43:03.362Z",
+    "lastFetchedAt": "2026-09-12T10:48:52.330Z",
     "lastFetchStatus": "error",
     "lastFetchError": "getaddrinfo ENOTFOUND feeds.cnbc.com"
   }

@@ -65,6 +65,12 @@
 
 - [`glosario.md`](glosario.md) — más de 145 términos de referencia rápida (indicadores, estructura de mercado, estrategias, macro, modelos de ejecución, gestión de riesgo), cada uno enlazado a su página de profundidad.
 
+## Referencias Raw
+
+Corpus de fuentes externas y referencias sin procesar (papers académicos, guías de terceros, transcripciones de sitios financieros). Para consulta y tracción de materiales académicos, no para inyección automática de contexto.
+
+- Carpeta [`raw/`](raw/) — referencias de fuentes externas por categoría (análisis fundamental, indicadores, estrategias, gestión de riesgo, infraestructura), cada una enlazada a su fuente original. Incluye transcripciones de StockCharts, Investopedia, Federal Reserve, ECB, BIS, QuantStart, etc.
+
 ## Proyecto — Ingeniería MT5 Bots
 
 Investigación de ingeniería de *este* proyecto concreto (arquitectura y funcionamiento de MetaTrader 5, fundamentos y estándar de MQL5, arquitectura de Expert Advisors, modelo de órdenes/deals/posiciones, gestión de riesgo de EAs, Strategy Tester, backtesting/optimización/validación quant, ciclo de vida y versionado de estrategias, integración Python, MCP/agentes de IA, arquitectura multiagente futura, análisis fundamental aplicado, selección de broker, despliegue en VPS, seguridad/credenciales, observabilidad/auditoría, estándar de desarrollo de EAs con IA, primeros bots de laboratorio, plan de puesta en marcha y pipeline de validación/backtest agéntico). Corpus separado con sus propias convenciones (tabla de estados por documento, decisiones congeladas, preguntas abiertas) — ver [`proyecto-mt5-bots/00_INDEX.md`](proyecto-mt5-bots/00_INDEX.md) para el índice completo y [`CLAUDE.md`](CLAUDE.md) para las convenciones. No forma parte del catálogo de coincidencia automática que usan los agentes del dashboard (`wikiStore.ts` solo indexa viñetas con el formato exacto de arriba) — pensado para consulta humana/Claude Code, no para inyección automática de contexto en agentes.
