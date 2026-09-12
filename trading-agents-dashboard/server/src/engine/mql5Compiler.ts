@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { nanoid } from 'nanoid';
 import { MQL5_COMPILE_DIR, MQL5_DELIVERABLES_DIR } from '../paths.js';
+import { acquireMt5Lock, releaseMt5Lock } from './mt5Mutex.js';
 
 const DEFAULT_METAEDITOR_PATH = 'C:\\Program Files\\MetaTrader 5\\metaeditor64.exe';
 const COMPILE_TIMEOUT_MS = 30_000;
@@ -54,6 +55,18 @@ function parseLog(raw: string, srcPath: string, displayName: string): { errors: 
 }
 
 export async function compileMql5(code: string, displayName: string): Promise<CompileResult> {
+  // Acquire global MT5 lock to prevent concurrent compilation/backtest collisions (E1)
+  const lockId = `compile-${nanoid(8)}`;
+  await acquireMt5Lock(lockId);
+
+  try {
+    return await compileMql5Internal(code, displayName);
+  } finally {
+    await releaseMt5Lock();
+  }
+}
+
+async function compileMql5Internal(code: string, displayName: string): Promise<CompileResult> {
   const exe = await resolveMetaeditorPath();
   if (!exe) {
     return { status: 'unverified', errors: [], warnings: [] };
