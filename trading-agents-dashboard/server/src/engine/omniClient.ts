@@ -121,18 +121,30 @@ export async function fetchWithTimeout(
  * Lección del bucle /loop 2026-08-29: `cerebras/gpt-oss-120b` hace 404 intermitente
  * ("Model zai-glm-4.7 is archived") y tumbaba los jobs largos de generación MQL5.
  */
-const FALLBACK_MODELS = (process.env.OMNIROUTE_FALLBACK_MODELS ?? 'auto/pro-coding,auto/smart')
+const FALLBACK_MODELS = (process.env.OMNIROUTE_FALLBACK_MODELS ?? 'auto/pro-coding,mistral/codestral-latest,auto/smart')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
 
+function isPermanentModelError(err: any): boolean {
+  const msg = String(err?.message ?? err).toLowerCase();
+  return (
+    msg.includes('not available in your subscription tier') ||
+    msg.includes('is archived') ||
+    msg.includes('is no longer available') ||
+    msg.includes('does not exist') ||
+    msg.includes('model_not_found')
+  );
+}
+
 export async function chatCompletion(
-  model: string,
+  rawModel: string,
   messages: ChatMessage[],
   tool?: ToolDefinition | null,
   options: OmniClientOptions = {}
 ): Promise<any> {
-  const chain = [model, ...FALLBACK_MODELS.filter((m) => m !== model)];
+  const model = rawModel.replace(/^omniroute:/, '');
+  const chain = [model, ...FALLBACK_MODELS.map((m) => m.replace(/^omniroute:/, '')).filter((m) => m !== model)];
   let lastError: unknown;
   for (let i = 0; i < chain.length; i++) {
     try {
@@ -225,9 +237,21 @@ async function chatCompletionOnce(
         throw new Error(`Respuesta inválida de OmniRoute: ${text.slice(0, 200)}`);
       }
     } catch (err: any) {
-      globalCircuitBreaker.recordFailure();
       if (options.signal?.aborted) {
         throw new Error('[omniClient] detenido por el usuario');
+      }
+      if (isPermanentModelError(err)) {
+        lastError = err;
+        console.warn(`[omniClient] Error permanente de modelo para ${model}: ${String(err?.message ?? err).slice(0, 120)}. Saltando reintentos...`);
+        break;
+      }
+      const errText = String(err?.message ?? err).toLowerCase();
+      const isRateLimit = errText.includes('rate limit') || errText.includes('rate-limit') || errText.includes('429') || errText.includes('cooling down') || errText.includes('503');
+      if (isRateLimit) {
+        console.warn(`[omniClient] Limitación de tasa o cola temporal en ${model}. Pausando 4s...`);
+        await delay(4000);
+      } else {
+        globalCircuitBreaker.recordFailure();
       }
       if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
         lastError = new Error(`Tiempo de espera agotado (${Math.round(timeoutMs / 1000)}s) al consultar modelo ${model}`);

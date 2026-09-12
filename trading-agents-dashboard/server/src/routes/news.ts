@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import {
-  listSources, addSource, updateSource, deleteSource, listItems, appendItems, markDigested,
+  listSources, addSource, updateSource, deleteSource, listItems, markDigested,
 } from '../store/newsStore.js';
-import { fetchRss, fetchGenericUrl } from '../engine/newsFetcher.js';
+import { fetchOneSource, fetchAllNewsSources } from '../engine/newsScheduler.js';
 import { generateNewsDigest } from '../engine/newsDigest.js';
 import { WIKI_DIR, WIKI_INDEX_FILE } from '../paths.js';
 import type { NewsSource } from '../types.js';
@@ -33,23 +33,6 @@ newsRouter.delete('/sources/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
-async function fetchOneSource(source: NewsSource): Promise<{ source: NewsSource; newItems: number; error?: string }> {
-  try {
-    const candidates = source.kind === 'rss' ? await fetchRss(source) : await fetchGenericUrl(source);
-    const fresh = await appendItems(source.id, candidates);
-    const updated = await updateSource(source.id, {
-      lastFetchedAt: new Date().toISOString(), lastFetchStatus: 'ok', lastFetchError: undefined,
-    });
-    return { source: updated ?? source, newItems: fresh.length };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const updated = await updateSource(source.id, {
-      lastFetchedAt: new Date().toISOString(), lastFetchStatus: 'error', lastFetchError: message,
-    });
-    return { source: updated ?? source, newItems: 0, error: message };
-  }
-}
-
 newsRouter.post('/sources/:id/fetch', asyncHandler(async (req, res) => {
   const sources = await listSources();
   const source = sources.find((s) => s.id === req.params.id);
@@ -58,12 +41,8 @@ newsRouter.post('/sources/:id/fetch', asyncHandler(async (req, res) => {
 }));
 
 newsRouter.post('/fetch-all', asyncHandler(async (_req, res) => {
-  const sources = (await listSources()).filter((s) => s.enabled);
-  const results = [];
-  for (const source of sources) {
-    results.push(await fetchOneSource(source)); // secuencial a propósito: nada de ráfagas de red simultáneas
-  }
-  res.json(results);
+  const outcome = await fetchAllNewsSources(false);
+  res.json(outcome.results);
 }));
 
 newsRouter.get('/items', asyncHandler(async (req, res) => {

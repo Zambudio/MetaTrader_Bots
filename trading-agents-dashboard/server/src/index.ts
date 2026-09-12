@@ -16,6 +16,7 @@ import { backtestRouter } from './routes/backtest.js';
 import { newsRouter } from './routes/news.js';
 import { reconcileOrphanedRuns } from './store/runsStore.js';
 import { reconcileOrphanedMql5Jobs } from './engine/mql5Jobs.js';
+import { startNewsScheduler } from './engine/newsScheduler.js';
 
 import { apiKeyAuth } from './middleware/auth.js';
 
@@ -78,5 +79,6 @@ Promise.allSettled([
 ]).finally(() => {
   app.listen(PORT, () => {
     console.log(`[trading-agents-server] listening on http://localhost:${PORT}`);
+    startNewsScheduler();
   });
 });

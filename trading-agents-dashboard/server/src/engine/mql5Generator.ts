@@ -482,9 +482,10 @@ async function runMql5Pipeline(
   onProgress?.({ attempt: 1, maxAttempts: MAX_COMPILE_ATTEMPTS, phase: 'generating', details: 'Generando código MQL5 estructurado...' });
   let draft: EaDraft | null = null;
   let lastDraftError: string | null = null;
+  let successfulModel = resolvedModel;
   const candidateModels = [
     resolvedModel,
-    ...(resolvedModel.includes('auto/best-coding') ? ['omniroute:auto/pro-coding'] : []),
+    ...(resolvedModel.includes('auto/best-coding') ? ['mistral/codestral-latest', 'auto/pro-coding'] : []),
   ];
 
   for (const modelCandidate of candidateModels) {
@@ -494,6 +495,7 @@ async function runMql5Pipeline(
           ? `${initialUserPrompt}\n\nATENCIÓN CRÍTICA: El intento anterior fue rechazado porque devolviste código incompleto o trunco (${lastDraftError}). Debes entregar el archivo .mq5 COMPLETO y AUTOCONTENIDO desde las directivas #property y OnInit hasta el cierre de OnTick y OnTradeTransaction, sin omitir ninguna función ni usar stubs ni comentarios vacíos.`
           : initialUserPrompt;
         draft = await requestEa(modelCandidate, systemPrompt, promptToUse);
+        successfulModel = modelCandidate;
         break;
       } catch (err: any) {
         lastDraftError = err instanceof Error ? err.message : String(err);
@@ -521,7 +523,7 @@ async function runMql5Pipeline(
   while (compile.status === 'errors' && attempts < MAX_COMPILE_ATTEMPTS) {
     const previousErrors = compile.errors;
     onProgress?.({ attempt: attempts + 1, maxAttempts: MAX_COMPILE_ATTEMPTS, phase: 'generating', details: `Corrigiendo errores de compilación (${attempts + 1}/${MAX_COMPILE_ATTEMPTS})...` });
-    draft = await requestEa(resolvedModel, systemPrompt, buildFixPrompt(draft.code, previousErrors));
+    draft = await requestEa(successfulModel, systemPrompt, buildFixPrompt(draft.code, previousErrors));
     onProgress?.({ attempt: attempts + 1, maxAttempts: MAX_COMPILE_ATTEMPTS, phase: 'compiling', details: `Recompilando en MetaEditor64 (${attempts + 1}/${MAX_COMPILE_ATTEMPTS})...` });
     compile = await compileMql5(draft.code, filename);
     attempts += 1;

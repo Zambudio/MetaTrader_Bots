@@ -84,9 +84,6 @@ export async function overwritePreset(id: string, agents: Agent[]): Promise<Agen
   const state = await loadAgentConfigsState();
   const preset = state.presets.find((p) => p.id === id);
   if (!preset) return null;
-  if (isProtectedPreset(preset.id)) {
-    return null;
-  }
   preset.agents = agents;
   preset.updatedAt = new Date().toISOString();
   await saveAgentConfigsState(state);
