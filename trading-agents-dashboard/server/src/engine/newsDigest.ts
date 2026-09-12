@@ -40,14 +40,30 @@ function upsertIndexEntry(indexContent: string, pageRelPath: string, description
   const bullet = `- [\`${pageRelPath}\`](${pageRelPath}) — ${description}`;
 
   if (indexContent.includes(categoryHeading)) {
-    // Inserta el bullet justo después de la línea de cabecera de la categoría (o después del
-    // último bullet de esa categoría si ya tiene alguno, para mantenerlos agrupados).
     const lines = indexContent.split('\n');
     const headingIndex = lines.findIndex((l) => l.trim() === categoryHeading);
-    let insertAt = headingIndex + 1;
-    while (insertAt < lines.length && lines[insertAt].trim() === '') insertAt++;
-    while (insertAt < lines.length && lines[insertAt].startsWith('- ')) insertAt++;
-    lines.splice(insertAt, 0, bullet);
+    
+    // Busca si ya existe una entrada para este mismo archivo
+    let existingLineIndex = -1;
+    for (let i = headingIndex + 1; i < lines.length; i++) {
+      if (!lines[i].startsWith('- ')) break;
+      if (lines[i].includes(pageRelPath)) {
+        existingLineIndex = i;
+        break;
+      }
+    }
+    
+    if (existingLineIndex >= 0) {
+      // Reemplaza la línea existente
+      lines[existingLineIndex] = bullet;
+    } else {
+      // Inserta después del último bullet de la categoría
+      let insertAt = headingIndex + 1;
+      while (insertAt < lines.length && lines[insertAt].trim() === '') insertAt++;
+      while (insertAt < lines.length && lines[insertAt].startsWith('- ')) insertAt++;
+      lines.splice(insertAt, 0, bullet);
+    }
+    
     return lines.join('\n');
   }
 

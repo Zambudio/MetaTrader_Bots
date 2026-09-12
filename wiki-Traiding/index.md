@@ -79,5 +79,7 @@ _Última actualización: 2026-08-16 (revisión de rigor académico: eliminación
 
 ## Noticias
 
-- [`noticias/2026-09-06.md`](noticias/2026-09-06.md) — 11 artículo(s) obtenidos el 2026-09-06 — ver detalle en la página.
-- [`noticias/2026-09-12.md`](noticias/2026-09-12.md) — 135 artículo(s) obtenidos el 2026-09-12 — ver detalle en la página.
+Agrupadas por fecha de obtención (13 fuentes premium, sondeo automático cada 60 minutos). Ver carpeta [`noticias/`](noticias/) para listado completo y diarios.
+
+- [`noticias/2026-09-06.md`](noticias/2026-09-06.md) — 11 artículo(s) digeridos
+- [`noticias/2026-09-12.md`](noticias/2026-09-12.md) — 140 artículo(s) digeridos (acumulado del día)
