@@ -29,9 +29,17 @@ export const NewsPanel = ({ onClose }: { onClose: () => void }) => {
 
   const handleAddSource = async () => {
     if (!newName.trim() || !newUrl.trim()) return;
-    await api.addNewsSource({ name: newName.trim(), kind: newKind, url: newUrl.trim() });
+    const trimmedUrl = newUrl.trim();
+    try {
+      new URL(trimmedUrl);
+    } catch {
+      setError('URL inválida');
+      return;
+    }
+    await api.addNewsSource({ name: newName.trim(), kind: newKind, url: trimmedUrl });
     setNewName('');
     setNewUrl('');
+    setError(null);
     await reload();
   };
 

@@ -69,7 +69,13 @@ export async function generateNewsDigest(items: NewsItem[], opts: GenerateDigest
   await fs.mkdir(path.dirname(pageAbsPath), { recursive: true });
   await fs.writeFile(pageAbsPath, renderPage(date, pending), 'utf-8');
 
-  const indexContent = await fs.readFile(opts.indexFile, 'utf-8');
+  let indexContent = '';
+  try {
+    indexContent = await fs.readFile(opts.indexFile, 'utf-8');
+  } catch (err) {
+    if (!(err instanceof Error && 'code' in err && err.code === 'ENOENT')) throw;
+    await fs.mkdir(path.dirname(opts.indexFile), { recursive: true });
+  }
   const description = `${pending.length} artículo(s) obtenidos el ${date} — ver detalle en la página.`;
   const updatedIndex = upsertIndexEntry(indexContent, pageRelPath, description);
   await fs.writeFile(opts.indexFile, updatedIndex, 'utf-8');

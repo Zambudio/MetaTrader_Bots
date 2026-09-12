@@ -54,6 +54,10 @@ export async function fetchGenericUrl(source: NewsSource): Promise<Array<Omit<Ne
   if (!response.ok) {
     throw new Error(`GET ${source.url} respondió ${response.status}`);
   }
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!contentType.includes('text/html') && !contentType.includes('text/plain')) {
+    throw new Error(`Content-Type no soportado: ${contentType}`);
+  }
   const html = await response.text();
   const { title, description } = extractTitleAndDescription(html);
   if (!title) {
