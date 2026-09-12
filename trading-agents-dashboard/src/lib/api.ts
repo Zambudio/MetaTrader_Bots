@@ -126,6 +126,8 @@ export const api = {
     request<NewsItem[]>(sourceId ? `/news/items?sourceId=${encodeURIComponent(sourceId)}` : '/news/items'),
   generateNewsDigest: () =>
     request<{ pageRelPath: string | null; digestedIds: string[] }>('/news/digest', { method: 'POST' }),
+  pollRunUntilTerminal: (runId: string, maxAttempts?: number, onUpdate?: (run: Run) => void) =>
+    pollRunUntilTerminal(runId, maxAttempts, onUpdate),
 };
 
 const MQL5_POLL_INTERVAL_MS = 2000;
@@ -214,4 +216,49 @@ async function optimizeMql5WithPolling(
 ): Promise<Mql5GenerationResult> {
   const { jobId } = await api.startMql5Optimization(strategy, previousCode, previousBacktest, iteration, model, runId, previousNotes);
   return pollJob(jobId, onProgress);
+}
+
+export async function pollRunUntilTerminal(
+  runId: string,
+  maxAttempts: number = 1800, // 30 min @ 1 poll/sec
+  onUpdate?: (run: Run) => void
+): Promise<Run> {
+  let consecutiveFailures = 0;
+  const startedAt = Date.now();
+  const POLL_INTERVAL_MS = 1000;
+  const MAX_POLL_TIMEOUT_MS = 90 * 60 * 1000; // 90 min hard cap
+  const MAX_CONSECUTIVE_FAILURES = 30; // ~30s of failures before giving up
+
+  while (true) {
+    await sleep(POLL_INTERVAL_MS + consecutiveFailures * 200);
+
+    if (Date.now() - startedAt > MAX_POLL_TIMEOUT_MS) {
+      throw new Error(
+        'El análisis lleva demasiado tiempo sin terminar. Puede seguir en curso — recarga la página en unos minutos para ver si el resultado ya está.'
+      );
+    }
+
+    let run: Run;
+    try {
+      run = await api.getRun(runId);
+      consecutiveFailures = 0;
+    } catch (err) {
+      if (isTransientPollError(err)) {
+        consecutiveFailures += 1;
+        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+          throw new Error(
+            'No se pudo contactar con el servidor tras varios intentos seguidos. El análisis puede seguir en curso — recarga la página en un minuto.'
+          );
+        }
+        continue;
+      }
+      throw err;
+    }
+
+    onUpdate?.(run);
+
+    if (run.status !== 'running') {
+      return run;
+    }
+  }
 }

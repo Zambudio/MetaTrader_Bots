@@ -289,22 +289,11 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     try {
       const run = await api.startRun(selectedPair, timeframe, maxRetries, activePresetId ?? undefined, 'real');
       set({ currentRun: run });
-
-      let attempts = 0;
-      while (attempts < MAX_POLL_ATTEMPTS) {
-        attempts++;
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        const latest = await api.getRun(run.id);
-        set({ currentRun: latest });
-        if (latest.status !== 'running') break;
-      }
-
-      if (attempts >= MAX_POLL_ATTEMPTS) {
-        set({
-          error: 'Tiempo límite de espera alcanzado (30 min). Puedes reanudar o reejecutar el análisis desde la tarjeta del agente que quedó pendiente.',
-          errorDomain: 'run',
-        });
-      }
+      
+      const finalRun = await api.pollRunUntilTerminal(run.id, MAX_POLL_ATTEMPTS, (updatedRun) => {
+        set({ currentRun: updatedRun });
+      });
+      set({ currentRun: finalRun });
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Error ejecutando el análisis',
@@ -322,22 +311,11 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     try {
       const run = await api.resumeRun(currentRun.id, agentId);
       set({ currentRun: run });
-
-      let attempts = 0;
-      while (attempts < MAX_POLL_ATTEMPTS) {
-        attempts++;
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        const latest = await api.getRun(run.id);
-        set({ currentRun: latest });
-        if (latest.status !== 'running') break;
-      }
-
-      if (attempts >= MAX_POLL_ATTEMPTS) {
-        set({
-          error: 'Tiempo límite de espera alcanzado reanudando el análisis (30 min). Puedes reintentar desde la tarjeta de cualquier agente.',
-          errorDomain: 'run',
-        });
-      }
+      
+      const finalRun = await api.pollRunUntilTerminal(run.id, MAX_POLL_ATTEMPTS, (updatedRun) => {
+        set({ currentRun: updatedRun });
+      });
+      set({ currentRun: finalRun });
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Error reanudando el análisis',
