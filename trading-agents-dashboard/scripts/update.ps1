@@ -24,6 +24,9 @@ Write-Host '== npm install (raíz + server) ==' -ForegroundColor Cyan
 npm install --no-fund --no-audit
 npm install --no-fund --no-audit --prefix server
 
+Write-Host '== typecheck server ==' -ForegroundColor Cyan
+npx tsc -b --noEmit
+
 Write-Host '== build frontend ==' -ForegroundColor Cyan
 npm run build
 
