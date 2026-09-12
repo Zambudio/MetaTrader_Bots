@@ -16,6 +16,15 @@
     "moduleDetection": "auto",
     "noEmit": true,
     "jsx": "react-jsx",
+    
+    /* Strict mode for null safety */
+    "strict": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitAny": true,
+    "noImplicitThis": true,
 
     /* Linting */
     "noUnusedLocals": true,
