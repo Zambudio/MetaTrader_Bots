@@ -10,6 +10,7 @@ export const NewsPanel = ({ onClose }: { onClose: () => void }) => {
   const [newName, setNewName] = useState('');
   const [newKind, setNewKind] = useState<'rss' | 'generic_url'>('rss');
   const [newUrl, setNewUrl] = useState('');
+  const [showActionMenu, setShowActionMenu] = useState(false);
 
   const reload = async () => {
     setLoading(true);
@@ -87,27 +88,34 @@ export const NewsPanel = ({ onClose }: { onClose: () => void }) => {
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted">Fuentes ({sources.length})</p>
-            <div className="flex gap-2">
-              <button onClick={handleFetchAll} disabled={loading} className="text-xs text-cyan hover:underline cursor-pointer disabled:opacity-40">Actualizar todas</button>
-              <button onClick={handleDigest} className="text-xs text-cyan hover:underline cursor-pointer">Generar resumen de wiki</button>
+            <div className="relative">
+              <button onClick={() => setShowActionMenu(!showActionMenu)} disabled={loading} className="text-xs px-3 py-1.5 rounded-lg border border-cyan/60 bg-cyan/10 text-cyan hover:bg-cyan/20 cursor-pointer disabled:opacity-40">
+                ⚙ Acciones
+              </button>
+              {showActionMenu && (
+                <div className="absolute right-0 mt-2 bg-panel border border-line/70 rounded-lg shadow-lg overflow-hidden z-10">
+                  <button onClick={() => { handleFetchAll(); setShowActionMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-cyan hover:bg-void/60 text-nowrap">Actualizar todas</button>
+                  <button onClick={() => { handleDigest(); setShowActionMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-cyan hover:bg-void/60 text-nowrap">Generar resumen wiki</button>
+                </div>
+              )}
             </div>
           </div>
           <ul className="divide-y divide-line/40 border border-line/70 rounded-xl overflow-hidden bg-void/40">
             {sources.map((s) => (
-              <li key={s.id} className="px-4 py-3 flex items-center justify-between gap-4">
+              <li key={s.id} className="px-4 py-3 flex items-center justify-between gap-4 hover:bg-void/30 transition-colors">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold text-paper truncate">{s.name}</p>
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-sm font-semibold text-paper">{s.name}</p>
                     <span className="text-xs text-muted shrink-0">({s.kind})</span>
-                    {s.lastFetchStatus === 'error' && <span className="text-xs px-2 py-1 rounded bg-bear/20 text-bear shrink-0">error</span>}
+                    {s.lastFetchStatus === 'error' && <span className="inline-flex h-2 w-2 rounded-full bg-bear shrink-0" title={s.lastFetchError} />}
                   </div>
                   <p className="text-xs text-muted truncate">{s.url}</p>
                 </div>
-                <div className="flex gap-2 shrink-0 whitespace-nowrap">
+                <div className="flex gap-2 shrink-0">
                   <button onClick={async () => { await api.fetchNewsSource(s.id); await reload(); }}
-                    className="text-xs text-cyan hover:underline cursor-pointer">Actualizar</button>
+                    className="text-xs px-2 py-1 rounded text-cyan border border-cyan/40 hover:bg-cyan/10 cursor-pointer">Actualizar</button>
                   <button onClick={async () => { await api.deleteNewsSource(s.id); await reload(); }}
-                    className="text-xs text-bear hover:underline cursor-pointer">Borrar</button>
+                    className="text-xs px-2 py-1 rounded text-bear border border-bear/40 hover:bg-bear/10 cursor-pointer">Borrar</button>
                 </div>
               </li>
             ))}
