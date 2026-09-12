@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { validateNewsSourceUrl } from '../utils/urlValidator.js';
 import {
   listSources, addSource, updateSource, deleteSource, listItems, markDigested,
 } from '../store/newsStore.js';
@@ -39,6 +40,14 @@ newsRouter.post('/sources', asyncHandler(async (req, res) => {
   if (!name || typeof name !== 'string') { res.status(400).json({ error: 'name is required' }); return; }
   if (kind !== 'rss' && kind !== 'generic_url') { res.status(400).json({ error: 'kind must be "rss" or "generic_url"' }); return; }
   if (!url || typeof url !== 'string') { res.status(400).json({ error: 'url is required' }); return; }
+  
+  // Validate URL to prevent SSRF (G2)
+  const validation = validateNewsSourceUrl(url);
+  if (!validation.valid) {
+    res.status(400).json({ error: `URL blocked by security policy: ${validation.error}` });
+    return;
+  }
+  
   res.status(201).json(await addSource({ name, kind, url }));
 }));
 

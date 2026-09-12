@@ -4,6 +4,7 @@ import { saveRun, loadRun, listRuns, deleteRun } from '../store/runsStore.js';
 import { executeRun, DEFAULT_MAX_RETRIES } from '../engine/orchestrator.js';
 import { abortRun } from '../engine/runAbortRegistry.js';
 import { getActivePreset, getPreset } from '../store/agentConfigsStore.js';
+import { listAgents } from '../store/agentsStore.js';
 import { hashConfiguration, validatePreset } from '../config/configValidation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import type { Agent, Run } from '../types.js';
@@ -76,7 +77,12 @@ runsRouter.post(
       res.status(400).json({ error: `La baseline ${preset.name} requiere el activo de referencia ${preset.referenceAsset}; recibido ${pair}.` });
       return;
     }
-    const agents = structuredClone(preset.agents);
+    
+    // FIX B1: Use live agents (from agentes.json) instead of frozen preset agents.
+    // This ensures that edits to agents after the preset was saved take effect immediately.
+    // The preset still freezes configuration for reproducibility, but agents are always live.
+    const liveAgents = await listAgents();
+    const agents = structuredClone(liveAgents.length > 0 ? liveAgents : preset.agents);
     if (agents.length === 0) {
       res.status(400).json({ error: 'no hay agentes configurados' });
       return;
