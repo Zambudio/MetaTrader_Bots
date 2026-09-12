@@ -38,6 +38,16 @@ export const AgentConfigBar = () => {
     }
   };
 
+  const handleSaveClick = async () => {
+    if (isProtected && activePreset) {
+      const details = [activePreset.version, activePreset.referenceAsset].filter(Boolean).join(' · ');
+      const label = details ? `${activePreset.name} (${details})` : activePreset.name;
+      const message = `⚠️ "${label}" es una plantilla base oficial (protegida).\n\nAl guardar, sobrescribirás esta plantilla con los agentes actuales. Los cambios serán permanentes para todos los usos futuros de esta plantilla.\n\n¿Estás seguro?`;
+      if (!window.confirm(message)) return;
+    }
+    await overwriteActivePreset();
+  };
+
   const handleDeleteClick = () => {
     if (activePreset && !isProtected) {
       const details = [activePreset.version, activePreset.referenceAsset].filter(Boolean).join(' · ');
@@ -110,11 +120,11 @@ export const AgentConfigBar = () => {
         </button>
       )}
 
-      {activePresetId && !isProtected && (
+      {activePresetId && (
         <button
-          onClick={() => overwriteActivePreset()}
+          onClick={handleSaveClick}
           disabled={isAnalysing}
-          title="Sobrescribir esta configuración con los agentes actuales"
+          title={isProtected ? "Guardar y sobrescribir esta plantilla base oficial" : "Sobrescribir esta configuración con los agentes actuales"}
           className="rounded-xl border border-line/70 text-paper/80 font-medium text-sm px-3 py-2 hover:text-cyan hover:border-cyan/50 hover:shadow-[0_0_12px_-4px_rgba(45,230,244,0.3)] transition-all disabled:opacity-40 cursor-pointer"
         >
           💾 Guardar
