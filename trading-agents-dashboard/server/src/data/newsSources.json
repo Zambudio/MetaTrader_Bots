@@ -5,7 +5,10 @@
     "kind": "rss",
     "url": "https://feeds.reuters.com/reuters/businessNews",
     "enabled": true,
-    "createdAt": "2026-09-12T12:00:00.000Z"
+    "createdAt": "2026-09-12T12:00:00.000Z",
+    "lastFetchedAt": "2026-09-12T08:44:18.660Z",
+    "lastFetchStatus": "error",
+    "lastFetchError": "getaddrinfo ENOTFOUND feeds.reuters.com"
   },
   {
     "id": "investing_forex",
@@ -13,7 +16,9 @@
     "kind": "rss",
     "url": "https://www.investing.com/rss/news_1.rss",
     "enabled": true,
-    "createdAt": "2026-09-12T12:00:00.000Z"
+    "createdAt": "2026-09-12T12:00:00.000Z",
+    "lastFetchedAt": "2026-09-12T08:44:18.812Z",
+    "lastFetchStatus": "ok"
   },
   {
     "id": "fxstreet",
@@ -21,7 +26,9 @@
     "kind": "rss",
     "url": "https://www.fxstreet.com/rss",
     "enabled": true,
-    "createdAt": "2026-09-12T12:00:00.000Z"
+    "createdAt": "2026-09-12T12:00:00.000Z",
+    "lastFetchedAt": "2026-09-12T08:44:19.350Z",
+    "lastFetchStatus": "ok"
   },
   {
     "id": "litefinance_forex",
@@ -29,7 +36,10 @@
     "kind": "rss",
     "url": "https://www.litefinance.org/rss/",
     "enabled": true,
-    "createdAt": "2026-09-12T12:00:00.000Z"
+    "createdAt": "2026-09-12T12:00:00.000Z",
+    "lastFetchedAt": "2026-09-12T08:44:19.836Z",
+    "lastFetchStatus": "error",
+    "lastFetchError": "Invalid character in entity name\nLine: 22\nColumn: 43\nChar: ="
   },
   {
     "id": "investing_stocks",
@@ -37,7 +47,9 @@
     "kind": "rss",
     "url": "https://www.investing.com/rss/news_25.rss",
     "enabled": true,
-    "createdAt": "2026-09-12T12:00:00.000Z"
+    "createdAt": "2026-09-12T12:00:00.000Z",
+    "lastFetchedAt": "2026-09-12T08:44:19.932Z",
+    "lastFetchStatus": "ok"
   },
   {
     "id": "investing_earnings",
@@ -45,7 +57,9 @@
     "kind": "rss",
     "url": "https://www.investing.com/rss/news_1062.rss",
     "enabled": true,
-    "createdAt": "2026-09-12T12:00:00.000Z"
+    "createdAt": "2026-09-12T12:00:00.000Z",
+    "lastFetchedAt": "2026-09-12T08:44:20.027Z",
+    "lastFetchStatus": "ok"
   },
   {
     "id": "marketwatch",
@@ -53,7 +67,9 @@
     "kind": "rss",
     "url": "https://feeds.marketwatch.com/marketwatch/topstories/",
     "enabled": true,
-    "createdAt": "2026-09-12T12:00:00.000Z"
+    "createdAt": "2026-09-12T12:00:00.000Z",
+    "lastFetchedAt": "2026-09-12T08:44:20.603Z",
+    "lastFetchStatus": "ok"
   },
   {
     "id": "yahoo_finance",
@@ -61,7 +77,10 @@
     "kind": "rss",
     "url": "https://feeds.finance.yahoo.com/rss/2.0/headline",
     "enabled": true,
-    "createdAt": "2026-09-12T12:00:00.000Z"
+    "createdAt": "2026-09-12T12:00:00.000Z",
+    "lastFetchedAt": "2026-09-12T08:44:21.151Z",
+    "lastFetchStatus": "error",
+    "lastFetchError": "Status code 400"
   },
   {
     "id": "coindesk",
@@ -69,7 +88,9 @@
     "kind": "rss",
     "url": "https://www.coindesk.com/arc/outboundfeeds/rss/",
     "enabled": true,
-    "createdAt": "2026-09-12T12:00:00.000Z"
+    "createdAt": "2026-09-12T12:00:00.000Z",
+    "lastFetchedAt": "2026-09-12T08:44:21.745Z",
+    "lastFetchStatus": "ok"
   },
   {
     "id": "cointelegraph",
@@ -77,7 +98,9 @@
     "kind": "rss",
     "url": "https://cointelegraph.com/feed",
     "enabled": true,
-    "createdAt": "2026-09-12T12:00:00.000Z"
+    "createdAt": "2026-09-12T12:00:00.000Z",
+    "lastFetchedAt": "2026-09-12T08:44:22.065Z",
+    "lastFetchStatus": "ok"
   },
   {
     "id": "cryptoslate",
@@ -85,7 +108,9 @@
     "kind": "rss",
     "url": "https://cryptoslate.com/feed/",
     "enabled": true,
-    "createdAt": "2026-09-12T12:00:00.000Z"
+    "createdAt": "2026-09-12T12:00:00.000Z",
+    "lastFetchedAt": "2026-09-12T08:44:22.221Z",
+    "lastFetchStatus": "ok"
   },
   {
     "id": "investing_economic",
@@ -93,7 +118,10 @@
     "kind": "rss",
     "url": "https://www.investing.com/rss/news_100.rss",
     "enabled": true,
-    "createdAt": "2026-09-12T12:00:00.000Z"
+    "createdAt": "2026-09-12T12:00:00.000Z",
+    "lastFetchedAt": "2026-09-12T08:44:25.423Z",
+    "lastFetchStatus": "error",
+    "lastFetchError": "Status code 404"
   },
   {
     "id": "cnbc_markets",
@@ -101,6 +129,9 @@
     "kind": "rss",
     "url": "https://feeds.cnbc.com/cnbc/rss-full",
     "enabled": true,
-    "createdAt": "2026-09-12T12:00:00.000Z"
+    "createdAt": "2026-09-12T12:00:00.000Z",
+    "lastFetchedAt": "2026-09-12T08:44:25.555Z",
+    "lastFetchStatus": "error",
+    "lastFetchError": "getaddrinfo ENOTFOUND feeds.cnbc.com"
   }
 ]

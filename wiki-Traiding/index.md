@@ -80,3 +80,4 @@ _Última actualización: 2026-08-16 (revisión de rigor académico: eliminación
 ## Noticias
 
 - [`noticias/2026-09-06.md`](noticias/2026-09-06.md) — 11 artículo(s) obtenidos el 2026-09-06 — ver detalle en la página.
+- [`noticias/2026-09-12.md`](noticias/2026-09-12.md) — 135 artículo(s) obtenidos el 2026-09-12 — ver detalle en la página.
