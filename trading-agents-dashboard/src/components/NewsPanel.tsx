@@ -100,10 +100,12 @@ export const NewsPanel = ({ onClose }: { onClose: () => void }) => {
                   <p className="text-xs text-muted truncate">{s.url}</p>
                   {s.lastFetchStatus === 'error' && <p className="text-xs text-bear">Último error: {s.lastFetchError}</p>}
                 </div>
-                <button onClick={async () => { await api.fetchNewsSource(s.id); await reload(); }}
-                  className="text-xs text-cyan hover:underline cursor-pointer shrink-0">Actualizar</button>
-                <button onClick={async () => { await api.deleteNewsSource(s.id); await reload(); }}
-                  className="text-xs text-bear hover:underline cursor-pointer shrink-0">Borrar</button>
+                <div className="flex gap-2 shrink-0">
+                  <button onClick={async () => { await api.fetchNewsSource(s.id); await reload(); }}
+                    className="text-xs text-cyan hover:underline cursor-pointer">Actualizar</button>
+                  <button onClick={async () => { await api.deleteNewsSource(s.id); await reload(); }}
+                    className="text-xs text-bear hover:underline cursor-pointer">Borrar</button>
+                </div>
               </li>
             ))}
           </ul>

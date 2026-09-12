@@ -61,8 +61,8 @@ newsRouter.post('/sources/:id/fetch', asyncHandler(async (req, res) => {
 }));
 
 newsRouter.post('/fetch-all', asyncHandler(async (_req, res) => {
-  const outcome = await fetchAllNewsSources(false);
-  res.json(outcome.results);
+  const outcome = await fetchAllNewsSources(true);
+  res.json({ results: outcome.results, digestResult: outcome.digestResult });
 }));
 
 newsRouter.get('/items', asyncHandler(async (req, res) => {
