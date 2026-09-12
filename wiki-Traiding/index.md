@@ -71,6 +71,14 @@ Corpus de fuentes externas y referencias sin procesar (papers académicos, guía
 
 - Carpeta [`raw/`](raw/) — referencias de fuentes externas por categoría (análisis fundamental, indicadores, estrategias, gestión de riesgo, infraestructura), cada una enlazada a su fuente original. Incluye transcripciones de StockCharts, Investopedia, Federal Reserve, ECB, BIS, QuantStart, etc.
 
+### Guías StockCharts (raw/basico/)
+
+- [`stockcharts-lineas-barras.md`](raw/basico/stockcharts-lineas-barras.md)
+- [`stockcharts-tipos-grafico.md`](raw/basico/stockcharts-tipos-grafico.md)
+- [`stockcharts-velas-japonesas.md`](raw/basico/stockcharts-velas-japonesas.md)
+- [`stockcharts-soporte-resistencia.md`](raw/basico/stockcharts-soporte-resistencia.md)
+- [`stockcharts-dow-theory.md`](raw/basico/stockcharts-dow-theory.md)
+
 ## Proyecto — Ingeniería MT5 Bots
 
 Investigación de ingeniería de *este* proyecto concreto (arquitectura y funcionamiento de MetaTrader 5, fundamentos y estándar de MQL5, arquitectura de Expert Advisors, modelo de órdenes/deals/posiciones, gestión de riesgo de EAs, Strategy Tester, backtesting/optimización/validación quant, ciclo de vida y versionado de estrategias, integración Python, MCP/agentes de IA, arquitectura multiagente futura, análisis fundamental aplicado, selección de broker, despliegue en VPS, seguridad/credenciales, observabilidad/auditoría, estándar de desarrollo de EAs con IA, primeros bots de laboratorio, plan de puesta en marcha y pipeline de validación/backtest agéntico). Corpus separado con sus propias convenciones (tabla de estados por documento, decisiones congeladas, preguntas abiertas) — ver [`proyecto-mt5-bots/00_INDEX.md`](proyecto-mt5-bots/00_INDEX.md) para el índice completo y [`CLAUDE.md`](CLAUDE.md) para las convenciones. No forma parte del catálogo de coincidencia automática que usan los agentes del dashboard (`wikiStore.ts` solo indexa viñetas con el formato exacto de arriba) — pensado para consulta humana/Claude Code, no para inyección automática de contexto en agentes.
@@ -78,6 +86,14 @@ Investigación de ingeniería de *este* proyecto concreto (arquitectura y funcio
 ## Proyecto — Planes de ingeniería del dashboard
 
 Planes de implementación, specs de diseño e informes de prueba/auditoría de `trading-agents-dashboard/` (dependencias multi-padre entre agentes, esquema de 6 agentes de análisis, prueba end-to-end del ciclo agentes→MQL5→backtest con 9 problemas reales corregidos) — los planes/specs ya ejecutados quedan como registro histórico de diseño, los informes registran hallazgos verificados en vivo sobre una implementación ya hecha. Ver [`proyecto-dashboard/00_INDEX.md`](proyecto-dashboard/00_INDEX.md) para el índice completo. Igual que `proyecto-mt5-bots/`, fuera del catálogo de coincidencia automática de `wikiStore.ts`.
+
+### Diagnósticos Codex (iteraciones de debugging)
+
+- [`codex-diag-iter2.md`](proyecto-dashboard/deliverables/diagnosticos-codex/codex-diag-iter2.md)
+- [`codex-diag-iter3.md`](proyecto-dashboard/deliverables/diagnosticos-codex/codex-diag-iter3.md)
+- [`codex-diag-iter4.md`](proyecto-dashboard/deliverables/diagnosticos-codex/codex-diag-iter4.md)
+- [`codex-diag-iter5.md`](proyecto-dashboard/deliverables/diagnosticos-codex/codex-diag-iter5.md)
+- [`codex-diag-iter6.md`](proyecto-dashboard/deliverables/diagnosticos-codex/codex-diag-iter6.md)
 
 ---
 
