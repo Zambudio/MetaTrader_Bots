@@ -220,7 +220,7 @@ async function optimizeMql5WithPolling(
 
 export async function pollRunUntilTerminal(
   runId: string,
-  maxAttempts: number = 1800, // 30 min @ 1 poll/sec
+  _maxAttempts: number = 1800, // 30 min @ 1 poll/sec (kept for backward compat, not used - hard cap is 90 min)
   onUpdate?: (run: Run) => void
 ): Promise<Run> {
   let consecutiveFailures = 0;

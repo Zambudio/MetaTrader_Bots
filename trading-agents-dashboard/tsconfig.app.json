@@ -11,7 +11,7 @@
 
     /* Bundler mode */
     "moduleResolution": "node",
-    "allowImportingTsExtensions": false,
+    "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": false,
     "moduleDetection": "auto",
     "noEmit": true,
