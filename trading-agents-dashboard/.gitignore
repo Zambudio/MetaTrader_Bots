@@ -24,6 +24,7 @@ dist-ssr
 server/src/data/*
 !server/src/data/agents.json
 !server/src/data/pairs.json
+!server/src/data/newsSources.json
 server/src/data/runs/
 server/src/data/mql5-tmp/
 server/src/data/mql5-jobs/

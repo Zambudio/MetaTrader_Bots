@@ -8,6 +8,26 @@ import { generateNewsDigest } from '../engine/newsDigest.js';
 import { WIKI_DIR, WIKI_INDEX_FILE } from '../paths.js';
 import type { NewsSource } from '../types.js';
 
+const PREMIUM_NEWS_SOURCES = [
+  // Forex News
+  { name: 'Reuters Forex & Markets', kind: 'rss' as const, url: 'https://feeds.reuters.com/reuters/businessNews' },
+  { name: 'Investing.com Forex News', kind: 'rss' as const, url: 'https://www.investing.com/rss/news_1.rss' },
+  { name: 'FXStreet Forex Analysis', kind: 'rss' as const, url: 'https://www.fxstreet.com/rss' },
+  { name: 'LiteFinance Forex', kind: 'rss' as const, url: 'https://www.litefinance.org/rss/' },
+  // Stocks & Markets
+  { name: 'Investing.com Stocks', kind: 'rss' as const, url: 'https://www.investing.com/rss/news_25.rss' },
+  { name: 'Investing.com Earnings', kind: 'rss' as const, url: 'https://www.investing.com/rss/news_1062.rss' },
+  { name: 'MarketWatch Markets', kind: 'rss' as const, url: 'https://feeds.marketwatch.com/marketwatch/topstories/' },
+  { name: 'Yahoo Finance Market News', kind: 'rss' as const, url: 'https://feeds.finance.yahoo.com/rss/2.0/headline' },
+  // Cryptocurrency News
+  { name: 'CoinDesk Bitcoin & Crypto', kind: 'rss' as const, url: 'https://www.coindesk.com/arc/outboundfeeds/rss/' },
+  { name: 'Cointelegraph Crypto News', kind: 'rss' as const, url: 'https://cointelegraph.com/feed' },
+  { name: 'Cryptoslate Crypto Market', kind: 'rss' as const, url: 'https://cryptoslate.com/feed/' },
+  // Economic Calendar & Macro
+  { name: 'Investing.com Economic Events', kind: 'rss' as const, url: 'https://www.investing.com/rss/news_100.rss' },
+  { name: 'CNBC Markets', kind: 'rss' as const, url: 'https://feeds.cnbc.com/cnbc/rss-full' },
+];
+
 export const newsRouter = Router();
 
 newsRouter.get('/sources', asyncHandler(async (_req, res) => {
@@ -67,4 +87,24 @@ newsRouter.post('/digest', asyncHandler(async (_req, res) => {
     for (const [sourceId, ids] of bySource) await markDigested(sourceId, ids);
   }
   res.json(result);
+}));
+
+newsRouter.post('/seed-premium', asyncHandler(async (_req, res) => {
+  const existing = await listSources();
+  const existingNames = new Set(existing.map((s) => s.name));
+  const results = { added: 0, skipped: 0, failed: 0, failures: [] as string[] };
+  for (const source of PREMIUM_NEWS_SOURCES) {
+    if (existingNames.has(source.name)) {
+      results.skipped++;
+      continue;
+    }
+    try {
+      await addSource(source);
+      results.added++;
+    } catch (err) {
+      results.failed++;
+      results.failures.push(`${source.name}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  res.json(results);
 }));

@@ -1,0 +1,106 @@
+[
+  {
+    "id": "reuters_forex",
+    "name": "Reuters Forex & Markets",
+    "kind": "rss",
+    "url": "https://feeds.reuters.com/reuters/businessNews",
+    "enabled": true,
+    "createdAt": "2026-09-12T12:00:00.000Z"
+  },
+  {
+    "id": "investing_forex",
+    "name": "Investing.com Forex News",
+    "kind": "rss",
+    "url": "https://www.investing.com/rss/news_1.rss",
+    "enabled": true,
+    "createdAt": "2026-09-12T12:00:00.000Z"
+  },
+  {
+    "id": "fxstreet",
+    "name": "FXStreet Forex Analysis",
+    "kind": "rss",
+    "url": "https://www.fxstreet.com/rss",
+    "enabled": true,
+    "createdAt": "2026-09-12T12:00:00.000Z"
+  },
+  {
+    "id": "litefinance_forex",
+    "name": "LiteFinance Forex",
+    "kind": "rss",
+    "url": "https://www.litefinance.org/rss/",
+    "enabled": true,
+    "createdAt": "2026-09-12T12:00:00.000Z"
+  },
+  {
+    "id": "investing_stocks",
+    "name": "Investing.com Stocks",
+    "kind": "rss",
+    "url": "https://www.investing.com/rss/news_25.rss",
+    "enabled": true,
+    "createdAt": "2026-09-12T12:00:00.000Z"
+  },
+  {
+    "id": "investing_earnings",
+    "name": "Investing.com Earnings",
+    "kind": "rss",
+    "url": "https://www.investing.com/rss/news_1062.rss",
+    "enabled": true,
+    "createdAt": "2026-09-12T12:00:00.000Z"
+  },
+  {
+    "id": "marketwatch",
+    "name": "MarketWatch Markets",
+    "kind": "rss",
+    "url": "https://feeds.marketwatch.com/marketwatch/topstories/",
+    "enabled": true,
+    "createdAt": "2026-09-12T12:00:00.000Z"
+  },
+  {
+    "id": "yahoo_finance",
+    "name": "Yahoo Finance Market News",
+    "kind": "rss",
+    "url": "https://feeds.finance.yahoo.com/rss/2.0/headline",
+    "enabled": true,
+    "createdAt": "2026-09-12T12:00:00.000Z"
+  },
+  {
+    "id": "coindesk",
+    "name": "CoinDesk Bitcoin & Crypto",
+    "kind": "rss",
+    "url": "https://www.coindesk.com/arc/outboundfeeds/rss/",
+    "enabled": true,
+    "createdAt": "2026-09-12T12:00:00.000Z"
+  },
+  {
+    "id": "cointelegraph",
+    "name": "Cointelegraph Crypto News",
+    "kind": "rss",
+    "url": "https://cointelegraph.com/feed",
+    "enabled": true,
+    "createdAt": "2026-09-12T12:00:00.000Z"
+  },
+  {
+    "id": "cryptoslate",
+    "name": "Cryptoslate Crypto Market",
+    "kind": "rss",
+    "url": "https://cryptoslate.com/feed/",
+    "enabled": true,
+    "createdAt": "2026-09-12T12:00:00.000Z"
+  },
+  {
+    "id": "investing_economic",
+    "name": "Investing.com Economic Events",
+    "kind": "rss",
+    "url": "https://www.investing.com/rss/news_100.rss",
+    "enabled": true,
+    "createdAt": "2026-09-12T12:00:00.000Z"
+  },
+  {
+    "id": "cnbc_markets",
+    "name": "CNBC Markets",
+    "kind": "rss",
+    "url": "https://feeds.cnbc.com/cnbc/rss-full",
+    "enabled": true,
+    "createdAt": "2026-09-12T12:00:00.000Z"
+  }
+]
