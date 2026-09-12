@@ -8,7 +8,7 @@ const backendPort = process.env.PORT || '5175';
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: {
-    target: 'es2023',
+    target: 'es2022',
     minify: 'esbuild',
   },
   server: {
