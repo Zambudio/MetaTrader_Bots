@@ -18,8 +18,18 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  
+  // Enviar API key si está disponible (para requerir auth en todos los endpoints)
+  try {
+    const apiKey = localStorage.getItem('dashboard_api_key') || import.meta.env.VITE_DASHBOARD_API_KEY;
+    if (apiKey) headers['x-api-key'] = apiKey;
+  } catch {
+    // localStorage puede no estar disponible
+  }
+  
   const response = await fetch(`/api${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     ...options,
   });
   if (!response.ok) {

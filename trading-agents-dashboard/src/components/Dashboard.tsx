@@ -16,12 +16,16 @@ import { buildLevels, filterEnabledAgents, wouldCreateCycle } from '../lib/agent
 import type { Agent } from '../types/agent';
 
 export const Dashboard = () => {
+  // Selectores para evitar re-render en cada cambio de estado de run
+  const agents = useAgentStore((s) => s.agents);
+  const currentRun = useAgentStore((s) => s.currentRun);
+  const isAnalysing = useAgentStore((s) => s.isAnalysing);
+  const isLoading = useAgentStore((s) => s.isLoading);
+  const error = useAgentStore((s) => s.error);
+  const maxRetries = useAgentStore((s) => s.maxRetries);
+  
+  // Acciones (éstas nunca cambian)
   const {
-    agents,
-    currentRun,
-    isAnalysing,
-    isLoading,
-    error,
     loadInitialData,
     addAgent,
     updateAgent,
@@ -30,9 +34,18 @@ export const Dashboard = () => {
     resumeWorkflow,
     stopWorkflow,
     loadRun,
-    maxRetries,
     setMaxRetries,
-  } = useAgentStore();
+  } = useAgentStore((s) => ({
+    loadInitialData: s.loadInitialData,
+    addAgent: s.addAgent,
+    updateAgent: s.updateAgent,
+    removeAgent: s.removeAgent,
+    runWorkflow: s.runWorkflow,
+    resumeWorkflow: s.resumeWorkflow,
+    stopWorkflow: s.stopWorkflow,
+    loadRun: s.loadRun,
+    setMaxRetries: s.setMaxRetries,
+  }));
 
   const [editingAgent, setEditingAgent] = useState<Agent | null | 'new'>(null);
   const [showHistory, setShowHistory] = useState(false);

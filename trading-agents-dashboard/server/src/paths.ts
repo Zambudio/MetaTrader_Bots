@@ -2,8 +2,9 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const serverDir = path.dirname(currentDir);
 
-export const DATA_DIR = path.join(currentDir, 'data');
+export const DATA_DIR = path.join(serverDir, 'data');
 export const RUNS_DIR = path.join(DATA_DIR, 'runs');
 export const AGENTS_FILE = path.join(DATA_DIR, 'agents.json');
 export const AGENT_CONFIGS_FILE = path.join(DATA_DIR, 'agentConfigs.json');

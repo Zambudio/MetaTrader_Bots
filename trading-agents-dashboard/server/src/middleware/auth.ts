@@ -13,8 +13,8 @@ export function apiKeyAuth(req: Request, res: Response, next: NextFunction): voi
     return;
   }
 
-  // Endpoints de lectura (GET, OPTIONS, HEAD) y health check quedan exentos
-  if (['GET', 'OPTIONS', 'HEAD'].includes(req.method) || req.path === '/api/health') {
+  // Health check siempre accesible; todo lo demás requiere API key si está configurada
+  if (req.path === '/api/health' || req.method === 'OPTIONS') {
     next();
     return;
   }

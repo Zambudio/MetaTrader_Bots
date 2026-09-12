@@ -301,7 +301,7 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
 
       if (attempts >= MAX_POLL_ATTEMPTS) {
         set({
-          error: 'Tiempo límite de espera alcanzado (10 min). Puedes reanudar o reejecutar el análisis desde la tarjeta del agente que quedó pendiente.',
+          error: 'Tiempo límite de espera alcanzado (30 min). Puedes reanudar o reejecutar el análisis desde la tarjeta del agente que quedó pendiente.',
           errorDomain: 'run',
         });
       }
@@ -334,7 +334,7 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
 
       if (attempts >= MAX_POLL_ATTEMPTS) {
         set({
-          error: 'Tiempo límite de espera alcanzado reanudando el análisis (10 min). Puedes reintentar desde la tarjeta de cualquier agente.',
+          error: 'Tiempo límite de espera alcanzado reanudando el análisis (30 min). Puedes reintentar desde la tarjeta de cualquier agente.',
           errorDomain: 'run',
         });
       }
