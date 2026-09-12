@@ -94,11 +94,14 @@ export const NewsPanel = ({ onClose }: { onClose: () => void }) => {
           </div>
           <ul className="divide-y divide-line/40 border border-line/70 rounded-xl overflow-hidden bg-void/40">
             {sources.map((s) => (
-              <li key={s.id} className="px-4 py-3 flex items-start justify-between gap-4">
+              <li key={s.id} className="px-4 py-3 flex items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-paper truncate">{s.name} <span className="text-muted font-normal">({s.kind})</span></p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-paper truncate">{s.name}</p>
+                    <span className="text-xs text-muted shrink-0">({s.kind})</span>
+                    {s.lastFetchStatus === 'error' && <span className="text-xs px-2 py-1 rounded bg-bear/20 text-bear shrink-0">error</span>}
+                  </div>
                   <p className="text-xs text-muted truncate">{s.url}</p>
-                  {s.lastFetchStatus === 'error' && <p className="text-xs text-bear">Último error: {s.lastFetchError}</p>}
                 </div>
                 <div className="flex gap-2 shrink-0 whitespace-nowrap">
                   <button onClick={async () => { await api.fetchNewsSource(s.id); await reload(); }}
