@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Dashboard - Simple</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+            color: #e0e0e0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            min-height: 100vh;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        header {
+            background: rgba(15, 23, 42, 0.8);
+            border-bottom: 2px solid #2563eb;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+        h1 { color: #2563eb; margin-bottom: 10px; }
+        .section {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid #2563eb;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .status { display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 12px; }
+        .status.ok { background: #10b981; color: white; }
+        .status.error { background: #ef4444; color: white; }
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            background: #0a0e27;
+            border: 1px solid #2563eb;
+            color: #e0e0e0;
+            border-radius: 4px;
+        }
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px 0;
+        }
+        button:hover { background: #1d4ed8; }
+        #results {
+            background: #0a0e27;
+            border: 1px solid #10b981;
+            color: #10b981;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 Trading Dashboard - Simplified Version</h1>
+            <p>React build is having issues. Using fallback interface.</p>
+        </header>
+
+        <div class="section">
+            <h2>API Status <span class="status ok" id="api-status">Checking...</span></h2>
+            <p id="api-info">Verifying server connection...</p>
+        </div>
+
+        <div class="section">
+            <h2>Symbol Search Test</h2>
+            <p>Test the symbol search API endpoint:</p>
+            <input type="text" id="search-input" placeholder="Enter symbol (e.g., BTC, AAPL, EUR)" value="BTC">
+            <button onclick="testSearch()">🔍 Search</button>
+            <div id="results"></div>
+        </div>
+
+        <div class="section">
+            <h2>System Info</h2>
+            <p>Frontend Version: Simple (React disabled)</p>
+            <p>Backend: <span id="backend-url">http://localhost:5175</span></p>
+            <p>React Issue: Manifest error #185 (see console)</p>
+        </div>
+    </div>
+
+    <script>
+        async function checkAPI() {
+            try {
+                const res = await fetch('/api/health');
+                if (res.ok) {
+                    document.getElementById('api-status').textContent = '🟢 ONLINE';
+                    document.getElementById('api-info').textContent = '✓ Server responding normally';
+                } else {
+                    throw new Error(`HTTP ${res.status}`);
+                }
+            } catch (e) {
+                document.getElementById('api-status').textContent = '🔴 ERROR';
+                document.getElementById('api-info').textContent = `✗ Server error: ${e.message}`;
+            }
+        }
+
+        async function testSearch() {
+            const query = document.getElementById('search-input').value;
+            const results = document.getElementById('results');
+
+            if (!query) {
+                results.innerHTML = '⚠️ Enter a symbol';
+                return;
+            }
+
+            results.innerHTML = '🔄 Searching...';
+            try {
+                const res = await fetch(`/api/symbols/search?q=${encodeURIComponent(query)}`);
+                const data = await res.json();
+
+                if (Array.isArray(data) && data.length > 0) {
+                    results.innerHTML = `✓ Found ${data.length} results:\n\n` +
+                        data.slice(0, 5).map(r =>
+                            `${r.symbol} - ${r.name}\n  Type: ${r.type} | Exchange: ${r.exchange || 'N/A'}`
+                        ).join('\n\n');
+                } else {
+                    results.innerHTML = '⚠️ No results found';
+                }
+            } catch (e) {
+                results.innerHTML = `✗ Error: ${e.message}`;
+            }
+        }
+
+        // Check API on load
+        checkAPI();
+    </script>
+</body>
+</html>

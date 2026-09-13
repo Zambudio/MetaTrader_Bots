@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <title>Bots de Trading — Agentes IA</title>
+    <link rel="stylesheet" crossorigin href="/assets/index-CdlP_MEO.css">
+    <style>
+      html, body { margin: 0; padding: 0; }
+      body { background: #0a0e27; color: #fff; font-family: system-ui; }
+      #error-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 9999; padding: 20px; overflow-y: auto; }
+      #error-overlay.show { display: flex; align-items: center; justify-content: center; }
+      #error-box { background: #1a1f3a; border: 2px solid #ff3333; border-radius: 8px; padding: 30px; max-width: 600px; }
+      #error-box h1 { color: #ff3333; margin-top: 0; }
+      #error-box pre { background: #0a0e27; padding: 15px; border-radius: 4px; overflow-x: auto; color: #0f0; font-size: 12px; }
+      #error-box button { background: #2563eb; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <div id="error-overlay">
+      <div id="error-box">
+        <h1>⚠️ Error Loading Application</h1>
+        <p>The dashboard failed to load. Check the error details below:</p>
+        <pre id="error-message">Loading...</pre>
+        <button onclick="location.reload()">🔄 Reload</button>
+        <button onclick="location.href='/debug.html'" style="margin-left: 10px;">📋 Debug Page</button>
+      </div>
+    </div>
+
+    <script>
+      const errors = [];
+      const originalError = console.error;
+      const originalWarn = console.warn;
+
+      // Capture console errors
+      console.error = function(...args) {
+        errors.push('ERROR: ' + args.join(' '));
+        originalError.apply(console, args);
+      };
+
+      window.addEventListener('error', (e) => {
+        errors.push(`RUNTIME: ${e.message}\n  at ${e.filename}:${e.lineno}:${e.colno}`);
+      });
+
+      window.addEventListener('unhandledrejection', (e) => {
+        errors.push(`PROMISE: ${e.reason}`);
+      });
+
+      // Show errors after 3 seconds if app hasn't loaded
+      setTimeout(() => {
+        const root = document.getElementById('root');
+        if (!root || !root.innerHTML || root.innerHTML.trim() === '') {
+          const overlay = document.getElementById('error-overlay');
+          const msg = document.getElementById('error-message');
+
+          if (errors.length > 0) {
+            msg.textContent = errors.join('\n\n');
+          } else {
+            msg.textContent = 'React failed to render but no errors were captured.\n\nCheck browser DevTools (F12) > Console for details.';
+          }
+
+          overlay.classList.add('show');
+        }
+      }, 3000);
+    </script>
+    <script type="module" crossorigin src="/assets/index-BVd22NmF.js"></script>
+  </body>
+</html>

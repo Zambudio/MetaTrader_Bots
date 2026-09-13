@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Symbol Search</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #222; color: #0f0; }
+        .test { margin: 10px 0; padding: 10px; border: 1px solid #0f0; }
+        .result { margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Symbol Search API Test</h1>
+    <div class="test">
+        <input type="text" id="query" placeholder="Enter symbol (e.g., BTC)" value="BTC" />
+        <button onclick="testSearch()">Search</button>
+        <div id="result" class="result"></div>
+    </div>
+
+    <script>
+        async function testSearch() {
+            const query = document.getElementById('query').value;
+            const result = document.getElementById('result');
+
+            if (!query) {
+                result.innerHTML = '<p style="color: red;">Please enter a symbol</p>';
+                return;
+            }
+
+            try {
+                result.innerHTML = '<p>Searching...</p>';
+                const response = await fetch(`/api/symbols/search?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    if (Array.isArray(data) && data.length > 0) {
+                        result.innerHTML = '<p style="color: #0f0;">✓ Results found:</p><pre>' + JSON.stringify(data.slice(0, 5), null, 2) + '</pre>';
+                    } else {
+                        result.innerHTML = '<p style="color: #ff0;">No results returned (array empty)</p>';
+                    }
+                } else {
+                    result.innerHTML = '<p style="color: red;">✗ Error: ' + (data.error || response.status) + '</p>';
+                }
+            } catch (err) {
+                result.innerHTML = '<p style="color: red;">✗ Network Error: ' + err.message + '</p>';
+            }
+        }
+
+        // Test on load
+        testSearch();
+    </script>
+</body>
+</html>
