@@ -15,8 +15,11 @@ const AgentUpdateSchema = z.object({
   photo: z.string().optional(),
   model: z.string().optional(),
   activation: z.object({
-    mode: z.enum(['always', 'data_available']),
-    requiredData: z.array(z.string()).optional(),
+    mode: z.enum(['always', 'data_available', 'on_conflict']),
+    requiredData: z.array(z.enum([
+      'market_snapshot', 'ohlcv', 'session_clock', 'verified_macro_calendar', 'verified_news',
+      'corporate_fundamentals', 'sec_filings', 'benchmark_data', 'derivatives_metrics', 'on_chain_metrics',
+    ])).optional(),
     description: z.string(),
   }).optional(),
   abstentionConditions: z.array(z.string()).optional(),
