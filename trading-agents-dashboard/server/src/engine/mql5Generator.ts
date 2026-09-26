@@ -9,6 +9,7 @@ import { getWikiContextBlock } from '../store/wikiStore.js';
 import type { Mql5GenerationResult, StrategyProposalLite } from '../types.js';
 import { sanitizeJsonResponse, type ChatMessage } from './omniClient.js';
 import { routeChatCompletion as chatCompletion } from './llmRouter.js';
+import { parseModelString } from '../utils/modelString.js';
 import { reviewMql5Code, type CodeReviewResult } from './codeReviewer.js';
 import { runHeadlessBacktest } from './mql5Backtester.js';
 import { evaluateQualityGate } from './qualityGate.js';
@@ -440,13 +441,38 @@ interface EaDraft {
   fixSummary: string | null;
 }
 
+/** Fuente CLI usada como red de seguridad cuando OmniRoute agota su cadena de fallback entera
+ * (cuenta/suscripción sin acceso a ningún modelo del pool — ver H6 de la auditoría 2026-09-26:
+ * los 4 modelos de fallback de OmniRoute devolvieron errores de cuenta/tier/rate-limit y la
+ * generación de MQL5 quedaba bloqueada sin que el usuario supiera del workaround manual
+ * `OMNIROUTE_DEFAULT_MODEL=claude:sonnet`). Solo se activa cuando el modelo pedido explícitamente
+ * NO fija ya una fuente CLI propia (`claude:`/`openai:`) — nunca sustituye una elección explícita
+ * del usuario, solo el "modelo por defecto del servidor" (omniroute sin más).
+ */
+const CODEGEN_FALLBACK_SOURCE_MODEL = process.env.MQL5_FALLBACK_MODEL || 'claude:sonnet';
+
+/** Exportado únicamente para test unitario directo (evita mockear todo el pipeline de generateMql5). */
+export async function requestEaCompletion(model: string, messages: ChatMessage[]): Promise<any> {
+  const { source } = parseModelString(model);
+  try {
+    return await chatCompletion(model, messages, DELIVER_EA_TOOL, { timeoutMs: MQL5_GEN_TIMEOUT_MS });
+  } catch (err) {
+    if (source !== 'omniroute' || model === CODEGEN_FALLBACK_SOURCE_MODEL) throw err;
+    console.warn(
+      `[mql5Generator] modelo OmniRoute "${model || '(por defecto)'}" agotó su cadena de fallback ` +
+        `(${err instanceof Error ? err.message : err}); reintentando generación de código vía ${CODEGEN_FALLBACK_SOURCE_MODEL}...`
+    );
+    return chatCompletion(CODEGEN_FALLBACK_SOURCE_MODEL, messages, DELIVER_EA_TOOL, { timeoutMs: MQL5_GEN_TIMEOUT_MS });
+  }
+}
+
 async function requestEa(model: string, systemPrompt: string, userPrompt: string): Promise<EaDraft> {
   const messages: ChatMessage[] = [
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
   ];
 
-  const data = await chatCompletion(model, messages, DELIVER_EA_TOOL, { timeoutMs: MQL5_GEN_TIMEOUT_MS });
+  const data = await requestEaCompletion(model, messages);
   const message = data?.choices?.[0]?.message;
   const toolCall = message?.tool_calls?.[0];
 
