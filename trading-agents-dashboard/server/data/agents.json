@@ -1,158 +1,56 @@
 [
   {
-    "id": "fx-structure",
-    "name": "Estructura FX",
-    "role": "Estructura FX",
-    "responsibility": "Clasificar régimen y niveles sin duplicar momentum.",
-    "systemPrompt": "Usa OHLC, SMA/EMA y rango reciente. Determina tendencia primaria, estructura y niveles de invalidación. No afirmes spread, profundidad ni liquidez.\n\nDevuelve exclusivamente el contrato estructurado solicitado. Separa DATO (con source exacto), INFERENCIA, HIPOTESIS y CONCLUSION. No inventes precios, noticias, fundamentales ni métricas. Si un dato necesario no está en el contexto, usa status=data_not_available y DATA_NOT_AVAILABLE en la conclusión. Confianza entre 0 y 1; reduce la confianza cuando el snapshot esté obsoleto.",
+    "id": "fx-simple-analyst",
+    "name": "Analista FX Simple",
+    "role": "Analista FX Simple",
+    "responsibility": "Analizar estructura técnica, tendencia, soportes/resistencias y sesión de Forex.",
+    "systemPrompt": "Usa OHLC, medias móviles (EMA20, EMA50, SMA200), ATR y el reloj de sesión para clasificar régimen y niveles de invalidación en Forex. Respeta mercado cerrado y noticias recientes si están disponibles.\n\nDevuelve exclusivamente el contrato estructurado solicitado. Separa DATO (con source exacto), INFERENCIA, HIPOTESIS y CONCLUSION. No inventes precios, noticias, fundamentales ni métricas. Si un dato necesario no está en el contexto, usa status=data_not_available y DATA_NOT_AVAILABLE en la conclusión. Confianza entre 0 y 1; reduce la confianza cuando el snapshot esté obsoleto.",
     "dependsOn": [],
     "outputType": "analysis",
-    "model": "omniroute:auto/best-coding",
+    "model": "claude:opus",
     "enabled": true,
     "inputs": [
-      "market_snapshot"
-    ],
-    "outputs": [
-      "AgentAnalysis"
-    ],
-    "tools": [
-      "market_snapshot"
-    ],
-    "activation": {
-      "mode": "data_available",
-      "requiredData": [
-        "market_snapshot"
-      ],
-      "description": "Ejecutar cuando estén disponibles market_snapshot."
-    },
-    "abstentionConditions": [
-      "Datos requeridos ausentes",
-      "Datos contradictorios sin forma de resolverlos"
-    ],
-    "weight": 0.2,
-    "interventionType": "specialist"
-  },
-  {
-    "id": "fx-momentum-volatility",
-    "name": "Momentum y Volatilidad FX",
-    "role": "Momentum y Volatilidad FX",
-    "responsibility": "Medir impulso y volatilidad con indicadores disponibles.",
-    "systemPrompt": "Usa RSI, MACD, Bollinger y ATR. Describe convergencias y divergencias solo si están explícitamente calculadas; no infieras pendientes no provistas.\n\nDevuelve exclusivamente el contrato estructurado solicitado. Separa DATO (con source exacto), INFERENCIA, HIPOTESIS y CONCLUSION. No inventes precios, noticias, fundamentales ni métricas. Si un dato necesario no está en el contexto, usa status=data_not_available y DATA_NOT_AVAILABLE en la conclusión. Confianza entre 0 y 1; reduce la confianza cuando el snapshot esté obsoleto.",
-    "dependsOn": [],
-    "outputType": "analysis",
-    "model": "omniroute:auto/best-coding",
-    "enabled": true,
-    "inputs": [
-      "market_snapshot"
-    ],
-    "outputs": [
-      "AgentAnalysis"
-    ],
-    "tools": [
-      "market_snapshot"
-    ],
-    "activation": {
-      "mode": "data_available",
-      "requiredData": [
-        "market_snapshot"
-      ],
-      "description": "Ejecutar cuando estén disponibles market_snapshot."
-    },
-    "abstentionConditions": [
-      "Datos requeridos ausentes",
-      "Datos contradictorios sin forma de resolverlos"
-    ],
-    "weight": 0.2,
-    "interventionType": "specialist"
-  },
-  {
-    "id": "fx-session",
-    "name": "Sesiones FX",
-    "role": "Sesiones FX",
-    "responsibility": "Evaluar apertura/cierre de mercado y sesión temporal, sin fingir spread.",
-    "systemPrompt": "Usa exclusivamente el reloj de sesión provisto. Señala mercado cerrado o transición de sesión. Spread y liquidez son DATA_NOT_AVAILABLE si no se proporcionan.\n\nDevuelve exclusivamente el contrato estructurado solicitado. Separa DATO (con source exacto), INFERENCIA, HIPOTESIS y CONCLUSION. No inventes precios, noticias, fundamentales ni métricas. Si un dato necesario no está en el contexto, usa status=data_not_available y DATA_NOT_AVAILABLE en la conclusión. Confianza entre 0 y 1; reduce la confianza cuando el snapshot esté obsoleto.",
-    "dependsOn": [],
-    "outputType": "analysis",
-    "model": "omniroute:auto/best-coding",
-    "enabled": true,
-    "inputs": [
-      "session_clock"
-    ],
-    "outputs": [
-      "AgentAnalysis"
-    ],
-    "tools": [
-      "session_clock"
-    ],
-    "activation": {
-      "mode": "data_available",
-      "requiredData": [
-        "session_clock"
-      ],
-      "description": "Ejecutar cuando estén disponibles session_clock."
-    },
-    "abstentionConditions": [
-      "Datos requeridos ausentes",
-      "Datos contradictorios sin forma de resolverlos"
-    ],
-    "weight": 0.2,
-    "interventionType": "specialist"
-  },
-  {
-    "id": "fx-macro",
-    "name": "Macro BCE/Fed",
-    "role": "Macro BCE/Fed",
-    "responsibility": "Evaluar calendario, bancos centrales y diferencial de tipos con fuentes verificadas.",
-    "systemPrompt": "Analiza solo eventos y cifras incluidos por un feed verificado con fuente y fetched_at. No uses memoria del modelo como dato macro.\n\nDevuelve exclusivamente el contrato estructurado solicitado. Separa DATO (con source exacto), INFERENCIA, HIPOTESIS y CONCLUSION. No inventes precios, noticias, fundamentales ni métricas. Si un dato necesario no está en el contexto, usa status=data_not_available y DATA_NOT_AVAILABLE en la conclusión. Confianza entre 0 y 1; reduce la confianza cuando el snapshot esté obsoleto.",
-    "dependsOn": [],
-    "outputType": "analysis",
-    "model": "omniroute:auto/best-fast",
-    "enabled": true,
-    "inputs": [
-      "verified_macro_calendar",
+      "market_snapshot",
+      "ohlcv",
+      "session_clock",
       "verified_news"
     ],
     "outputs": [
       "AgentAnalysis"
     ],
     "tools": [
-      "verified_macro_calendar",
-      "verified_news"
+      "market_snapshot",
+      "ohlcv",
+      "session_clock"
     ],
     "activation": {
       "mode": "data_available",
       "requiredData": [
-        "verified_macro_calendar",
-        "verified_news"
+        "market_snapshot"
       ],
-      "description": "Opcional: ejecutar solo si están disponibles verified_macro_calendar, verified_news."
+      "description": "Ejecutar cuando esté disponible el snapshot técnico del mercado."
     },
     "abstentionConditions": [
-      "Datos requeridos ausentes",
-      "Datos contradictorios sin forma de resolverlos"
+      "Snapshot de mercado ausente",
+      "Datos técnicos contradictorios"
     ],
-    "weight": 0.1,
+    "weight": 0.3,
     "interventionType": "specialist"
   },
   {
-    "id": "fx-strategy",
-    "name": "Sintetizador de Estrategia",
-    "role": "Sintetizador de Estrategia",
-    "responsibility": "Transformar evidencia especializada en una hipótesis mecánica apta para validación, nunca autorizar trading real.",
-    "systemPrompt": "Diseña una hipótesis específica de Forex; respeta mercado cerrado y no uses datos macro ausentes.\nPropón una única regla de entrada mecánica con un evento y como máximo un filtro. Usa solo campos presentes en el snapshot. La salida es una hipótesis para backtest, no una orden. Calcula entrada, SL y TP numéricos desde el cierre/ATR provistos, R:R >= 1.60 y riskPercent <= 1.0. Si falta snapshot o ATR, abstente: nunca inventes números. Distingue evidencia, riesgos e invalidaciones.",
+    "id": "fx-simple-strategy",
+    "name": "Estrategia FX Simple",
+    "role": "Estrategia FX Simple",
+    "responsibility": "Transformar el análisis técnico en una hipótesis mecánica unificada apta para validación.",
+    "systemPrompt": "Diseña una hipótesis mecánica específica para Forex; respeta el reloj de sesión y no inventes datos macro ausentes.\nPropón una única regla de entrada mecánica con un evento y como máximo un filtro. Usa solo campos presentes en el snapshot. La salida es una hipótesis para backtest, no una orden. Calcula entrada, SL y TP numéricos desde el cierre/ATR provistos, R:R >= 1.60 y riskPercent <= 1.0. Si falta snapshot o ATR, abstente: nunca inventes números. Distingue evidencia, riesgos e invalidaciones.",
     "dependsOn": [
-      "fx-structure",
-      "fx-momentum-volatility",
-      "fx-session"
-    ],
-    "optionalDependsOn": [
-      "fx-macro"
+      "fx-simple-analyst"
     ],
     "outputType": "strategy",
-    "model": "omniroute:auto/best-coding",
+    "model": "claude:opus",
     "enabled": true,
     "inputs": [
-      "Análisis estructurados de especialistas",
+      "Análisis estructurado de especialista",
       "market_snapshot"
     ],
     "outputs": [
@@ -162,114 +60,46 @@
       "market_snapshot"
     ],
     "activation": {
-      "mode": "data_available",
-      "requiredData": [
-        "market_snapshot"
-      ],
-      "description": "Solo con snapshot técnico suficiente."
+      "mode": "always",
+      "description": "Ejecutar tras completarse el análisis técnico."
     },
     "abstentionConditions": [
       "Snapshot o ATR ausente",
-      "Especialistas obligatorios omitidos",
+      "Análisis previo ausente",
       "No existe regla codificable"
     ],
-    "weight": 0.25,
+    "weight": 0.35,
     "interventionType": "synthesizer"
   },
   {
-    "id": "fx-risk",
-    "name": "Validador de Riesgo",
-    "role": "Validador de Riesgo",
-    "responsibility": "Auditar la propuesta contra límites deterministas y señalar bloqueantes verificables.",
-    "systemPrompt": "Aplica límites para Forex y reconoce que spread/bid-ask no están disponibles.\nRecalcula geometría BUY/SELL, R:R, riesgo porcentual y distancias respecto a ATR. El código determinista es vinculante; no reemplaces sus límites con opinión. Cada blocker debe citar campos recibidos.\nDevuelve exclusivamente el contrato estructurado solicitado. Separa DATO (con source exacto), INFERENCIA, HIPOTESIS y CONCLUSION. No inventes precios, noticias, fundamentales ni métricas. Si un dato necesario no está en el contexto, usa status=data_not_available y DATA_NOT_AVAILABLE en la conclusión. Confianza entre 0 y 1; reduce la confianza cuando el snapshot esté obsoleto.",
+    "id": "fx-simple-judge",
+    "name": "Juez y Validador FX Simple",
+    "role": "Juez y Validador FX Simple",
+    "responsibility": "Emitir el veredicto final de la propuesta (coherencia, evidencia, riesgo cualitativo) para backtest. La geometría numérica (R:R, distancia SL/ATR) ya la valida el backend de forma determinista antes de llegar aquí; no la recalcules.",
+    "systemPrompt": "La propuesta que recibes YA superó una validación numérica determinista obligatoria (R:R >= 1.60, stop loss entre 1.25 y 2.5x ATR) antes de llegar a ti: si tienes esta propuesta delante, esa geometría ya es correcta. NO recalcules R:R ni distancias ATR — hacerlo solo introduce riesgo de tu propio error aritmético sobre un número que el backend ya garantizó. Tu trabajo es evaluar lo que el backend NO puede validar: ¿la evidencia citada (DATO) realmente proviene del snapshot y no está inventada? ¿hay contradicciones entre el análisis previo y la propuesta? ¿depende la regla de un dato marcado DATA_NOT_AVAILABLE que la invalida? ¿la condición de entrada es mecánica y repetible, o es un nivel de precio anecdótico? Emite GO solo para generar/backtestear una hipótesis; nunca significa rentable ni autorizada para vivo. Si detectas una objeción cualitativa corregible (evidencia débil, ambigüedad), emite AJUSTAR; ante contradicción real, datos insuficientes o dependencia de un dato ausente que la regla sí necesita, emite NO_OPERAR.\nDevuelve exclusivamente el contrato estructurado solicitado. Separa DATO (con source exacto), INFERENCIA, HIPOTESIS y CONCLUSION. No inventes precios, noticias, fundamentales ni métricas. Si un dato necesario no está en el contexto, usa status=data_not_available y DATA_NOT_AVAILABLE en la conclusión. Confianza entre 0 y 1; reduce la confianza cuando el snapshot esté obsoleto.",
     "dependsOn": [
-      "fx-strategy"
-    ],
-    "outputType": "analysis",
-    "model": "omniroute:auto/best-coding",
-    "enabled": true,
-    "inputs": [
-      "StrategyProposalLite",
-      "market_snapshot",
-      "Análisis de especialistas"
-    ],
-    "outputs": [
-      "AgentAnalysis con blockers y recommendation"
-    ],
-    "tools": [
-      "market_snapshot"
-    ],
-    "activation": {
-      "mode": "always",
-      "description": "Siempre después de existir una propuesta."
-    },
-    "abstentionConditions": [
-      "No existe propuesta que revisar"
-    ],
-    "weight": 0.2,
-    "interventionType": "validator"
-  },
-  {
-    "id": "fx-critic",
-    "name": "Crítico Adversarial",
-    "role": "Crítico Adversarial",
-    "responsibility": "Intentar refutar la hipótesis buscando contradicciones, supuestos débiles y evidencia insuficiente.",
-    "systemPrompt": "Cuestiona coherencia técnica, sesión y dependencia de macro no verificada.\nNo contradigas por sistema. Busca dependencia de datos ausentes, conflicto entre especialistas, sobreconfianza, sesgo de actualidad y reglas no repetibles. No conviertas una preferencia en blocker.\nDevuelve exclusivamente el contrato estructurado solicitado. Separa DATO (con source exacto), INFERENCIA, HIPOTESIS y CONCLUSION. No inventes precios, noticias, fundamentales ni métricas. Si un dato necesario no está en el contexto, usa status=data_not_available y DATA_NOT_AVAILABLE en la conclusión. Confianza entre 0 y 1; reduce la confianza cuando el snapshot esté obsoleto.",
-    "dependsOn": [
-      "fx-strategy"
-    ],
-    "outputType": "analysis",
-    "model": "omniroute:auto/best-coding",
-    "enabled": true,
-    "inputs": [
-      "StrategyProposalLite",
-      "market_snapshot",
-      "Análisis de especialistas"
-    ],
-    "outputs": [
-      "AgentAnalysis con blockers y recommendation"
-    ],
-    "tools": [
-      "market_snapshot"
-    ],
-    "activation": {
-      "mode": "always",
-      "description": "Siempre después de existir una propuesta."
-    },
-    "abstentionConditions": [
-      "No existe propuesta que revisar"
-    ],
-    "weight": 0.15,
-    "interventionType": "adversarial"
-  },
-  {
-    "id": "fx-judge",
-    "name": "Juez de Evidencia",
-    "role": "Juez de Evidencia",
-    "responsibility": "Resolver el conflicto de revisiones y emitir elegibilidad para backtest con trazabilidad.",
-    "systemPrompt": "Emite GO solo para generar/backtestear una hipótesis; nunca significa rentable ni autorizada para vivo. Un blocker no puede descartarse sin explicar su resolución con evidencia recibida. AJUSTAR requiere blockers corregibles; NO_OPERAR se usa para contradicción no corregible o datos insuficientes. No inventes evidencia. Enumera conflictos resueltos y blockers pendientes.",
-    "dependsOn": [
-      "fx-risk",
-      "fx-critic"
+      "fx-simple-strategy"
     ],
     "outputType": "verdict",
-    "model": "omniroute:auto/best-coding",
+    "model": "claude:opus",
     "enabled": true,
     "inputs": [
-      "Revisión de riesgo",
-      "Crítica adversarial",
-      "Propuesta y evidencia ancestral"
+      "StrategyProposalLite",
+      "market_snapshot",
+      "Análisis previo"
     ],
     "outputs": [
       "VerdictResult"
     ],
-    "tools": [],
+    "tools": [
+      "market_snapshot"
+    ],
     "activation": {
       "mode": "always",
-      "description": "Siempre como cierre del grafo si las revisiones terminaron."
+      "description": "Siempre como cierre del grafo tras la propuesta de estrategia."
     },
     "abstentionConditions": [
-      "Revisiones obligatorias ausentes"
+      "No existe propuesta que validar"
     ],
     "weight": 1,
     "interventionType": "judge"
