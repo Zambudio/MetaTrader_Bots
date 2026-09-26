@@ -16,6 +16,7 @@ interface Props {
   runId?: string;
   isRunComplete?: boolean;
   verdictDecision?: Veredicto;
+  unresolvedBlockers?: string[];
   initialResult?: Mql5GenerationResult;
 }
 
@@ -26,6 +27,7 @@ export const StrategyResultCard = ({
   runId,
   isRunComplete = true,
   verdictDecision,
+  unresolvedBlockers,
   initialResult,
 }: Props) => {
   const [mql5State, setMql5State] = useState<
@@ -37,6 +39,7 @@ export const StrategyResultCard = ({
 
   const mql5Model = useAgentStore((s) => s.mql5Model);
   const setMql5Model = useAgentStore((s) => s.setMql5Model);
+  const setAiSettingsOpen = useAgentStore((s) => s.setAiSettingsOpen);
   // El generador de MQL5 usa el modelo elegido explícitamente para codegen; si no hay ninguno,
   // hereda el del agente de estrategia (comportamiento histórico).
   const effectiveMql5Model = mql5Model ?? agentModel ?? '';
@@ -123,7 +126,10 @@ export const StrategyResultCard = ({
     }
   };
 
-  const canGenerate = Boolean(runId) && isRunComplete && verdictDecision === 'go';
+  // Espeja literalmente el gate determinista de mql5Eligibility.validateMql5SourceRun: GO por sí
+  // solo no basta, nunca debe habilitarse con objeciones sin resolver (defensa en profundidad,
+  // no depender únicamente de que el backend derive isRunComplete correctamente).
+  const canGenerate = Boolean(runId) && isRunComplete && verdictDecision === 'go' && !(unresolvedBlockers?.length);
 
   // Selector de motor de generación del EA — se muestra tanto antes de generar como en el
   // estado de error, para poder cambiar de modelo antes de reintentar.
@@ -284,6 +290,20 @@ export const StrategyResultCard = ({
                   La generación queda bloqueada hasta que un nuevo run resuelva las objeciones y termine con GO.
                 </p>
               </div>
+            ) : verdictDecision === 'go' && (unresolvedBlockers?.length ?? 0) > 0 ? (
+              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2.5">
+                <div className="flex items-start gap-3 text-sm text-amber-300">
+                  <span className="text-lg">⚠️</span>
+                  <span>
+                    El Razonador emitió <strong>GO</strong> pero quedan {unresolvedBlockers?.length} objeción(es) sin resolver:{' '}
+                    {unresolvedBlockers?.join(', ')}.
+                  </span>
+                </div>
+                <p className="pt-1.5 border-t border-amber-500/20 text-xs text-paper/80">
+                  Esto es una violación de contrato del juez, no un estado válido para generar MQL5. Requiere un nuevo run que
+                  resuelva las objeciones antes de generar código.
+                </p>
+              </div>
             ) : (
               <div className="flex flex-col gap-3">
                 {engineSelector}
@@ -358,6 +378,12 @@ export const StrategyResultCard = ({
                     ↻ Comprobar si ya se generó
                   </button>
                 )}
+                <button
+                  onClick={() => setAiSettingsOpen(true)}
+                  className="px-4 py-2 rounded-lg bg-paper/5 text-paper/80 hover:bg-paper/10 transition-colors border border-line text-sm font-semibold"
+                >
+                  ⚙️ Comprobar motores de IA
+                </button>
               </div>
             </div>
             {engineSelector}
