@@ -517,9 +517,10 @@ async function executeRunBody(run: Run, agents: Agent[], signal: AbortSignal): P
     run.finalState = 'invalid_result';
     run.issues.push({ code: 'INVALID_RESULT', severity: 'error', message: 'Se agotaron las revisiones con veredicto AJUSTAR.' });
   } else if (verdict.veredicto === 'go' && (verdict.unresolvedBlockers?.length ?? 0) > 0) {
-    run.status = 'done';
-    run.finalState = 'validated';
-    run.issues.push({ code: 'CONTRACT_WARNING', severity: 'warning', message: `El juez emitió GO pero quedan ${verdict.unresolvedBlockers.length} blocker(s) sin resolver: ${verdict.unresolvedBlockers.join(', ')}`, agentId: verdictAgent?.id });
+    run.status = 'error';
+    run.finalState = 'invalid_result';
+    const blockers = verdict.unresolvedBlockers ?? [];
+    run.issues.push({ code: 'CONTRACT_ERROR', severity: 'error', message: `El juez emitió GO con ${blockers.length} blocker(s) sin resolver: ${blockers.join(', ')}. Esto es una violación de contrato del juez, no un estado válido para generar MQL5.`, agentId: verdictAgent?.id });
   } else {
     run.status = 'done';
     run.finalState = verdict.veredicto === 'go' ? 'validated' : 'rejected';
