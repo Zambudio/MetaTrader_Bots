@@ -11,6 +11,7 @@ import { sanitizeJsonResponse, type ChatMessage } from './omniClient.js';
 import { routeChatCompletion as chatCompletion } from './llmRouter.js';
 import { parseModelString } from '../utils/modelString.js';
 import { reviewMql5Code, type CodeReviewResult } from './codeReviewer.js';
+import { checkMql5Fidelity, type FidelityCheckResult } from './mql5FidelityChecker.js';
 import { runHeadlessBacktest } from './mql5Backtester.js';
 import { evaluateQualityGate } from './qualityGate.js';
 import type { Mt5LogSession } from './mt5LogParser.js';
@@ -575,11 +576,21 @@ async function runMql5Pipeline(
 
   // 1.6: CodeReviewerAgent que evalúa las 22 reglas del Doc 17
   let review: CodeReviewResult | undefined;
+  let fidelity: FidelityCheckResult | undefined;
   if (compile.status === 'ok' || compile.status === 'unverified') {
     onProgress?.({ attempt: attempts, maxAttempts: MAX_COMPILE_ATTEMPTS, phase: 'evaluating', details: 'Auditando cumplimiento de las 22 reglas del Doc 17...' });
     review = reviewMql5Code(draft.code, draft.assumptionsToVerify);
     if (!review.passed) {
       console.warn(`[CodeReviewer] Advertencia en reglas de código: ${review.summary}`);
+    }
+
+    // H1 (auditoría 2026-09-26): fidelidad del código frente a la StrategyProposal aprobada
+    // (dirección de entrada + indicadores declarados realmente usados). Advisory, no bloqueante.
+    fidelity = checkMql5Fidelity(draft.code, strategy);
+    if (!fidelity.passed || fidelity.findings.length > 0) {
+      for (const f of fidelity.findings) {
+        console.warn(`[Mql5Fidelity] ${f.severity.toUpperCase()} ${f.code}: ${f.message}`);
+      }
     }
   }
 
@@ -668,6 +679,7 @@ async function runMql5Pipeline(
     iteration: currentIteration,
     backtestSession: backtestSession ?? undefined,
     optimizationNotes: optimizationNotes.length > 0 ? optimizationNotes : undefined,
+    fidelityCheck: fidelity,
   };
 }
 
