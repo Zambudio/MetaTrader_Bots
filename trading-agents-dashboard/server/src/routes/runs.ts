@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 import { saveRun, loadRun, listRuns, deleteRun } from '../store/runsStore.js';
 import { executeRun, DEFAULT_MAX_RETRIES } from '../engine/orchestrator.js';
 import { abortRun } from '../engine/runAbortRegistry.js';
+import { tryAcquireRunLock, releaseRunLock } from '../engine/runLockRegistry.js';
 import { getActivePreset, getPreset } from '../store/agentConfigsStore.js';
 import { listAgents } from '../store/agentsStore.js';
 import { hashConfiguration, validatePreset } from '../config/configValidation.js';
@@ -120,53 +121,78 @@ runsRouter.post(
 runsRouter.post(
   '/:id/resume',
   asyncHandler(async (req, res) => {
-    const run = await loadRun(req.params.id);
-    if (!run) {
-      res.status(404).json({ error: 'run not found' });
+    const runId = req.params.id;
+
+    // H2 (auditoría 2026-09-26): check+set síncrono, sin `await` de por medio, para que dos
+    // peticiones casi simultáneas (doble clic, dos pestañas) no lean ambas `status='error'` antes
+    // de que ninguna haya persistido `status='running'`. Ver runLockRegistry.ts.
+    if (!tryAcquireRunLock(runId)) {
+      res.status(409).json({ error: 'Ya hay una ejecución en curso para este run; espera a que termine antes de reintentar.' });
       return;
     }
 
-    if (!run.configuration) {
-      res.status(409).json({ error: 'El run histórico no contiene una configuración inmutable y no puede reanudarse de forma segura.' });
-      return;
-    }
-    if (run.configurationHash !== hashConfiguration(run.configuration)) {
-      res.status(409).json({ error: 'El snapshot de configuración del run no supera la verificación de integridad.' });
-      return;
-    }
-    const { agentId } = req.body ?? {};
-    const targetAgentId = typeof agentId === 'string' ? agentId : undefined;
-
-    const retryTargets = new Set(
-      run.results
-        .filter((r) => r.status === 'error' || (targetAgentId !== undefined && r.agentId === targetAgentId))
-        .map((r) => r.agentId)
-    );
-    const livePreset = await getPreset(run.configuration.id);
-    const overrides = syncLiveModelsForRetry(run.configuration.agents, livePreset?.agents, retryTargets);
-    if (overrides.length > 0) {
-      run.issues = run.issues ?? [];
-      for (const o of overrides) {
-        run.issues.push({
-          code: 'MODEL_OVERRIDE_ON_RESUME',
-          severity: 'warning',
-          message: `${o.agentId}: modelo actualizado de "${o.from}" a "${o.to}" al reintentar (sincronizado con la configuración vigente).`,
-          agentId: o.agentId,
-        });
+    // Se libera en CUALQUIER salida temprana (404/409/excepción); solo si llegamos a lanzar
+    // `resumeRun` se pasa la responsabilidad de liberarlo a su `.finally` (mientras dure la
+    // ejecución de fondo, ninguna otra petición de resume para este run puede colarse).
+    let handedOffToBackgroundResume = false;
+    try {
+      const run = await loadRun(runId);
+      if (!run) {
+        res.status(404).json({ error: 'run not found' });
+        return;
       }
-      run.configurationHash = hashConfiguration(run.configuration);
+
+      if (run.status === 'running') {
+        res.status(409).json({ error: 'Este run ya está en ejecución.' });
+        return;
+      }
+      if (!run.configuration) {
+        res.status(409).json({ error: 'El run histórico no contiene una configuración inmutable y no puede reanudarse de forma segura.' });
+        return;
+      }
+      if (run.configurationHash !== hashConfiguration(run.configuration)) {
+        res.status(409).json({ error: 'El snapshot de configuración del run no supera la verificación de integridad.' });
+        return;
+      }
+      const { agentId } = req.body ?? {};
+      const targetAgentId = typeof agentId === 'string' ? agentId : undefined;
+
+      const retryTargets = new Set(
+        run.results
+          .filter((r) => r.status === 'error' || (targetAgentId !== undefined && r.agentId === targetAgentId))
+          .map((r) => r.agentId)
+      );
+      const livePreset = await getPreset(run.configuration.id);
+      const overrides = syncLiveModelsForRetry(run.configuration.agents, livePreset?.agents, retryTargets);
+      if (overrides.length > 0) {
+        run.issues = run.issues ?? [];
+        for (const o of overrides) {
+          run.issues.push({
+            code: 'MODEL_OVERRIDE_ON_RESUME',
+            severity: 'warning',
+            message: `${o.agentId}: modelo actualizado de "${o.from}" a "${o.to}" al reintentar (sincronizado con la configuración vigente).`,
+            agentId: o.agentId,
+          });
+        }
+        run.configurationHash = hashConfiguration(run.configuration);
+      }
+
+      const agents = structuredClone(run.configuration.agents);
+
+      const { resumeRun } = await import('../engine/orchestrator.js');
+      handedOffToBackgroundResume = true;
+      resumeRun(run, agents, targetAgentId)
+        .catch(async (err) => {
+          console.error('[runs] resume failed', err);
+          run.status = 'error';
+          await saveRun(run).catch(() => {});
+        })
+        .finally(() => releaseRunLock(runId));
+
+      res.status(202).json(run);
+    } finally {
+      if (!handedOffToBackgroundResume) releaseRunLock(runId);
     }
-
-    const agents = structuredClone(run.configuration.agents);
-
-    const { resumeRun } = await import('../engine/orchestrator.js');
-    resumeRun(run, agents, targetAgentId).catch(async (err) => {
-      console.error('[runs] resume failed', err);
-      run.status = 'error';
-      await saveRun(run).catch(() => {});
-    });
-
-    res.status(202).json(run);
   })
 );
 
