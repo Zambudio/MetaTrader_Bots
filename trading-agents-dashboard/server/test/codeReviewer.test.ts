@@ -77,4 +77,15 @@ void OnTradeTransaction(const MqlTradeTransaction &trans, const MqlTradeRequest 
     expect(res.passed).toBe(false);
     expect(res.blockingRules).toContain(16);
   });
+
+  it('reconoce el guard de nueva barra con variables prefijadas (Regla 16) — regresión', () => {
+    // Reproducido en un EA real generado y compilado en la validación FOREX: el guard usaba
+    // `g_lastBarTime`/`currentBarTime` (prefijo `g_` de variable global) y la regex original solo
+    // reconocía los nombres exactos sin prefijo, marcando "no_cumple" pese a que el guard sí existe.
+    const prefixedGuardCode = validEaCode
+      .replace('datetime lastBarTime = 0;', 'datetime g_lastBarTime = 0;')
+      .replace('if(currentBarTime == lastBarTime) return;\n  lastBarTime = currentBarTime;', 'if(currentBarTime == g_lastBarTime) return;\n  g_lastBarTime = currentBarTime;');
+    const res = reviewMql5Code(prefixedGuardCode, ['Supuesto 1']);
+    expect(res.blockingRules).not.toContain(16);
+  });
 });

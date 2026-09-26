@@ -164,7 +164,9 @@ export function reviewMql5Code(code: string, assumptions: string[] = []): CodeRe
   });
 
   // Regla 16: Distinguir nueva barra de nuevo tick (guard bar-based)
-  const hasNewBarGuard = /if\s*\(\s*(?:currentBarTime|lastBarTime|barTime)\s*==\s*(?:currentBarTime|lastBarTime|barTime)\s*\)\s*return/i.test(code) ||
+  // Los identificadores reales varían en prefijo (p. ej. `g_lastBarTime`, `m_currentBarTime`),
+  // no solo el nombre exacto sin prefijar — \w* a ambos lados evita falsos negativos por eso.
+  const hasNewBarGuard = /if\s*\(\s*\w*(?:currentBarTime|lastBarTime|barTime)\w*\s*==\s*\w*(?:currentBarTime|lastBarTime|barTime)\w*\s*\)\s*return/i.test(code) ||
     /if\s*\(\s*iTime\s*\([^)]*\)\s*==\s*\w+\s*\)\s*return/i.test(code);
   evaluations.push({
     ruleNumber: 16,
