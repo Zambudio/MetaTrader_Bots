@@ -19,6 +19,8 @@ export interface OmniClientOptions {
   maxTokens?: number;
   /** Aborta la llamada en curso (botón "Detener análisis") — también respetado por los CLIs. */
   signal?: AbortSignal;
+  /** No consulta ni actualiza el circuit breaker global (las pruebas de Ajustes de IA no deben abrirlo). */
+  bypassCircuitBreaker?: boolean;
 }
 
 const DEFAULT_TIMEOUT_MS = Number(process.env.OMNIROUTE_TIMEOUT_MS) || 180_000;
@@ -62,6 +64,54 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * JSON.parse es estricto: un carácter de control (0x00-0x1F) SIN escapar dentro de un literal de
+ * cadena es un error de sintaxis, aunque el resto del documento sea válido. Esto ocurre en la
+ * práctica cuando un modelo devuelve código fuente multilínea (p. ej. MQL5) dentro de un campo
+ * JSON y olvida escapar algún salto de línea o tabulador de esa cadena como `\n`/`\t` — el resto
+ * del tool-call es perfectamente válido, solo ese carácter suelto rompe el parseo entero.
+ *
+ * Recorre el texto carácter a carácter, siguiendo el propio estado de "dentro/fuera de cadena"
+ * de JSON (comillas sin escapar como delimitador, `\` como escape del siguiente carácter), y
+ * escapa cualquier control character que aparezca dentro de una cadena. Fuera de cadenas (espacios
+ * entre tokens) no se toca nada — ahí un salto de línea ya es JSON válido.
+ */
+function escapeUnescapedControlCharsInStrings(text: string): string {
+  let out = '';
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const code = text.charCodeAt(i);
+    if (inString && escaped) {
+      out += ch;
+      escaped = false;
+      continue;
+    }
+    if (inString && ch === '\\') {
+      out += ch;
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      out += ch;
+      continue;
+    }
+    if (inString && code < 0x20) {
+      switch (ch) {
+        case '\n': out += '\\n'; break;
+        case '\r': out += '\\r'; break;
+        case '\t': out += '\\t'; break;
+        default: out += '\\u' + code.toString(16).padStart(4, '0');
+      }
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
 export function sanitizeJsonResponse(raw: string): string {
   let cleaned = raw.trim();
   // Strip markdown code fences if present (```json ... ``` o ```mql5 ... ```)
@@ -72,7 +122,7 @@ export function sanitizeJsonResponse(raw: string): string {
   if (cleaned.startsWith('data: ')) {
     cleaned = cleaned.replace(/^data:\s*/, '').trim();
   }
-  return cleaned;
+  return escapeUnescapedControlCharsInStrings(cleaned);
 }
 
 /**
@@ -161,7 +211,7 @@ export async function chatCompletion(
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
-async function chatCompletionOnce(
+export async function chatCompletionOnce(
   model: string,
   messages: ChatMessage[],
   tool?: ToolDefinition | null,
@@ -177,7 +227,8 @@ async function chatCompletionOnce(
   const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
   const retryDelayMs = options.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
 
-  globalCircuitBreaker.check();
+  const breaker = options.bypassCircuitBreaker ? null : globalCircuitBreaker;
+  breaker?.check();
 
   let lastError: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -222,7 +273,7 @@ async function chatCompletionOnce(
         if (response.status === 400 && tool) {
           console.warn(`[omniClient] Proveedor upstream falló con 400 ante tool_choice en ${model}. Activando fallback a JSON prompt...`);
           const fallbackRes = await chatCompletionJsonFallback(baseUrl, apiKey, model, messages, tool, timeoutMs, options.signal);
-          globalCircuitBreaker.recordSuccess();
+          breaker?.recordSuccess();
           return fallbackRes;
         }
         throw new Error(`OmniRoute respondió ${response.status}: ${body.slice(0, 300)}`);
@@ -231,7 +282,7 @@ async function chatCompletionOnce(
       const text = await response.text();
       try {
         const parsed = JSON.parse(sanitizeJsonResponse(text));
-        globalCircuitBreaker.recordSuccess();
+        breaker?.recordSuccess();
         return parsed;
       } catch {
         throw new Error(`Respuesta inválida de OmniRoute: ${text.slice(0, 200)}`);
@@ -251,7 +302,7 @@ async function chatCompletionOnce(
         console.warn(`[omniClient] Limitación de tasa o cola temporal en ${model}. Pausando 4s...`);
         await delay(4000);
       } else {
-        globalCircuitBreaker.recordFailure();
+        breaker?.recordFailure();
       }
       if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
         lastError = new Error(`Tiempo de espera agotado (${Math.round(timeoutMs / 1000)}s) al consultar modelo ${model}`);
