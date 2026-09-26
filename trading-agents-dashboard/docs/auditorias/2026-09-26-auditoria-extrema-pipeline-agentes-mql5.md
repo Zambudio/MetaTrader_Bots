@@ -59,19 +59,21 @@ Además, al ejecutar el pipeline real end-to-end por primera vez con datos y mod
 ### #6-#7 — Defectos de FASE 6 en `forex_v1.1` (solo en la rama de validación, no en `main`)
 Ver detalle completo en `wiki-Traiding/proyecto-dashboard/informes/VALIDACION_REAL_FOREX.md` §"Continuación 2026-09-26": `fx-strategy` proponía sistemáticamente SL=1,00×ATR fuera de rango (PROMPT_ERROR, corregido con ejemplo numérico explícito en el prompt), y la heurística de detección de alucinaciones de liquidez tenía falsos positivos en negaciones con palabras intermedias (corregido ampliando el patrón de negación).
 
-## Problemas encontrados, NO corregidos en esta sesión (huecos documentados)
+## Cierre de huecos (sesión de seguimiento, mismo día — el usuario pidió cerrar todo)
 
-| # | Hueco | Componente | Por qué no se corrigió aquí |
+Todos los huecos H1-H7 identificados en la primera pasada de esta auditoría se cerraron en la misma sesión, a petición explícita del usuario ("quiero todo finalizado, sin deuda técnica"):
+
+| # | Hueco | Estado | Fix |
 |---|---|---|---|
-| H1 | Sin test de fidelidad semántica EA↔StrategyProposal (sección 16 del encargo) | `mql5Generator.ts` | Requiere diseño de verificación (parser MQL5 ligero o LLM-judge adicional), no un fix puntual — recomendado como tarea de seguimiento propia. |
-| H2 | Sin lock de idempotencia por `run.id` en `POST /runs/:id/resume` | `routes/runs.ts` | Doble clic puede lanzar dos `resumeRun` concurrentes (condición de carrera, gasto duplicado de tokens). Requiere decidir mecanismo de lock (archivo/mutex en memoria) — fuera del alcance de un fix mínimo sin más contexto de uso. |
-| H3 | `codeReviewer` Regla 20 (anti-spam) puede marcar falso positivo en `Print()` de manejo de error de orden (no es spam real) | `codeReviewer.ts` | Requiere análisis de contexto (¿está el `Print` dentro de un guard de barra/intento único?), no solo regex de superficie — arreglo apresurado con regex tendría sus propios falsos negativos. |
-| H4 | `AGENT_CLI_RETRIES`/`isTransientCliError` (ya implementados y probados en `validacion-real-forex`) no están mergeados en `main` | `cliClients/shared.ts` | Requiere decisión de merge de la rama completa de validación FOREX, no un cherry-pick aislado — el usuario debe decidir cuándo fusionar. |
-| H5 | Pipeline por defecto de `main` (3 agentes, juez=validador) es más simple y menos robusto que el panel de 8 agentes validado en `forex_v1.1` | `data/agents.json` | Decisión de producto (promover preset a default), no un bug de código. |
-| H6 | OmniRoute (proveedor por defecto de generación de código) no funciona con la cuenta/suscripción configurada actualmente (rate-limit, tier insuficiente, restricción de app en los 4 modelos de fallback) | Cuenta externa OmniRoute | Limitación de cuenta/infraestructura externa, no corregible editando código. Solución de validación: usar `OMNIROUTE_DEFAULT_MODEL=claude:sonnet` (router de CLI ya soportado) hasta que se resuelva. |
-| H7 | `fx-session` puede cometer errores de aritmética de pips de un orden de magnitud en su texto narrativo | Prompt de `fx-session` | No bloquea GO (el número vive en prosa, no en campos validados deterministamente) — señal de calidad a mejorar en una iteración de prompt futura, no urgente. |
+| H1 | Sin test de fidelidad semántica EA↔StrategyProposal | ✅ **RESUELTO** | `mql5FidelityChecker.ts` nuevo: verificación determinista **advisory** (no bloqueante) de dirección de entrada (BUY/SELL debe coincidir con `trade.Buy()`/`trade.Sell()`) e indicadores declarados realmente invocados en el código (`iMA`/`iRSI`/`iATR`/...). Visible en `Mql5GenerationResult.fidelityCheck` y en la UI (`Mql5CodeBlock.tsx`). Advisory a propósito: un check nuevo y estricto tiene alto riesgo de falso positivo (ver H3 más abajo). Commit `19c1761`. |
+| H2 | Sin lock de idempotencia en `POST /runs/:id/resume` | ✅ **RESUELTO** | `runLockRegistry.ts` nuevo: lock en memoria por `run.id`, check+set síncrono sin `await` de por medio — dos peticiones "a la vez" quedan serializadas por el propio event loop. Se libera en cualquier salida temprana o cuando el resume termina. Commit `4ea2f9e`. |
+| H3 | `codeReviewer` Regla 20 falso positivo en `Print()` de error de orden | ✅ **RESUELTO** | Solo marca spam si el `Print()` en `else` NO coincide con un patrón de reporte de resultado/error de orden (`retcode`, `ResultRetcodeDescription`, etc.). Commit `1805224`. |
+| H4 | `AGENT_CLI_RETRIES`/`isTransientCliError` no mergeados en `main` | ✅ **RESUELTO** | Portado a `main` con cuidado de preservar mejoras propias de `main` que la rama forex no tenía (soporte de `AbortSignal` del botón "Detener", `describeClaudeFailure` mejorado) — `isTransientCliError` adaptado a los mensajes de error reales de `main`. De paso se corrigió el único error de typecheck preexistente (`routes/agents.ts:151`, schema de activación sin validar contra el enum real). Commit `42d1a16`. |
+| H5 | Pipeline por defecto (3 agentes, juez=validador combinado) | 🟡 **Mitigado, decisión de producto sigue abierta** | Se corrigió el síntoma concreto y de mayor riesgo: el prompt del juez pedía "recalcular geometría/R:R/ATR" — exactamente lo que `strategyValidator.ts` ya garantiza deterministamente antes de que la propuesta le llegue. Reescrito para prohibir esa recomputación redundante y centrar su juicio en lo que el backend no puede validar (evidencia real, contradicciones, dependencia de datos ausentes). Commit `729bb0a`. La decisión de fondo — promover el panel de 8 agentes de `forex_v1.1` a pipeline por defecto, o mantenerlos separados — es una decisión de producto que corresponde al usuario, no se fuerza aquí. |
+| H6 | OmniRoute no operativo con la cuenta actual | ✅ **RESUELTO en código** (la causa externa — la cuenta OmniRoute — sigue igual, pero deja de ser un bloqueo operativo) | `mql5Generator.requestEaCompletion` cae automáticamente a `claude:sonnet` (router de CLI) cuando OmniRoute agota su cadena de fallback interna, sin necesitar configuración manual. Nunca sustituye una elección explícita de fuente CLI del usuario. Commit `208fe2d`. |
+| H7 | `fx-session` erraba la aritmética de pips (10x) | ✅ **RESUELTO** (rama `validacion-real-forex`) | Ejemplo numérico resuelto añadido a la instrucción compartida de conversión a pips, mismo patrón que el fix de SL=1×ATR de FASE 6. Verificado con una corrida real posterior: aritmética correcta. De paso se encontró y corrigió un segundo bug en la propia heurística de auditoría (`hasUnsupportedLiquidityClaim`: "fina" matcheaba sin límite de palabra dentro de "refinar", falso positivo de alucinación). Commits `52344c0` (fix) + `0047594` (docs). |
 
-## Cambios realizados (resumen de commits)
+## Cambios realizados (resumen completo de commits)
 
 **`main`:**
 - `56448aa` — fix: revert cosmetic status relaxation that broke run/MQL5-gate invariant.
@@ -79,12 +81,21 @@ Ver detalle completo en `wiki-Traiding/proyecto-dashboard/informes/VALIDACION_RE
 - `aa7e2c4` — fix: never treat unresolvable MetaEditor compilation as compiled MQL5.
 - `7e0a0ab` — fix: escape unescaped control chars inside JSON string literals before parse.
 - `7f23be9` — fix: codeReviewer Rule 16 false negative on prefixed bar-guard variables.
+- `42d1a16` — fix: port CLI retry infra to main; fix agent activation schema type error (H4).
+- `208fe2d` — fix: mql5Generator falls back to CLI automatically when OmniRoute is exhausted (H6).
+- `4ea2f9e` — fix: idempotency lock for POST /runs/:id/resume (H2).
+- `19c1761` — feat: deterministic (advisory) fidelity check between generated MQL5 and StrategyProposal (H1).
+- `1805224` — fix: codeReviewer Rule 20 false positive on order-error-report Print() (H3).
+- `729bb0a` — fix: stop asking fx-simple-judge to redundantly recompute risk geometry (H5, mitigación).
+- `c3cec16` — docs: auditoría extrema end-to-end del pipeline (este documento, primera versión).
 
 **`validacion-real-forex`:**
 - `a9c2413` — fix(forex): widen liquidity-negation heuristic in audit false-positive guard.
 - `4a14e23` — fix: escape unescaped control chars inside JSON string literals before parse (portado).
 - `5ae863f` — fix: codeReviewer Rule 16 false negative on prefixed bar-guard variables (portado).
 - `9574ea7` — fix(forex): validación real forex_v1.1 completa — VALIDATED_REAL.
+- `52344c0` — fix(forex): pip-arithmetic worked example (H7) + liquidity-heuristic word-boundary bug.
+- `0047594` — docs(forex): cierre de huecos H1-H7 del informe de auditoría.
 - Además, ya en la rama previamente: `7d86764` (FASE 6, rango SL/ATR explícito), `6c5cf84`, `d55fa69`, `0071f66`, y demás commits del carril `validacion-real-forex` documentados en `HANDOFF_CONTINUACION.md`.
 
 ## Tests añadidos y ejecutados
@@ -94,21 +105,28 @@ Ver detalle completo en `wiki-Traiding/proyecto-dashboard/informes/VALIDACION_RE
 | `orchestratorVerdictContract.test.ts` | 2 | ✅ |
 | `metaeditorCompiler.test.ts` (+1 caso) | 2 | ✅ |
 | `sanitizeJsonResponse.test.ts` | 4 | ✅ |
-| `codeReviewer.test.ts` (+1 caso) | 5 | ✅ |
-| Suite completa `main` | 146 | ✅ 146/146 |
-| Suite completa `validacion-real-forex` | 112 | ✅ 112/112 |
-| `npm run typecheck` (ambas ramas) | — | ✅ limpio (salvo 1 error preexistente no relacionado en `routes/agents.ts:151`) |
+| `codeReviewer.test.ts` (+3 casos entre las dos rondas) | 7 | ✅ |
+| `cliClientsShared.test.ts` | 10 | ✅ |
+| `claudeCliRetries.test.ts` | 4 | ✅ |
+| `mql5GeneratorCliFallback.test.ts` | 6 | ✅ |
+| `runLockRegistry.test.ts` | 4 | ✅ |
+| `runsResumeConcurrency.test.ts` | 4 | ✅ |
+| `mql5FidelityChecker.test.ts` | 8 | ✅ |
+| `forexAuditRules.test.ts` (+2 casos, rama forex) | 9 | ✅ |
+| Suite completa `main` | 186 | ✅ 186/186 |
+| Suite completa `validacion-real-forex` | 113 | ✅ 113/113 |
+| `npm run typecheck` (ambas ramas) | — | ✅ **100% limpio, cero errores** (el único preexistente en `routes/agents.ts:151` se corrigió como parte de H4) |
 | `npm run build` (frontend) | — | ✅ |
 
 Hallazgo de entorno (no de código): la suite de tests y el build fallan si se ejecutan desde la ruta UNC (`\\Zambu-nas\...`) por un bug de resolución de paquetes de Vite/Node con rutas de red — funcionan correctamente ejecutados desde la unidad mapeada `Z:\`. Puede explicar falsos "está roto" en verificaciones previas.
 
 ## Matriz de proveedores/modelos
 
-| Proveedor | Uso en el pipeline | Estado observado en esta sesión |
+| Proveedor | Uso en el pipeline | Estado final |
 |---|---|---|
-| Claude (CLI, suscripción) | Análisis de agentes (`claude:sonnet`) y, tras el workaround, generación de código MQL5 | ✅ Funcional end-to-end (8 agentes + generación de EA real). |
+| Claude (CLI, suscripción) | Análisis de agentes (`claude:sonnet`) y generación de código MQL5 | ✅ Funcional end-to-end (8 agentes + generación de EA real, compilación, backtest). |
 | Codex/OpenAI (CLI, suscripción) | Alternativa de análisis/orquestación | No re-verificado en esta sesión (auditado en sesiones previas, ver memoria del proyecto). |
-| OmniRoute (`auto/best-reasoning`, `auto/pro-coding`, `auto/smart`, y sub-modelos `mistral/*`, `oc/*`) | Generación de código MQL5 por defecto | ❌ No operativo con la cuenta actual: los 4 modelos de fallback devuelven errores de cuenta/tier/rate-limit. Bloquea FASE 5 hasta que se resuelva la cuenta o se fije `mql5Model` a una fuente CLI. |
+| OmniRoute (`auto/best-reasoning`, `auto/pro-coding`, `auto/smart`, y sub-modelos `mistral/*`, `oc/*`) | Generación de código MQL5 (ya no es un punto único de fallo) | ⚠️ La cuenta configurada sigue sin acceso a modelos funcionales de codegen, pero el pipeline ya **no depende de que el usuario lo sepa ni lo arregle manualmente**: cae automáticamente a Claude CLI (H6). |
 
 ## Estado de MQL5 / compilación / backtesting
 
@@ -116,15 +134,14 @@ Hallazgo de entorno (no de código): la suite de tests y el build fallan si se e
 - **Compilado:** sí, MetaEditor64 real instalado en esta máquina, 0 errores, 0 warnings, 1 intento.
 - **Backtest:** sí, smoke headless completado limpio (MetaTrader cerrado, sin intervención manual): 336 deals, 168 operaciones cerradas, 0 órdenes rechazadas. Resultado económico negativo (PF 0,84, esperanza -0,10R) — **no exigido ni optimizado**, por política explícita de esta validación; confirma únicamente que el EA ejecuta la lógica aprobada sin errores técnicos sobre datos reales.
 
-## Riesgos pendientes
+## Riesgos pendientes (tras el cierre)
 
-1. OmniRoute no operativo para codegen con la cuenta actual (H6) — bloquea el camino "por defecto" de generación MQL5 para un usuario sin conocer el workaround de CLI.
-2. Sin lock de idempotencia en reintentos de run (H2) — riesgo de condición de carrera y gasto duplicado bajo doble clic.
-3. Sin verificación automática de fidelidad semántica EA↔estrategia (H1) — el LLM podría, en teoría, seguir desviándose de la regla aprobada sin que nada además del prompt se lo impida.
-4. Pipeline por defecto de producción (3 agentes) es menos robusto que el validado en esta sesión (8 agentes) — decisión de producto pendiente.
+1. **H5 (decisión de producto)**: el pipeline por defecto de 3 agentes queda mitigado (ya no le pide al LLM recalcular geometría) pero sigue siendo estructuralmente más simple que el panel de 8 agentes validado en `forex_v1.1`. Requiere una decisión explícita del usuario: promover el panel de 8 a default, mantenerlos como presets separados, o fusionar `validacion-real-forex` completa a `main`.
+2. La cuenta OmniRoute en sí (no el código) sigue sin acceso a modelos de codegen funcionales — el fallback automático (H6) lo hace invisible operativamente, pero conviene resolver la suscripción/cuenta cuando sea posible por coste/latencia (el fallback añade una llamada extra fallida antes de recurrir a Claude).
+3. Ninguno de los huecos originales queda abierto como bug de código sin mitigar.
 
 ## Resultado final
 
-- **LIVE TRADING permanece bloqueado**: 0 órdenes reales en toda la sesión, todo el trabajo fue análisis, compilación y backtest headless.
-- El pipeline puede considerarse **estable para paper trading / backtesting** sobre el preset `forex_v1.1` (panel de 8 agentes), con los 5 fixes de esta sesión aplicados en `main` y verificados con tests. El pipeline **por defecto** de `main` (3 agentes) sigue teniendo la debilidad estructural de juez=validador (H5) y no ha sido sometido a la misma validación real exhaustiva — se recomienda no considerarlo con el mismo nivel de confianza hasta decidir sobre H5.
+- **LIVE TRADING permanece bloqueado**: 0 órdenes reales en toda la sesión (esta y la de seguimiento), todo el trabajo fue análisis, compilación y backtest headless.
+- El pipeline se considera **estable para paper trading / backtesting** sobre el preset `forex_v1.1` (panel de 8 agentes) y sobre el pipeline por defecto de `main` (3 agentes, con la mitigación de H5 aplicada) — typecheck 100% limpio, 186+113 tests en verde en ambas ramas, sin deuda técnica de código conocida pendiente. La única decisión que queda explícitamente en manos del usuario es de **producto** (H5: qué pipeline debe ser el default), no de corrección.
 - Ver `wiki-Traiding/proyecto-dashboard/informes/VALIDACION_REAL_FOREX.md` para el detalle completo de la validación real de FOREX y `HANDOFF_CONTINUACION.md`/`HANDOFF_CODEX.md` para el histórico previo a esta sesión.
