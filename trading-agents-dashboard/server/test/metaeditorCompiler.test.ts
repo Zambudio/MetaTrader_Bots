@@ -182,4 +182,18 @@ void OnTradeTransaction(const MqlTradeTransaction &trans, const MqlTradeRequest 
     expect(res.status).toBe('ok');
     expect(res.errors.length).toBe(0);
   });
+
+  it('falla cerrado (lanza) en vez de devolver "unverified" si MetaEditor no está disponible', async () => {
+    // Regresión: 'unverified' se trataba aguas abajo (mql5Generator, routes/mql5.ts) como
+    // equivalente a compilación OK, entregando un EA nunca compilado como si lo estuviera
+    // (sección 14: "ningún MQL5 se considera correcto sin compilar").
+    const previous = process.env.METAEDITOR_PATH;
+    process.env.METAEDITOR_PATH = 'C:\\ruta\\que\\no\\existe\\metaeditor64.exe';
+    try {
+      await expect(compileMql5(eaTemplate, 'EA_EURUSD_H1.mq5')).rejects.toThrow(/MetaEditor no está disponible/);
+    } finally {
+      if (previous === undefined) delete process.env.METAEDITOR_PATH;
+      else process.env.METAEDITOR_PATH = previous;
+    }
+  });
 });
