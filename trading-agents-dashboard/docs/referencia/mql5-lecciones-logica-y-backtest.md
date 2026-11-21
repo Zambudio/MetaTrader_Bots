@@ -12,7 +12,7 @@
 1. El agente genera el `.mq5` con el LLM (OmniRoute) y lo compila vía MetaEditor CLI en un
    bucle de hasta 3 intentos, corrigiendo errores reales de compilador. Los fallos de esta
    fase (identificadores no declarados, conversiones de enum, `TRADE_RETCODE_*`
-   inexistentes, etc.) se documentan solos en `docs/MQL5_ERRORES_CONOCIDOS.md` — ya van
+   inexistentes, etc.) se documentan solos en `docs/referencia/mql5-errores-conocidos.md` — ya van
    12 firmas distintas confirmadas y se inyectan automáticamente en el prompt de
    generación de la siguiente vez.
 2. Se resolvieron dos bugs de infraestructura del propio dashboard (documentados en
@@ -96,7 +96,7 @@ preguntas distintas:
 
 Hasta ahora el bucle de generación solo verificaba "¿compila?". Este hallazgo añade una
 segunda pregunta que el compilador nunca puede responder: "¿opera, y si opera, es
-rentable?". Motiva la función descrita en `docs/BACKTEST_LOG_ANALYZER.md`: un apartado en
+rentable?". Motiva la función descrita en `docs/funcionalidades/analizador-logs-backtest.md`: un apartado en
 el dashboard donde se sube el log del Strategy Tester (arrastrando el archivo o abriendo
 el explorador de Windows) y el sistema calcula automáticamente win rate, R:R real
 observado y resultado neto, en vez de tener que leerlo a mano en el log de MetaTrader.

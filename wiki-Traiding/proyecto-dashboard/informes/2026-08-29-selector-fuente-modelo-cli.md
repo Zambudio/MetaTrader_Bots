@@ -179,7 +179,7 @@ MODIF   server/src/engine/omniClient.ts     (+ export buildJsonSchemaSystemMessa
         server/package.json                 (+ scripts test / typecheck)
         server/.env.example                 (fuentes CLI, AGENT_MAX_CONCURRENCY)
         server/README.md                    (router de LLM, paralelismo, /api/models)
-        docs/ESQUEMA_AGENTES_ANALISIS.md    (nota de paralelismo por nivel)
+        docs/arquitectura/esquema-agentes-analisis.md    (nota de paralelismo por nivel)
         src/lib/api.ts                      (listModels -> ModelsResponse)
         src/lib/store.ts                    (sources/modelsBySource; mql5Model + localStorage)
         src/components/AgentConfigModal.tsx (usa <ModelSelector>)

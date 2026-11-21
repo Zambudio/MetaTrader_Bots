@@ -7,7 +7,7 @@
 ## Paso 1 — Instalar versión verificada de MetaTrader 5
 
 - **Prerrequisito:** re-verificar en `metatrader5.com/en/releasenotes` cuál es la build vigente en el momento real de instalar (no asumir que sigue siendo la 6090 — ver [`PREGUNTAS_ABIERTAS.md`](PREGUNTAS_ABIERTAS.md) Q-001).
-- Descargar el instalador oficial desde `metatrader5.com/es/download` (o el instalador ya presente en el repositorio, `mt5setup.exe`, verificando que corresponde a la build vigente antes de usarlo — si es más antiguo, descargar de nuevo).
+- Descargar el instalador oficial desde `metatrader5.com/es/download` (o el instalador ya presente en el repositorio, `tools/installers/mt5setup.exe`, verificando que corresponde a la build vigente antes de usarlo — si es más antiguo, descargar de nuevo).
 - Verificación tras instalar: comprobar el número de build desde `Ayuda → Acerca de` (o menú equivalente) y registrarlo en [`ESTADO_INVESTIGACION.md`](ESTADO_INVESTIGACION.md).
 
 ## Paso 2 — Crear/usar cuenta demo en broker seleccionado
