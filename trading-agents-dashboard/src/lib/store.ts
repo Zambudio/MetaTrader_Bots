@@ -52,6 +52,9 @@ interface AgentStore {
   /** Motor de generación de MQL5. `null` = usar el modelo del agente de estrategia. */
   mql5Model: string | null;
   setMql5Model: (value: string | null) => void;
+  /** Modal de Ajustes de IA abierto (lo abre el botón del header y el error de la tarjeta MQL5). */
+  aiSettingsOpen: boolean;
+  setAiSettingsOpen: (open: boolean) => void;
   currentRun: Run | null;
   isLoading: boolean;
   isAnalysing: boolean;
@@ -91,6 +94,8 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
   timeframe: 'H1',
   maxRetries: 2,
   mql5Model: readStoredMql5Model(),
+  aiSettingsOpen: false,
+  setAiSettingsOpen: (open) => set({ aiSettingsOpen: open }),
   currentRun: null,
   isLoading: true,
   isAnalysing: false,

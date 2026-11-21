@@ -5,6 +5,7 @@ import type { SavedPair, SymbolSearchResult } from '../types/pair';
 import type { Mql5GenerationProgress, Mql5GenerationResult, Mql5Job, StrategyProposalLite } from '../types/strategy';
 import type { Mt5LogSession } from '../types/backtest';
 import type { ModelsResponse } from '../types/model';
+import type { AiLoginSession, AiModelCheck, AiProviderId, AiStatusResponse } from '../types/ai';
 
 /** Error de una respuesta HTTP no-OK. Lleva el `status` para que quien llama pueda distinguir
  *  un fallo transitorio de gateway (502/503/504 del túnel de Cloudflare) de un error real. */
@@ -59,6 +60,21 @@ export const api = {
     request<{ ok: boolean }>(`/agent-configs/${id}`, { method: 'DELETE' }),
   listPairs: () => request<SavedPair[]>('/pairs'),
   listModels: () => request<ModelsResponse>('/models'),
+  // Ajustes de IA — el servidor solo los atiende desde el propio PC (403 desde el túnel).
+  getAiStatus: (forceRefresh = false) =>
+    request<AiStatusResponse>(`/ai/status${forceRefresh ? '?forceRefresh=true' : ''}`),
+  checkAiModel: (source: AiProviderId, model: string, signal?: AbortSignal) =>
+    request<AiModelCheck & { modelKey: string }>('/ai/models/check', {
+      method: 'POST',
+      body: JSON.stringify({ source, model }),
+      signal,
+    }),
+  startAiLogin: (provider: 'claude' | 'openai') =>
+    request<AiLoginSession>(`/ai/login/${provider}`, { method: 'POST' }),
+  getAiLogin: (id: string) => request<AiLoginSession>(`/ai/login/${id}`),
+  submitAiLoginCode: (id: string, code: string) =>
+    request<AiLoginSession>(`/ai/login/${id}/code`, { method: 'POST', body: JSON.stringify({ code }) }),
+  cancelAiLogin: (id: string) => request<AiLoginSession>(`/ai/login/${id}`, { method: 'DELETE' }),
   startRun: (pair: string, timeframe: string, maxRetries?: number, configurationId?: string, executionMode?: 'real' | 'simulation') =>
     request<Run>('/runs', { method: 'POST', body: JSON.stringify({ pair, timeframe, maxRetries, configurationId, executionMode }) }),
   resumeRun: (id: string, agentId?: string) =>

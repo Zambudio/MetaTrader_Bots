@@ -14,6 +14,7 @@ import { symbolSearchRouter } from './routes/symbolSearch.js';
 import { mql5Router } from './routes/mql5.js';
 import { backtestRouter } from './routes/backtest.js';
 import { newsRouter } from './routes/news.js';
+import { aiRouter } from './routes/ai.js';
 import { reconcileOrphanedRuns } from './store/runsStore.js';
 import { reconcileOrphanedMql5Jobs } from './engine/mql5Jobs.js';
 import { startNewsScheduler } from './engine/newsScheduler.js';
@@ -24,7 +25,7 @@ const app = express();
 const PORT = Number(process.env.PORT) || 5175;
 
 app.use(cors());
-// Los logs del Strategy Tester de MetaTrader (docs/BACKTEST_LOG_ANALYZER.md) pueden pesar
+// Los logs del Strategy Tester de MetaTrader (docs/funcionalidades/analizador-logs-backtest.md) pueden pesar
 // varios MB en backtests largos, muy por encima del límite por defecto de express.json (100kb).
 app.use(express.json({ limit: '25mb' }));
 app.use(apiKeyAuth);
@@ -40,13 +41,14 @@ app.use('/api/symbols/search', symbolSearchRouter);
 app.use('/api/mql5', mql5Router);
 app.use('/api/backtest', backtestRouter);
 app.use('/api/news', newsRouter);
+app.use('/api/ai', aiRouter);
 
 // ── Frontend compilado (producción) ────────────────────────────────────────────
 // En `npm run dev` el frontend lo sirve Vite (localhost:5173) y proxya /api aquí.
 // En producción (servicio siempre-activo) este mismo proceso sirve el build de
 // `dist/` en el mismo origen, así que el cliente llama a `/api/...` sin CORS ni
 // segundo puerto. Si `dist/` no existe, el server sigue en modo API-only.
-// Ver docs/DESPLIEGUE_WEB_SIEMPRE_ACTIVA.md.
+// Ver docs/operaciones/despliegue-web-24-7.md.
 const CLIENT_DIST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'dist');
 if (existsSync(path.join(CLIENT_DIST, 'index.html'))) {
   app.use(express.static(CLIENT_DIST));
