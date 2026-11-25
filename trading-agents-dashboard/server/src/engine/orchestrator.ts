@@ -519,7 +519,8 @@ async function executeRunBody(run: Run, agents: Agent[], signal: AbortSignal): P
   } else if (verdict.veredicto === 'go' && (verdict.unresolvedBlockers?.length ?? 0) > 0) {
     run.status = 'error';
     run.finalState = 'invalid_result';
-    run.issues.push({ code: 'CONTRACT_ERROR', severity: 'error', message: 'El juez emitió GO con blockers sin resolver.', agentId: verdictAgent?.id });
+    const blockers = verdict.unresolvedBlockers ?? [];
+    run.issues.push({ code: 'CONTRACT_ERROR', severity: 'error', message: `El juez emitió GO con ${blockers.length} blocker(s) sin resolver: ${blockers.join(', ')}. Esto es una violación de contrato del juez, no un estado válido para generar MQL5.`, agentId: verdictAgent?.id });
   } else {
     run.status = 'done';
     run.finalState = verdict.veredicto === 'go' ? 'validated' : 'rejected';

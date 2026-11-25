@@ -7,9 +7,16 @@ const backendPort = process.env.PORT || '5175';
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  build: {
+    target: 'es2022',
+    minify: 'esbuild',
+  },
   server: {
     proxy: {
       '/api': `http://localhost:${backendPort}`,
     },
+  },
+  ssr: {
+    noExternal: ['zustand'],
   },
 })

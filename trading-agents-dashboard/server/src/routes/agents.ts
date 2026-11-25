@@ -1,9 +1,31 @@
 import { Router } from 'express';
 import { nanoid } from 'nanoid';
+import { z } from 'zod';
 import { listAgents, saveAgents } from '../store/agentsStore.js';
 import { detectCycle } from '../engine/orchestrator.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import type { Agent } from '../types.js';
+
+const AgentUpdateSchema = z.object({
+  name: z.string().optional(),
+  role: z.string().optional(),
+  systemPrompt: z.string().optional(),
+  dependsOn: z.array(z.string()).optional(),
+  outputType: z.enum(['text', 'analysis', 'strategy', 'verdict']).optional(),
+  photo: z.string().optional(),
+  model: z.string().optional(),
+  activation: z.object({
+    mode: z.enum(['always', 'data_available', 'on_conflict']),
+    requiredData: z.array(z.enum([
+      'market_snapshot', 'ohlcv', 'session_clock', 'verified_macro_calendar', 'verified_news',
+      'corporate_fundamentals', 'sec_filings', 'benchmark_data', 'derivatives_metrics', 'on_chain_metrics',
+    ])).optional(),
+    description: z.string(),
+  }).optional(),
+  abstentionConditions: z.array(z.string()).optional(),
+  weight: z.number().min(0).max(1).optional(),
+  interventionType: z.enum(['specialist', 'synthesizer', 'validator', 'judge', 'adversarial']).optional(),
+}).strict();
 
 export const agentsRouter = Router();
 
@@ -71,6 +93,17 @@ agentsRouter.post(
 agentsRouter.put(
   '/:id',
   asyncHandler(async (req, res) => {
+    // Validar que el payload solo contiene campos permitidos
+    const parseResult = AgentUpdateSchema.safeParse(req.body ?? {});
+    if (!parseResult.success) {
+      res.status(400).json({
+        error: 'Invalid agent update fields',
+        details: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`),
+      });
+      return;
+    }
+    const updates = parseResult.data;
+
     const agents = await listAgents();
     const index = agents.findIndex((a) => a.id === req.params.id);
     if (index === -1) {
@@ -78,7 +111,6 @@ agentsRouter.put(
       return;
     }
 
-    const updates = req.body ?? {};
     if ('dependsOn' in updates) {
       const newDependsOn = updates.dependsOn;
       if (!Array.isArray(newDependsOn) || !newDependsOn.every((id) => typeof id === 'string')) {

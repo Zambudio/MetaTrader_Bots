@@ -52,6 +52,9 @@ interface AgentStore {
   /** Motor de generación de MQL5. `null` = usar el modelo del agente de estrategia. */
   mql5Model: string | null;
   setMql5Model: (value: string | null) => void;
+  /** Modal de Ajustes de IA abierto (lo abre el botón del header y el error de la tarjeta MQL5). */
+  aiSettingsOpen: boolean;
+  setAiSettingsOpen: (open: boolean) => void;
   currentRun: Run | null;
   isLoading: boolean;
   isAnalysing: boolean;
@@ -91,6 +94,8 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
   timeframe: 'H1',
   maxRetries: 2,
   mql5Model: readStoredMql5Model(),
+  aiSettingsOpen: false,
+  setAiSettingsOpen: (open) => set({ aiSettingsOpen: open }),
   currentRun: null,
   isLoading: true,
   isAnalysing: false,
@@ -289,22 +294,11 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     try {
       const run = await api.startRun(selectedPair, timeframe, maxRetries, activePresetId ?? undefined, 'real');
       set({ currentRun: run });
-
-      let attempts = 0;
-      while (attempts < MAX_POLL_ATTEMPTS) {
-        attempts++;
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        const latest = await api.getRun(run.id);
-        set({ currentRun: latest });
-        if (latest.status !== 'running') break;
-      }
-
-      if (attempts >= MAX_POLL_ATTEMPTS) {
-        set({
-          error: 'Tiempo límite de espera alcanzado (10 min). Puedes reanudar o reejecutar el análisis desde la tarjeta del agente que quedó pendiente.',
-          errorDomain: 'run',
-        });
-      }
+      
+      const finalRun = await api.pollRunUntilTerminal(run.id, MAX_POLL_ATTEMPTS, (updatedRun) => {
+        set({ currentRun: updatedRun });
+      });
+      set({ currentRun: finalRun });
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Error ejecutando el análisis',
@@ -322,22 +316,11 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     try {
       const run = await api.resumeRun(currentRun.id, agentId);
       set({ currentRun: run });
-
-      let attempts = 0;
-      while (attempts < MAX_POLL_ATTEMPTS) {
-        attempts++;
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        const latest = await api.getRun(run.id);
-        set({ currentRun: latest });
-        if (latest.status !== 'running') break;
-      }
-
-      if (attempts >= MAX_POLL_ATTEMPTS) {
-        set({
-          error: 'Tiempo límite de espera alcanzado reanudando el análisis (10 min). Puedes reintentar desde la tarjeta de cualquier agente.',
-          errorDomain: 'run',
-        });
-      }
+      
+      const finalRun = await api.pollRunUntilTerminal(run.id, MAX_POLL_ATTEMPTS, (updatedRun) => {
+        set({ currentRun: updatedRun });
+      });
+      set({ currentRun: finalRun });
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Error reanudando el análisis',

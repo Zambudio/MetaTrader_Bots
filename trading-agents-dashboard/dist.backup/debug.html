@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Test</title>
+    <style>
+        body {
+            background: #000;
+            color: #0f0;
+            font-family: monospace;
+            padding: 20px;
+        }
+        .test { border: 1px solid #0f0; padding: 10px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>🔍 DEBUG TEST</h1>
+
+    <div class="test">
+        <h2>1. Assets Loading</h2>
+        <p id="assets-test">Testing asset loading...</p>
+    </div>
+
+    <div class="test">
+        <h2>2. Console Errors</h2>
+        <p>Check browser console (F12) for errors</p>
+    </div>
+
+    <div class="test">
+        <h2>3. React Root</h2>
+        <div id="root">React should render here...</div>
+    </div>
+
+    <script>
+        console.log('✓ Debug page loaded');
+
+        // Test if assets exist
+        fetch('/assets/index-BVd22NmF.js', {method: 'HEAD'})
+            .then(r => {
+                document.getElementById('assets-test').innerHTML =
+                    r.ok ? '✓ JS asset found (200)' : `✗ JS asset error (${r.status})`;
+            })
+            .catch(e => {
+                document.getElementById('assets-test').innerHTML = '✗ Network error: ' + e.message;
+            });
+
+        // Load the actual app
+        console.log('Loading /assets/index-BVd22NmF.js...');
+    </script>
+    <script type="module" src="/assets/index-BVd22NmF.js"></script>
+</body>
+</html>

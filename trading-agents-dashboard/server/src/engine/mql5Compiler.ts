@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { nanoid } from 'nanoid';
 import { MQL5_COMPILE_DIR, MQL5_DELIVERABLES_DIR } from '../paths.js';
+import { acquireMt5Lock, releaseMt5Lock } from './mt5Mutex.js';
 
 const DEFAULT_METAEDITOR_PATH = 'C:\\Program Files\\MetaTrader 5\\metaeditor64.exe';
 const COMPILE_TIMEOUT_MS = 30_000;
@@ -54,9 +55,28 @@ function parseLog(raw: string, srcPath: string, displayName: string): { errors: 
 }
 
 export async function compileMql5(code: string, displayName: string): Promise<CompileResult> {
+  // Acquire global MT5 lock to prevent concurrent compilation/backtest collisions (E1)
+  const lockId = `compile-${nanoid(8)}`;
+  await acquireMt5Lock(lockId);
+
+  try {
+    return await compileMql5Internal(code, displayName);
+  } finally {
+    await releaseMt5Lock();
+  }
+}
+
+async function compileMql5Internal(code: string, displayName: string): Promise<CompileResult> {
   const exe = await resolveMetaeditorPath();
   if (!exe) {
-    return { status: 'unverified', errors: [], warnings: [] };
+    // Sección 14 del criterio de auditoría: ningún MQL5 se considera correcto sin compilar.
+    // Devolver 'unverified' aquí se trataba aguas abajo (mql5Generator, routes/mql5.ts) como
+    // equivalente a compilación OK, entregando al usuario un EA nunca compilado como si lo
+    // estuviera. Falla cerrado: esto es un problema de entorno, no un resultado válido.
+    throw new Error(
+      `MetaEditor no está disponible en la ruta esperada (${process.env.METAEDITOR_PATH || DEFAULT_METAEDITOR_PATH}). ` +
+        'No se puede verificar la compilación del MQL5 generado; configura METAEDITOR_PATH o instala MetaTrader 5.'
+    );
   }
 
   await fs.mkdir(MQL5_COMPILE_DIR, { recursive: true });
@@ -76,7 +96,9 @@ export async function compileMql5(code: string, displayName: string): Promise<Co
     try {
       raw = (await fs.readFile(logPath, 'utf16le')).replace(/^\uFEFF/, '');
     } catch {
-      return { status: 'unverified', errors: [], warnings: [] };
+      // MetaEditor no escribi\u00F3 el log esperado (crash, timeout silencioso, permisos): no hay
+      // forma de saber si compil\u00F3. Igual que arriba, falla cerrado en vez de devolver 'unverified'.
+      throw new Error('MetaEditor no gener\u00F3 el log de compilaci\u00F3n esperado; no se puede verificar si el MQL5 compil\u00F3.');
     }
 
     const { errors, warnings } = parseLog(raw, srcPath, displayName);

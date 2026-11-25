@@ -5,6 +5,7 @@ import path from 'node:path';
 import { nanoid } from 'nanoid';
 import { parseMt5Log, type Mt5LogSession } from './mt5LogParser.js';
 import { evaluateQualityGate, type QualityGateVerdict } from './qualityGate.js';
+import { acquireMt5Lock, releaseMt5Lock } from './mt5Mutex.js';
 
 const DEFAULT_TERMINAL_PATH = 'C:\\Program Files\\MetaTrader 5\\terminal64.exe';
 const DEFAULT_MT5_DATA_DIR = 'C:\\Users\\fadwe\\AppData\\Roaming\\MetaQuotes\\Terminal\\D0E8209F77C8CF37AD8BF550E51FF075';
@@ -240,6 +241,22 @@ function findCompletedSessionForExpert(
 }
 
 export async function runHeadlessBacktest(
+  code: string,
+  baseFilename: string,
+  options: BacktestOptions
+): Promise<BacktestExecutionResult> {
+  // Acquire global MT5 lock to prevent concurrent compilation/backtest collisions (E1)
+  const lockId = `backtest-${nanoid(8)}`;
+  await acquireMt5Lock(lockId);
+
+  try {
+    return await runHeadlessBacktestInternal(code, baseFilename, options);
+  } finally {
+    await releaseMt5Lock();
+  }
+}
+
+async function runHeadlessBacktestInternal(
   code: string,
   baseFilename: string,
   options: BacktestOptions

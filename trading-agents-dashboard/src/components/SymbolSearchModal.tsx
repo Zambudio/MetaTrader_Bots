@@ -153,7 +153,7 @@ export const SymbolSearchModal = ({ onClose, initialTab = 'favoritos', initialQu
           </div>
         </div>
 
-        <div className="overflow-y-auto flex-1">
+        <div className="overflow-y-auto flex-1 bg-void/20">
           {tab === 'favoritos' ? (
             favoritePairs.length === 0 ? (
               <p className="text-muted text-base p-5 text-center">

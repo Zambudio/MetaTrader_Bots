@@ -248,7 +248,7 @@ El sistema incluye un router extensible (`server/src/engine/llmRouter.ts`) que p
 Transforma la propuesta estructurada en un Expert Advisor robusto:
 1. **Inyección del Estándar:** Aplica las directivas obligatorias de [`17_Estandar_Desarrollo_EAs_con_IA.md`](wiki-Traiding/proyecto-mt5-bots/17_Estandar_Desarrollo_EAs_con_IA.md).
 2. **Compilación Headless:** Llama a `metaeditor64.exe /compile` en segundo plano.
-3. **Memoria de Errores Persistente:** Registra las incidencias corregidas en [`MQL5_ERRORES_CONOCIDOS.md`](trading-agents-dashboard/docs/MQL5_ERRORES_CONOCIDOS.md).
+3. **Memoria de Errores Persistente:** Registra las incidencias corregidas en [`mql5-errores-conocidos.md`](trading-agents-dashboard/docs/referencia/mql5-errores-conocidos.md).
 4. **Persistencia de Jobs:** Si el servidor se reinicia o el túnel falla, el estado de la generación se conserva en disco (`server/src/data/mql5Jobs.json`).
 
 ### 4. Quality Gate y Analizador de Logs del Strategy Tester

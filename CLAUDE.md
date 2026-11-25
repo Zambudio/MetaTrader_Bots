@@ -2,16 +2,38 @@
 
 Configuración multiagente para estrategias y bots en MetaTrader 5. Dos partes principales:
 
-- [`wiki-Traiding/`](wiki-Traiding/index.md) — base de conocimiento única del proyecto (todos los documentos viven aquí, no en `docs/`), mantenida por Claude Code siguiendo el patrón [LLM Wiki de Karpathy](wiki-Traiding/METHODOLOGY.md). Combina conocimiento de trading de propósito general (velas, indicadores, estrategias, análisis fundamental, gestión de riesgo, glosario) con la investigación de ingeniería de este proyecto concreto en [`proyecto-mt5-bots/`](wiki-Traiding/proyecto-mt5-bots/00_INDEX.md) (arquitectura MT5, modelo de órdenes/deals/posiciones, MQL5, MCP, riesgo, backtesting, despliegue en VPS, estándar de generación de EAs con IA...) y los planes/specs de ingeniería del dashboard en [`proyecto-dashboard/`](wiki-Traiding/proyecto-dashboard/00_INDEX.md). Las convenciones de cada parte están en [`wiki-Traiding/CLAUDE.md`](wiki-Traiding/CLAUDE.md).
-- [`trading-agents-dashboard/`](trading-agents-dashboard/README.md) — consola web de agentes de IA para análisis y propuesta de estrategia (indicadores, entrada, stop loss, take profit). Herramienta de investigación, no de ejecución: el resultado se usa manualmente para configurar Expert Advisors en MetaTrader. Ver también `trading-agents-dashboard/server/README.md` para el backend.
+- [`wiki-Traiding/`](wiki-Traiding/index.md) — base de conocimiento cuantitativo y de ingeniería MetaTrader/MQL5, mantenida siguiendo el patrón [LLM Wiki de Karpathy](wiki-Traiding/METHODOLOGY.md). Sus convenciones están en [`wiki-Traiding/CLAUDE.md`](wiki-Traiding/CLAUDE.md).
+- [`trading-agents-dashboard/`](trading-agents-dashboard/README.md) — consola web de agentes de IA. Su documentación técnica y operativa se indexa en [`trading-agents-dashboard/docs/`](trading-agents-dashboard/docs/README.md); el backend se documenta en [`server/README.md`](trading-agents-dashboard/server/README.md).
 
-## Regla permanente: toda la documentación va a la wiki, indexada
+## Regla permanente: documentación por ámbito, siempre indexada
 
-Este repositorio no usa `docs/` ni archivos de documentación sueltos en la raíz. Cualquier documento que Claude Code (o cualquier otro agente) genere para este proyecto — investigación, decisiones, planes de implementación (skills `superpowers:writing-plans`/`superpowers:brainstorming`), specs de diseño, hallazgos de auditoría, notas de progreso — se escribe dentro de `wiki-Traiding/`, en la categoría que corresponda:
+- Documentación del producto web — arquitectura, funcionalidades, operación, decisiones, planes, auditorías y cambios — → [`trading-agents-dashboard/docs/`](trading-agents-dashboard/docs/README.md), usando sus categorías y actualizando [`REGISTRO_DESARROLLO.md`](trading-agents-dashboard/docs/REGISTRO_DESARROLLO.md) cuando corresponda.
+- Conocimiento de trading de propósito general → categoría correspondiente de [`wiki-Traiding/`](wiki-Traiding/index.md).
+- Investigación y decisiones específicas de MetaTrader 5, MQL5 o EAs → [`wiki-Traiding/proyecto-mt5-bots/`](wiki-Traiding/proyecto-mt5-bots/00_INDEX.md).
+- Los planes e informes históricos que ya viven en [`wiki-Traiding/proyecto-dashboard/`](wiki-Traiding/proyecto-dashboard/00_INDEX.md) se conservan allí y se enlazan desde el índice de la web; no se duplican.
 
-- Conocimiento de trading de propósito general → la categoría existente que corresponda (`basico/`, `indicadores/`, `estrategias/`, `analisis-fundamental/`, `gestion-riesgo/`, `infraestructura/`), siguiendo el flujo de Ingest de [`wiki-Traiding/CLAUDE.md`](wiki-Traiding/CLAUDE.md).
-- Investigación/decisiones de ingeniería de MetaTrader 5, MQL5 o EAs → [`wiki-Traiding/proyecto-mt5-bots/`](wiki-Traiding/proyecto-mt5-bots/00_INDEX.md).
-- Planes/specs de ingeniería de `trading-agents-dashboard/` → [`wiki-Traiding/proyecto-dashboard/`](wiki-Traiding/proyecto-dashboard/00_INDEX.md) (`planes/` y `specs/`).
-- Si no encaja en ninguna categoría existente, se crea una nueva dentro de `wiki-Traiding/` (ver "las carpetas de categoría se crean cuando llega la primera página" en `wiki-Traiding/CLAUDE.md`) — nunca se deja como archivo suelto en la raíz o en un `docs/` ad hoc.
+No se crean documentos sueltos en la raíz del monorepo ni de la aplicación. `README.md` y este `CLAUDE.md` son excepciones convencionales como puntos de entrada. Ningún documento se considera terminado sin un enlace Markdown real desde su índice o desde un documento relacionado.
 
-**Ningún documento se da por terminado sin indexarlo y relacionarlo**: actualizar el índice correspondiente (`index.md` general o el `00_INDEX.md` de la categoría de proyecto) y enlazarlo con markdown real (`[texto](ruta)`) desde al menos un documento relacionado — nunca solo mencionarlo entre backticks, porque eso no cuenta como enlace (ni para Obsidian ni para la navegación real) y lo deja huérfano aunque "aparezca" citado por todas partes.
+---
+
+## 🧠 Base de Conocimiento Global (OBSIDIAN VAULT)
+
+Además de la `wiki-Traiding/` local especializada en trading cuantitativo, este repositorio forma parte del ecosistema global de proyectos integrado en nuestra base de conocimiento general:
+📁 **`z:\IA\02_Proyectos\OBSIDIAN VAULT`**
+
+### Directrices Obligatorias para Cualquier Agente de IA:
+1. **Consulta Previa Obligatoria**:
+   - Siempre que estemos desarrollando, buscando arquitecturas, integrando modelos de IA o configurando servidores, **busca información primero en `OBSIDIAN VAULT`** (`OBSIDIAN VAULT/index.md`).
+   - `wiki-Traiding/`: Conocimiento de dominio financiero interno, backtests específicos y catálogo local.
+   - `OBSIDIAN VAULT`: Infraestructura global (Synology NAS, Docker), pasarela de IA compartida (OmniRoute), estándares transversales (`Concepts/Estandar-Desarrollo-EAs-MQL5-IA.md`, `Concepts/Inyeccion-Automatica-Contexto-Wiki-Agentes.md`) y la ficha `Entities/Proyecto-MetaTrader-Bots.md`.
+2. **Referencias Cruzadas**: Si el usuario indica *"Hazlo como en el proyecto X"*, consulta las entidades y conceptos en `OBSIDIAN VAULT`.
+3. **Documentar y Relacionar Obligatoriamente Nuevos Desarrollos e Implementaciones**:
+   - Cualquier nueva implementación relevante, avance técnico transversal, integración con pasarelas o patrón arquitectónico **DEBE documentarse e interrelacionarse en `OBSIDIAN VAULT`**.
+   - Seguir estrictamente la metodología Wiki-Base (`OBSIDIAN VAULT/SCHEMA.md`):
+     - Frontmatter YAML (`tags`, `updated: YYYY-MM-DD`, `fuentes`).
+     - Sección `## Cross-references` con Wikilinks nativos `[[...]]`, enlazando a las notas pertinentes y SIEMPRE a `[[index]]`, `[[SCHEMA]]` y `[[log]]`.
+     - Sección `## Fuentes`.
+     - Regla del Vault Cerrado (0 enlaces Markdown salientes; rutas locales en texto plano en backticks).
+     - Actualización obligatoria de `OBSIDIAN VAULT/index.md` y registro cronológico en `OBSIDIAN VAULT/log.md`.
+
+

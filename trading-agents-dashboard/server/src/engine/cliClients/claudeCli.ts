@@ -8,6 +8,8 @@ import {
 import {
   extractBalancedJson,
   flattenMessages,
+  isTransientCliError,
+  resolveAgentCliRetries,
   resolveAgentCliTimeoutMs,
   resolveClaudeBin,
   spawnCli,
@@ -36,11 +38,37 @@ const DISALLOWED_TOOLS = [
 
 const CLAUDE_BIN = resolveClaudeBin();
 
-export async function claudeCliChatCompletion(
+/**
+ * Texto de diagnóstico para un `claude -p` que terminó con código != 0.
+ *
+ * Con `--output-format json`, los errores de sesión, límite de uso o modelo NO van a stderr:
+ * `claude` imprime el sobre JSON (`is_error`, `result`, `subtype`) en stdout y sale con código 1.
+ * Antes solo se mostraba stderr, así que el error salía siempre como `stderr: (vacío)` y la causa
+ * real (p. ej. "Claude AI usage limit reached") quedaba oculta.
+ */
+export function describeClaudeFailure(stdout: string, stderr: string): string {
+  const err = stderr.trim();
+  const out = stdout.trim();
+  let detail = '';
+  try {
+    const envelope = JSON.parse(out);
+    const result = typeof envelope?.result === 'string' ? envelope.result.trim() : '';
+    const subtype = typeof envelope?.subtype === 'string' ? envelope.subtype : '';
+    detail = [subtype && `subtype=${subtype}`, result].filter(Boolean).join(': ');
+  } catch {
+    detail = out.slice(0, 500);
+  }
+  const parts = [detail && `stdout: ${detail.slice(0, 500)}`, err && `stderr: ${err.slice(0, 500)}`].filter(Boolean);
+  return parts.length > 0 ? parts.join(' | ') : 'stdout y stderr vacíos';
+}
+
+const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+async function claudeCliAttempt(
   model: string,
   messages: ChatMessage[],
-  tool?: ToolDefinition | null,
-  options: OmniClientOptions = {}
+  tool: ToolDefinition | null | undefined,
+  options: OmniClientOptions
 ): Promise<any> {
   const systemPrompt = messages
     .filter((m) => m.role === 'system')
@@ -75,9 +103,7 @@ export async function claudeCliChatCompletion(
     throw new Error(`[claudeCli] timeout (${Math.round(timeoutMs / 1000)}s) esperando a claude`);
   }
   if (run.code !== 0) {
-    throw new Error(
-      `[claudeCli] claude salió con código ${run.code}. stderr: ${run.stderr.slice(0, 500) || '(vacío)'}`
-    );
+    throw new Error(`[claudeCli] claude salió con código ${run.code}. ${describeClaudeFailure(run.stdout, run.stderr)}`);
   }
 
   let envelope: any;
@@ -100,4 +126,38 @@ export async function claudeCliChatCompletion(
 
   const content = tool ? extractBalancedJson(sanitizeJsonResponse(result)) : result;
   return toChoicesResponse(content);
+}
+
+/**
+ * Reintento acotado ante fallos TRANSITORIOS (salida rápida con stdout/stderr vacíos, stdout no
+ * parseable, `.result` vacío, subtype != success). Evidencia real (rama `validacion-real-forex`):
+ * run `real-forex-20260830150301-r1-current` — `fx-judge` falló con "claude salió con código 1.
+ * stdout y stderr vacíos" en 6.1 s, en la 3ª pasada, y tumbó un run de ~30 min ya completado hasta
+ * el juez. `llmRouter` NO hace fallback entre fuentes, así que sin esto un hipo puntual de la
+ * suscripción cuesta la ejecución entera. Nunca reintenta si el usuario abortó o si es timeout
+ * (ver `isTransientCliError`).
+ */
+export async function claudeCliChatCompletion(
+  model: string,
+  messages: ChatMessage[],
+  tool?: ToolDefinition | null,
+  options: OmniClientOptions = {}
+): Promise<any> {
+  const maxRetries = resolveAgentCliRetries(2);
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await claudeCliAttempt(model, messages, tool, options);
+    } catch (err) {
+      lastErr = err;
+      if (attempt < maxRetries && isTransientCliError(err)) {
+        const backoffMs = 2_000 * (attempt + 1);
+        console.warn(`[claudeCli] fallo transitorio (intento ${attempt + 1}/${maxRetries + 1}): ${err instanceof Error ? err.message : err}. Reintento en ${backoffMs / 1000}s.`);
+        await delay(backoffMs);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }

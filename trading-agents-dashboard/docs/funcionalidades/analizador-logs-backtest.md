@@ -1,6 +1,6 @@
 # Analizador de logs del Strategy Tester
 
-Motivado por `docs/MQL5_LECCIONES_LOGICA_Y_BACKTEST.md` §4: compilar sin errores no
+Motivado por `docs/referencia/mql5-lecciones-logica-y-backtest.md` §4: compilar sin errores no
 demuestra que una estrategia sea rentable, solo que el código es válido. Para responder
 "¿opera, y si opera, es rentable?" hacía falta leer a mano el log de MetaTrader
 (`Tester\<terminal-id>\Agent-127.0.0.1-<puerto>\logs\AAAAMMDD.log`), que puede tener

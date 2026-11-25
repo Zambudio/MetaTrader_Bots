@@ -15,7 +15,7 @@
  * está disponible en la sesión del usuario tras el login (la tarea programada de
  * arranque lo verifica antes de `pm2 resurrect`).
  *
- * Detalle completo: docs/DESPLIEGUE_WEB_SIEMPRE_ACTIVA.md
+ * Detalle completo: docs/operaciones/despliegue-web-24-7.md
  */
 const path = require('node:path');
 

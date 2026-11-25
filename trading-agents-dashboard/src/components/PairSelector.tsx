@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAgentStore, TIMEFRAME_OPTIONS } from '../lib/store';
 import { SymbolSearchModal, type TabKey } from './SymbolSearchModal';
 
@@ -119,7 +120,11 @@ export const PairSelector = () => {
         </div>
       </div>
 
-      {modal && <SymbolSearchModal onClose={closeModal} initialTab={modal.tab} initialQuery={modal.query} />}
+      {modal &&
+        createPortal(
+          <SymbolSearchModal onClose={closeModal} initialTab={modal.tab} initialQuery={modal.query} />,
+          document.body,
+        )}
     </>
   );
 };

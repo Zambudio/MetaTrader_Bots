@@ -164,7 +164,9 @@ export function reviewMql5Code(code: string, assumptions: string[] = []): CodeRe
   });
 
   // Regla 16: Distinguir nueva barra de nuevo tick (guard bar-based)
-  const hasNewBarGuard = /if\s*\(\s*(?:currentBarTime|lastBarTime|barTime)\s*==\s*(?:currentBarTime|lastBarTime|barTime)\s*\)\s*return/i.test(code) ||
+  // Los identificadores reales varían en prefijo (p. ej. `g_lastBarTime`, `m_currentBarTime`),
+  // no solo el nombre exacto sin prefijar — \w* a ambos lados evita falsos negativos por eso.
+  const hasNewBarGuard = /if\s*\(\s*\w*(?:currentBarTime|lastBarTime|barTime)\w*\s*==\s*\w*(?:currentBarTime|lastBarTime|barTime)\w*\s*\)\s*return/i.test(code) ||
     /if\s*\(\s*iTime\s*\([^)]*\)\s*==\s*\w+\s*\)\s*return/i.test(code);
   evaluations.push({
     ruleNumber: 16,
@@ -200,14 +202,25 @@ export function reviewMql5Code(code: string, assumptions: string[] = []): CodeRe
   });
 
   // Regla 20: Logging suficiente sin spam (Límite por barra)
-  const hasSpammyElsePrint = /else\s*\{?\s*Print\s*\(/i.test(code);
+  // Falso positivo real encontrado auditando el primer EA generado en validacion-real-forex: un
+  // `else { Print(...ResultRetcodeDescription()...) }` reportando el fallo de una orden NO es
+  // spam — solo puede dispararse como máximo una vez por intento de orden (ya limitado aguas
+  // arriba por el guard de nueva barra de OnTick), no una vez por tick. Solo se considera spam un
+  // `else { Print(...) }` que NO sea un reporte de resultado de operación/error de ejecución.
+  const ORDER_ERROR_REPORT_HINT = /retcode|resultretcode|resultcomment|resultdeal|resultorder|GetLastError|ErrorDescription/i;
+  const elsePrintMatches = [...code.matchAll(/else\s*\{?\s*Print\s*\(/gi)];
+  const spammyElsePrints = elsePrintMatches.filter((m) => {
+    const windowEnd = Math.min(code.length, (m.index ?? 0) + 300);
+    const window = code.slice(m.index ?? 0, windowEnd);
+    return !ORDER_ERROR_REPORT_HINT.test(window);
+  });
   evaluations.push({
     ruleNumber: 20,
     ruleName: 'Logging controlado anti-spam por barra',
-    verdict: hasSpammyElsePrint ? 'no_cumple' : 'cumple',
-    details: hasSpammyElsePrint
-      ? 'Detectado Print() en ramas else sin filtro de barra (riesgo de log spam).'
-      : 'Logging controlado sin spam por tick.',
+    verdict: spammyElsePrints.length > 0 ? 'no_cumple' : 'cumple',
+    details: spammyElsePrints.length > 0
+      ? 'Detectado Print() en ramas else sin filtro de barra ni relación con un reporte de error de orden (riesgo de log spam).'
+      : 'Logging controlado sin spam por tick (los Print() en else son reportes de error de orden, acotados a un intento).',
   });
 
   // Regla 21: Código versionado (#property version)

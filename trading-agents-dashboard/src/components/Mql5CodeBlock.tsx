@@ -194,6 +194,20 @@ export const Mql5CodeBlock = ({ result, onOptimize, isOptimizing }: Props) => {
         </div>
       )}
 
+      {/* Fidelidad del código frente a la estrategia aprobada (H1, advisory) */}
+      {result.fidelityCheck && result.fidelityCheck.findings.length > 0 && (
+        <div className={`px-4 py-2.5 rounded-xl border ${result.fidelityCheck.passed ? 'bg-amber-500/10 border-amber-500/30' : 'bg-bear/10 border-bear/30'}`}>
+          <p className={`text-xs font-medium ${result.fidelityCheck.passed ? 'text-amber-300' : 'text-bear'}`}>
+            {result.fidelityCheck.passed ? '⚠ Aviso de fidelidad' : '✕ Posible desviación de fidelidad'} respecto a la estrategia aprobada:
+          </p>
+          <ul className="list-disc pl-5 mt-1.5 space-y-0.5 text-xs text-paper/80 font-mono">
+            {result.fidelityCheck.findings.map((f, i) => (
+              <li key={i}>{f.message}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Backtest Simulation Results Card */}
       {(stats || (result.optimizationNotes && result.optimizationNotes.length > 0)) && (
         <div className="p-5 bg-void/70 border border-cyan/30 rounded-2xl space-y-4 shadow-lg card-edge">

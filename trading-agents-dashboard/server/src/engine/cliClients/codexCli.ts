@@ -11,6 +11,8 @@ import {
 import {
   extractBalancedJson,
   flattenMessages,
+  isTransientCliError,
+  resolveAgentCliRetries,
   resolveAgentCliTimeoutMs,
   resolveCodexEntry,
   spawnCli,
@@ -46,7 +48,40 @@ function codexEntry(): string {
   return cachedCodexEntry;
 }
 
+const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/**
+ * Reintento acotado ante fallos TRANSITORIOS de `codex` — mismo mecanismo y motivación que
+ * `claudeCliChatCompletion` (ver ese comentario). Nunca reintenta si el usuario abortó o si es
+ * timeout (ver `isTransientCliError`).
+ */
 export async function codexCliChatCompletion(
+  model: string,
+  effort: string | undefined,
+  messages: ChatMessage[],
+  tool?: ToolDefinition | null,
+  options: OmniClientOptions = {}
+): Promise<any> {
+  const maxRetries = resolveAgentCliRetries(2);
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await codexCliAttempt(model, effort, messages, tool, options);
+    } catch (err) {
+      lastErr = err;
+      if (attempt < maxRetries && isTransientCliError(err)) {
+        const backoffMs = 2_000 * (attempt + 1);
+        console.warn(`[codexCli] fallo transitorio (intento ${attempt + 1}/${maxRetries + 1}): ${err instanceof Error ? err.message : err}. Reintento en ${backoffMs / 1000}s.`);
+        await delay(backoffMs);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+}
+
+async function codexCliAttempt(
   model: string,
   effort: string | undefined,
   messages: ChatMessage[],
@@ -108,9 +143,10 @@ export async function codexCliChatCompletion(
       // codex escribe `ERROR: {json}` en stdout ante errores de API (rate limit, modelo no
       // permitido por el plan, etc.) — extraerlo para un mensaje útil.
       const apiError = /ERROR:\s*(\{[\s\S]*?\})\s*$/m.exec(run.stdout)?.[1];
+      // stderr empieza con el banner de codex y el prompt repetido; la causa real va al FINAL.
       const detail =
         apiError ||
-        run.stderr.slice(0, 500).trim() ||
+        run.stderr.slice(-500).trim() ||
         run.stdout.slice(-500).trim() ||
         '(sin salida)';
       throw new Error(`[codexCli] codex falló (código ${run.code}): ${detail}`);

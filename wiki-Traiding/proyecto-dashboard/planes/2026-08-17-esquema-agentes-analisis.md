@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript (backend Express + `tsx`, frontend React 19 + Zustand + Tailwind v4), paquete `technicalindicators` (ya usado en el cliente, se añade al backend).
 
-**Spec:** [`trading-agents-dashboard/docs/ESQUEMA_AGENTES_ANALISIS.md`](../../../trading-agents-dashboard/docs/ESQUEMA_AGENTES_ANALISIS.md)
+**Spec:** [`trading-agents-dashboard/docs/arquitectura/esquema-agentes-analisis.md`](../../../trading-agents-dashboard/docs/arquitectura/esquema-agentes-analisis.md)
 
 ## Global Constraints
 
@@ -1444,6 +1444,6 @@ Expected: sin errores en consola del navegador relacionados con `verdict`/`attem
 
 - [ ] **Step 4: Confirmar que el plan y el spec siguen alineados**
 
-Relee `trading-agents-dashboard/docs/ESQUEMA_AGENTES_ANALISIS.md` y confirma que ningún paso de este plan lo contradice (roster, dependencias, mecánica de reintento, techo de 3). Si detectas una divergencia intencional (p. ej. la simplificación de `descendantChain` en la Task 4 Step 1, que se resolvió reutilizando `ancestorChain` en vez de escribir una función inversa aparte), añade una nota breve al spec explicando el cambio.
+Relee `trading-agents-dashboard/docs/arquitectura/esquema-agentes-analisis.md` y confirma que ningún paso de este plan lo contradice (roster, dependencias, mecánica de reintento, techo de 3). Si detectas una divergencia intencional (p. ej. la simplificación de `descendantChain` en la Task 4 Step 1, que se resolvió reutilizando `ancestorChain` en vez de escribir una función inversa aparte), añade una nota breve al spec explicando el cambio.
 
 No hay commit en esta tarea — es solo verificación.

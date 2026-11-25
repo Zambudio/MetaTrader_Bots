@@ -37,6 +37,43 @@ export function resolveAgentCliTimeoutMs(fallbackMs: number): number {
   return Number.isFinite(raw) && raw >= 1000 ? Math.floor(raw) : fallbackMs;
 }
 
+/**
+ * Nº de reintentos ante fallos TRANSITORIOS de un CLI de agente (`AGENT_CLI_RETRIES`, def.
+ * `fallback`, tope 5). Un hipo puntual de la suscripción (`claude` sale con código 1 y stdout/
+ * stderr vacíos en pocos segundos) no debe tumbar un run entero cuando `llmRouter` no hace
+ * fallback entre fuentes.
+ */
+export function resolveAgentCliRetries(fallback: number): number {
+  const raw = Number(process.env.AGENT_CLI_RETRIES);
+  if (!Number.isFinite(raw) || raw < 0) return fallback;
+  return Math.min(5, Math.floor(raw));
+}
+
+/**
+ * ¿El error de una invocación de CLI es TRANSITORIO (merece reintento) y no un fallo de
+ * contenido/entrada? Transitorio: salida no cero con stdout/stderr vacíos, stdout no parseable
+ * como el sobre JSON del CLI, `.result` vacío, `subtype != success`, "no se pudo lanzar", o
+ * cualquier fallo reportado por `codex`. NO transitorio: detención deliberada del usuario, timeout
+ * (probable prompt demasiado grande / saturación — reintentar agrava), límite de sesión/uso de la
+ * suscripción (reintentar no lo levanta), y errores de parseo del JSON de la RESPUESTA del modelo
+ * (`extractBalancedJson` — el reintento probablemente reproduce el mismo formato roto).
+ */
+export function isTransientCliError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/detenido por el usuario/i.test(msg)) return false;
+  if (/timeout \(\d+s\)/i.test(msg)) return false;
+  if (/hit your (?:session|usage) limit|l[ií]mite de (?:sesi[oó]n|uso)|usage limit reached/i.test(msg)) return false;
+  if (/no contiene ning[uú]n objeto JSON|objeto JSON sin cerrar/i.test(msg)) return false;
+  return (
+    /sali[oó] con c[oó]digo \d+\.\s*stdout y stderr vac[ií]os/i.test(msg) ||
+    /stdout no es JSON parseable/i.test(msg) ||
+    /no devolvi[oó] texto en \.result/i.test(msg) ||
+    /devolvi[oó] error \(subtype=/i.test(msg) ||
+    /no se pudo lanzar/i.test(msg) ||
+    /codex fall[oó] \(c[oó]digo/i.test(msg)
+  );
+}
+
 export interface CliRunResult {
   code: number | null;
   stdout: string;

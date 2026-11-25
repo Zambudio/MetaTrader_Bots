@@ -77,4 +77,37 @@ void OnTradeTransaction(const MqlTradeTransaction &trans, const MqlTradeRequest 
     expect(res.passed).toBe(false);
     expect(res.blockingRules).toContain(16);
   });
+
+  it('NO marca como spam un Print() de reporte de error de orden en else (Regla 20) — regresión', () => {
+    // Falso positivo real encontrado auditando el primer EA compilado en validacion-real-forex:
+    // un `else { Print(...ResultRetcodeDescription()...) }` tras un trade.Buy() fallido no es
+    // spam (a lo sumo una vez por intento de orden), pero la regex original lo marcaba igual que
+    // cualquier Print en else.
+    const codeWithOrderErrorReport = validEaCode.replace(
+      'if(trade.Buy(lot, _Symbol, ask, sl, tp, "Test")) {\n    Print("Orden compra enviada");\n  }',
+      'if(trade.Buy(lot, _Symbol, ask, sl, tp, "Test")) {\n    Print("Orden compra enviada");\n  } else {\n    Print("[ENTRY_ERROR] retcode=", trade.ResultRetcode(), " ", trade.ResultRetcodeDescription());\n  }'
+    );
+    const res = reviewMql5Code(codeWithOrderErrorReport, ['Supuesto 1']);
+    expect(res.blockingRules).not.toContain(20);
+  });
+
+  it('SÍ marca como spam un Print() en else que NO reporta un resultado de orden (Regla 20)', () => {
+    const genuinelySpammyCode = validEaCode.replace(
+      'if(trade.Buy(lot, _Symbol, ask, sl, tp, "Test")) {\n    Print("Orden compra enviada");\n  }',
+      'if(PositionsTotal() > 0) {\n    Print("hay posiciones abiertas");\n  } else {\n    Print("sin posiciones, esperando señal");\n  }'
+    );
+    const res = reviewMql5Code(genuinelySpammyCode, ['Supuesto 1']);
+    expect(res.blockingRules).toContain(20);
+  });
+
+  it('reconoce el guard de nueva barra con variables prefijadas (Regla 16) — regresión', () => {
+    // Reproducido en un EA real generado y compilado en la validación FOREX: el guard usaba
+    // `g_lastBarTime`/`currentBarTime` (prefijo `g_` de variable global) y la regex original solo
+    // reconocía los nombres exactos sin prefijo, marcando "no_cumple" pese a que el guard sí existe.
+    const prefixedGuardCode = validEaCode
+      .replace('datetime lastBarTime = 0;', 'datetime g_lastBarTime = 0;')
+      .replace('if(currentBarTime == lastBarTime) return;\n  lastBarTime = currentBarTime;', 'if(currentBarTime == g_lastBarTime) return;\n  g_lastBarTime = currentBarTime;');
+    const res = reviewMql5Code(prefixedGuardCode, ['Supuesto 1']);
+    expect(res.blockingRules).not.toContain(16);
+  });
 });

@@ -10,29 +10,34 @@ import { PairSelector } from './PairSelector';
 import { PriceChart } from './PriceChart';
 import { RunHistoryModal } from './RunHistoryModal';
 import { NewsPanel } from './NewsPanel';
+import { AiSettingsModal } from './AiSettingsModal';
 import { StrategyResultCard } from './StrategyResultCard';
 import { VerdictResultCard } from './VerdictResultCard';
 import { buildLevels, filterEnabledAgents, wouldCreateCycle } from '../lib/agentGraph';
 import type { Agent } from '../types/agent';
 
 export const Dashboard = () => {
-  const {
-    agents,
-    currentRun,
-    isAnalysing,
-    isLoading,
-    error,
-    loadInitialData,
-    addAgent,
-    updateAgent,
-    removeAgent,
-    runWorkflow,
-    resumeWorkflow,
-    stopWorkflow,
-    loadRun,
-    maxRetries,
-    setMaxRetries,
-  } = useAgentStore();
+  // Selectores para evitar re-render en cada cambio de estado de run
+  const agents = useAgentStore((s) => s.agents);
+  const currentRun = useAgentStore((s) => s.currentRun);
+  const isAnalysing = useAgentStore((s) => s.isAnalysing);
+  const isLoading = useAgentStore((s) => s.isLoading);
+  const error = useAgentStore((s) => s.error);
+  const maxRetries = useAgentStore((s) => s.maxRetries);
+  
+  // Las acciones son referencias estables; cada selector debe devolver directamente
+  // su valor para que el snapshot de Zustand también sea estable en React 19.
+  const loadInitialData = useAgentStore((s) => s.loadInitialData);
+  const addAgent = useAgentStore((s) => s.addAgent);
+  const updateAgent = useAgentStore((s) => s.updateAgent);
+  const removeAgent = useAgentStore((s) => s.removeAgent);
+  const runWorkflow = useAgentStore((s) => s.runWorkflow);
+  const resumeWorkflow = useAgentStore((s) => s.resumeWorkflow);
+  const stopWorkflow = useAgentStore((s) => s.stopWorkflow);
+  const loadRun = useAgentStore((s) => s.loadRun);
+  const setMaxRetries = useAgentStore((s) => s.setMaxRetries);
+  const aiSettingsOpen = useAgentStore((s) => s.aiSettingsOpen);
+  const setAiSettingsOpen = useAgentStore((s) => s.setAiSettingsOpen);
 
   const [editingAgent, setEditingAgent] = useState<Agent | null | 'new'>(null);
   const [showHistory, setShowHistory] = useState(false);
@@ -188,6 +193,13 @@ export const Dashboard = () => {
               <span>Noticias</span>
             </button>
             <button
+              onClick={() => setAiSettingsOpen(true)}
+              className="h-11 rounded-xl border border-line-bright bg-panel-raised/70 backdrop-blur-md text-paper/90 hover:text-cyan hover:border-cyan/50 hover:shadow-[0_0_18px_rgba(0,240,255,0.3)] font-semibold text-base px-5 transition-all whitespace-nowrap inline-flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <span>⚙️</span>
+              <span>Ajustes IA</span>
+            </button>
+            <button
               onClick={runWorkflow}
               disabled={isAnalysing || agents.length === 0}
               className="h-11 rounded-xl cyber-btn-cta font-bold text-base text-cyan hover:text-white px-7 transition-all whitespace-nowrap inline-flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
@@ -220,6 +232,8 @@ export const Dashboard = () => {
         )}
 
         {showNews && <NewsPanel onClose={() => setShowNews(false)} />}
+
+        {aiSettingsOpen && <AiSettingsModal onClose={() => setAiSettingsOpen(false)} />}
 
         <PriceChart />
 
@@ -360,6 +374,7 @@ export const Dashboard = () => {
                         runId={currentRun?.id}
                         isRunComplete={currentRun?.status === 'done'}
                         verdictDecision={verdictRes?.verdict?.veredicto}
+                        unresolvedBlockers={verdictRes?.verdict?.unresolvedBlockers}
                         initialResult={currentRun?.mql5Result}
                       />
                     ) : null;

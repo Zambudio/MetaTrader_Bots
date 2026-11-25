@@ -1,4 +1,5 @@
 import Parser from 'rss-parser';
+import { validateNewsSourceUrl } from '../utils/urlValidator.js';
 import type { NewsItem, NewsSource } from '../types.js';
 
 type PartialItem = Omit<NewsItem, 'id' | 'sourceId' | 'fetchedAt'> & { sourceId: string };
@@ -45,11 +46,21 @@ export function extractTitleAndDescription(html: string): { title: string | null
 const rssParser = new Parser();
 
 export async function fetchRss(source: NewsSource): Promise<Array<Omit<NewsItem, 'id' | 'sourceId' | 'fetchedAt'>>> {
+  // Validate URL to prevent SSRF (G2)
+  const validation = validateNewsSourceUrl(source.url);
+  if (!validation.valid) {
+    throw new Error(`URL bloqueada por política de seguridad: ${validation.error}`);
+  }
   const feed = await rssParser.parseURL(source.url);
   return (feed.items ?? []).map((item) => mapRssItemToNewsItem(item, source.id));
 }
 
 export async function fetchGenericUrl(source: NewsSource): Promise<Array<Omit<NewsItem, 'id' | 'sourceId' | 'fetchedAt'>>> {
+  // Validate URL to prevent SSRF (G2)
+  const validation = validateNewsSourceUrl(source.url);
+  if (!validation.valid) {
+    throw new Error(`URL bloqueada por política de seguridad: ${validation.error}`);
+  }
   const response = await fetch(source.url);
   if (!response.ok) {
     throw new Error(`GET ${source.url} respondió ${response.status}`);

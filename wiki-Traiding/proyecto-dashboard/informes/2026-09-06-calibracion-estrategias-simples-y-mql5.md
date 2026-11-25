@@ -1,4 +1,4 @@
-﻿# Calibración de estrategias "Simple" (Forex, Acciones, Cripto) y generación robusta MQL5
+# Calibración de estrategias "Simple" (Forex, Acciones, Cripto) y generación robusta MQL5
 
 **Fecha:** 2026-09-06 / 2026-09-07. **Estado: ✅ IMPLEMENTADO, CALIBRADO, VALIDADO EN VIVO Y EN PRODUCCIÓN (PM2)** en la rama `main` del repositorio `Z:\IA\02_Proyectos\MetaTrader_Bots`.
 
@@ -98,4 +98,4 @@ Se desarrolló y ejecutó el script de calibración integral `server/scripts/cal
 - `trading-agents-dashboard/server/src/engine/mql5Generator.ts`: Validación anti-stubs y reintentos robustos.
 - `trading-agents-dashboard/server/vitest.config.ts`: Configuración aislada de pruebas Node para el backend.
 - `trading-agents-dashboard/server/scripts/calibrateSimpleStrategies.ts`: Script de prueba y calibración automatizada de las 3 estrategias.
-- `trading-agents-dashboard/docs/MQL5_ERRORES_CONOCIDOS.md`: Base de conocimiento de errores MQL5 actualizada tras el ciclo de compilación.
+- `trading-agents-dashboard/docs/referencia/mql5-errores-conocidos.md`: Base de conocimiento de errores MQL5 actualizada tras el ciclo de compilación.

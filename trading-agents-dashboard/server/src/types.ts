@@ -156,6 +156,10 @@ export interface Mql5GenerationResult {
    * descarta en vez de seguir generando código. */
   discarded?: boolean;
   discardReason?: string;
+  /** H1 (auditoría 2026-09-26): verificación determinista y advisory de que el código implementa
+   * la dirección e indicadores declarados en la estrategia aprobada. No bloquea la entrega — ver
+   * `engine/mql5FidelityChecker.ts` para el porqué. */
+  fidelityCheck?: import('./engine/mql5FidelityChecker.js').FidelityCheckResult;
 }
 
 export interface AgentRunResult {

@@ -194,7 +194,7 @@ no elegida por coste) requiere una segunda instalación de MT5 o `--portable` co
 data-dir. Hasta entonces: **cerrar MetaTrader 5 antes de generar**. Emparejable con la limitación
 ya documentada en el informe del 2026-08-20 (símbolo `BTCUSD` inexistente en la cuenta demo) y
 con la nota operativa de MetaEditor abierto en
-[`docs/MQL5_LECCIONES_LOGICA_Y_BACKTEST.md`](../../../trading-agents-dashboard/docs/MQL5_LECCIONES_LOGICA_Y_BACKTEST.md) §5.
+[`docs/referencia/mql5-lecciones-logica-y-backtest.md`](../../../trading-agents-dashboard/docs/referencia/mql5-lecciones-logica-y-backtest.md) §5.
 
 ## Pendiente / no abordado en esta sesión
 
@@ -224,6 +224,6 @@ con la nota operativa de MetaEditor abierto en
 - [`server/README.md`](../../../trading-agents-dashboard/server/README.md) §"Generación de código
   MQL5" y §"Backtest headless automático" — actualizados con el comportamiento corregido (jobs
   persistidos + reconciliación; guard de MT5 abierto; `MQL5_GEN_TIMEOUT_MS`).
-- [`docs/DESPLIEGUE_WEB_SIEMPRE_ACTIVA.md`](../../../trading-agents-dashboard/docs/DESPLIEGUE_WEB_SIEMPRE_ACTIVA.md)
+- [`docs/operaciones/despliegue-web-24-7.md`](../../../trading-agents-dashboard/docs/operaciones/despliegue-web-24-7.md)
   §7 Troubleshooting y §10 Bitácora — un `scripts/update.ps1` o `pm2 restart` ya no pierde una
   generación MQL5 en curso.

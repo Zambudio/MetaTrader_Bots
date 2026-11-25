@@ -5,6 +5,7 @@ import type { SavedPair, SymbolSearchResult } from '../types/pair';
 import type { Mql5GenerationProgress, Mql5GenerationResult, Mql5Job, StrategyProposalLite } from '../types/strategy';
 import type { Mt5LogSession } from '../types/backtest';
 import type { ModelsResponse } from '../types/model';
+import type { AiLoginSession, AiModelCheck, AiProviderId, AiStatusResponse } from '../types/ai';
 
 /** Error de una respuesta HTTP no-OK. Lleva el `status` para que quien llama pueda distinguir
  *  un fallo transitorio de gateway (502/503/504 del túnel de Cloudflare) de un error real. */
@@ -18,8 +19,18 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  
+  // Enviar API key si está disponible (para requerir auth en todos los endpoints)
+  try {
+    const apiKey = localStorage.getItem('dashboard_api_key') || import.meta.env.VITE_DASHBOARD_API_KEY;
+    if (apiKey) headers['x-api-key'] = apiKey;
+  } catch {
+    // localStorage puede no estar disponible
+  }
+  
   const response = await fetch(`/api${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     ...options,
   });
   if (!response.ok) {
@@ -49,6 +60,21 @@ export const api = {
     request<{ ok: boolean }>(`/agent-configs/${id}`, { method: 'DELETE' }),
   listPairs: () => request<SavedPair[]>('/pairs'),
   listModels: () => request<ModelsResponse>('/models'),
+  // Ajustes de IA — el servidor solo los atiende desde el propio PC (403 desde el túnel).
+  getAiStatus: (forceRefresh = false) =>
+    request<AiStatusResponse>(`/ai/status${forceRefresh ? '?forceRefresh=true' : ''}`),
+  checkAiModel: (source: AiProviderId, model: string, signal?: AbortSignal) =>
+    request<AiModelCheck & { modelKey: string }>('/ai/models/check', {
+      method: 'POST',
+      body: JSON.stringify({ source, model }),
+      signal,
+    }),
+  startAiLogin: (provider: 'claude' | 'openai') =>
+    request<AiLoginSession>(`/ai/login/${provider}`, { method: 'POST' }),
+  getAiLogin: (id: string) => request<AiLoginSession>(`/ai/login/${id}`),
+  submitAiLoginCode: (id: string, code: string) =>
+    request<AiLoginSession>(`/ai/login/${id}/code`, { method: 'POST', body: JSON.stringify({ code }) }),
+  cancelAiLogin: (id: string) => request<AiLoginSession>(`/ai/login/${id}`, { method: 'DELETE' }),
   startRun: (pair: string, timeframe: string, maxRetries?: number, configurationId?: string, executionMode?: 'real' | 'simulation') =>
     request<Run>('/runs', { method: 'POST', body: JSON.stringify({ pair, timeframe, maxRetries, configurationId, executionMode }) }),
   resumeRun: (id: string, agentId?: string) =>
@@ -116,6 +142,8 @@ export const api = {
     request<NewsItem[]>(sourceId ? `/news/items?sourceId=${encodeURIComponent(sourceId)}` : '/news/items'),
   generateNewsDigest: () =>
     request<{ pageRelPath: string | null; digestedIds: string[] }>('/news/digest', { method: 'POST' }),
+  pollRunUntilTerminal: (runId: string, maxAttempts?: number, onUpdate?: (run: Run) => void) =>
+    pollRunUntilTerminal(runId, maxAttempts, onUpdate),
 };
 
 const MQL5_POLL_INTERVAL_MS = 2000;
@@ -204,4 +232,49 @@ async function optimizeMql5WithPolling(
 ): Promise<Mql5GenerationResult> {
   const { jobId } = await api.startMql5Optimization(strategy, previousCode, previousBacktest, iteration, model, runId, previousNotes);
   return pollJob(jobId, onProgress);
+}
+
+export async function pollRunUntilTerminal(
+  runId: string,
+  _maxAttempts: number = 1800, // 30 min @ 1 poll/sec (kept for backward compat, not used - hard cap is 90 min)
+  onUpdate?: (run: Run) => void
+): Promise<Run> {
+  let consecutiveFailures = 0;
+  const startedAt = Date.now();
+  const POLL_INTERVAL_MS = 1000;
+  const MAX_POLL_TIMEOUT_MS = 90 * 60 * 1000; // 90 min hard cap
+  const MAX_CONSECUTIVE_FAILURES = 30; // ~30s of failures before giving up
+
+  while (true) {
+    await sleep(POLL_INTERVAL_MS + consecutiveFailures * 200);
+
+    if (Date.now() - startedAt > MAX_POLL_TIMEOUT_MS) {
+      throw new Error(
+        'El análisis lleva demasiado tiempo sin terminar. Puede seguir en curso — recarga la página en unos minutos para ver si el resultado ya está.'
+      );
+    }
+
+    let run: Run;
+    try {
+      run = await api.getRun(runId);
+      consecutiveFailures = 0;
+    } catch (err) {
+      if (isTransientPollError(err)) {
+        consecutiveFailures += 1;
+        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+          throw new Error(
+            'No se pudo contactar con el servidor tras varios intentos seguidos. El análisis puede seguir en curso — recarga la página en un minuto.'
+          );
+        }
+        continue;
+      }
+      throw err;
+    }
+
+    onUpdate?.(run);
+
+    if (run.status !== 'running') {
+      return run;
+    }
+  }
 }

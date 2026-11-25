@@ -43,6 +43,12 @@ export interface Mql5GenerationResult {
   /** El Razonador, ya informado del fallo real de backtest, decidió NO_OPERAR — descartada. */
   discarded?: boolean;
   discardReason?: string;
+  /** Verificación determinista (advisory, no bloqueante) de que el código implementa la
+   * dirección e indicadores declarados en la estrategia aprobada. */
+  fidelityCheck?: {
+    passed: boolean;
+    findings: Array<{ code: string; severity: 'error' | 'warning'; message: string }>;
+  };
 }
 
 export interface Mql5GenerationProgress {

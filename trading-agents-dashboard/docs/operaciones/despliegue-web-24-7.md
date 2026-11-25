@@ -76,7 +76,7 @@ Express (server/, vía start.mjs — 1 proceso node)  ← proceso pm2 "trading-d
 | `scripts/pm2-boot.ps1` | **Nuevo.** Arranque en el login: espera a `Z:`, `pm2 resurrect`, red de seguridad. Llama `node <pm2-cli>` directo (no `pm2.cmd`) para no abrir `cmd.exe`. |
 | `scripts/install-autostart.ps1` | **Nuevo.** Registra/actualiza la tarea. Idempotente. Genera `pm2-boot-hidden.vbs` y apunta la tarea a `wscript.exe` (arranque sin ninguna ventana). |
 | `scripts/update.ps1` | **Nuevo.** `git pull` + build + `pm2 restart <ecosystem>` + verificación. |
-| `docs/DESPLIEGUE_WEB_SIEMPRE_ACTIVA.md` | **Nuevo.** Este documento. |
+| `docs/operaciones/despliegue-web-24-7.md` | **Nuevo.** Este documento. |
 
 > ⚠️ **Rutas de red y `cmd.exe`.** `npm`/`cmd.exe` **rechazan un `cwd` UNC**
 > (`\\Zambu-nas\...` → "No se permiten rutas UNC", cae a `C:\Windows`). Todo va
@@ -211,7 +211,7 @@ Volver al flujo antiguo: `pm2 stop all` y `npm run dev` como siempre (Vite en
 | Tras reiniciar el PC la web no responde | ¿Iniciaste sesión en Windows? La tarea es *Al iniciar sesión*. Mira `C:\Users\fadwe\.pm2\logs\autostart-boot.log`. Si dice "Z: no accesible", el disco de red tardó — la tarea reintenta 3× cada 2 min. |
 | `pm2-boot` no encuentra `Z:` | Los discos mapeados reconectan de forma perezosa. El script hace `net use Z:` y espera hasta 120 s. Si persiste, revisa las credenciales del recurso `\\Zambu-nas\nas-drive-pedro`. |
 | El backtest headless de MT5 falla bajo pm2 | pm2 corre en la sesión interactiva del usuario (LogonType Interactive), así que MetaTrader se comporta igual que con `npm run dev`. Si aun así falla, `pm2 logs` y comparar con un arranque manual. |
-| El backtest headless nunca termina (timeout 180 s) o "no se pudo confirmar la finalización" | ¿Tienes **MetaTrader 5 abierto a mano**? `terminal64.exe /config` solo lanza el tester en un arranque limpio — una instancia ya abierta ignora la config reenviada. Ciérralo antes de generar. El dashboard ahora lo detecta (`isTerminalRunning`) y avisa en vez de esperar los 180 s. Detalle: [`wiki-Traiding/proyecto-dashboard/informes/2026-08-30-resiliencia-generacion-mql5-y-backtest-mt5-abierto.md`](../../wiki-Traiding/proyecto-dashboard/informes/2026-08-30-resiliencia-generacion-mql5-y-backtest-mt5-abierto.md). |
+| El backtest headless nunca termina (timeout 180 s) o "no se pudo confirmar la finalización" | ¿Tienes **MetaTrader 5 abierto a mano**? `terminal64.exe /config` solo lanza el tester en un arranque limpio — una instancia ya abierta ignora la config reenviada. Ciérralo antes de generar. El dashboard ahora lo detecta (`isTerminalRunning`) y avisa en vez de esperar los 180 s. Detalle: [`wiki-Traiding/proyecto-dashboard/informes/2026-08-30-resiliencia-generacion-mql5-y-backtest-mt5-abierto.md`](../../../wiki-Traiding/proyecto-dashboard/informes/2026-08-30-resiliencia-generacion-mql5-y-backtest-mt5-abierto.md). |
 | Una generación MQL5 en curso se pierde al hacer `update.ps1` / `pm2 restart` | **Ya no** — desde 2026-08-30 los jobs se persisten en `server/src/data/mql5-jobs/` y `reconcileOrphanedMql5Jobs` los recupera al arrancar (a `done` si el run ya guardó el resultado, o `error` con botón de reintentar). El sondeo del frontend además aguanta el `502` del túnel durante el reinicio. |
 | Aparece una **ventana de consola** (`node` / Windows Terminal) tras el arranque | El arranque debe ir por `server/start.mjs`, no por el CLI `tsx` (que crea un proceso hijo con ventana). Comprueba `ecosystem.config.cjs` → `script` acaba en `start.mjs`; luego `pm2 delete trading-dashboard && pm2 start ecosystem.config.cjs --only trading-dashboard && pm2 save`. Verifica: `Get-Process node \| ? MainWindowHandle -ne 0` no devuelve nada. |
 | `npm run build` → "No se permiten rutas UNC" | Estás en `\\Zambu-nas\...`. `cd Z:\IA\02_Proyectos\MetaTrader_Bots\trading-agents-dashboard` primero. |
@@ -310,4 +310,4 @@ crédito de OmniRoute, y ver las estrategias. Si algún día se quiere cerrar:
   está abierto (una instancia en marcha ignora la config del tester reenviada) en
   vez de esperar 180 s. Commits `8916be0`, `d5ad933` en `main`; `pm2 restart` +
   `pm2 save` + health local/externa `{"ok":true}`. Informe completo:
-  [`wiki-Traiding/proyecto-dashboard/informes/2026-08-30-resiliencia-generacion-mql5-y-backtest-mt5-abierto.md`](../../wiki-Traiding/proyecto-dashboard/informes/2026-08-30-resiliencia-generacion-mql5-y-backtest-mt5-abierto.md).
+  [`wiki-Traiding/proyecto-dashboard/informes/2026-08-30-resiliencia-generacion-mql5-y-backtest-mt5-abierto.md`](../../../wiki-Traiding/proyecto-dashboard/informes/2026-08-30-resiliencia-generacion-mql5-y-backtest-mt5-abierto.md).
